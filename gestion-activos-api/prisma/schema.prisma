@@ -1,0 +1,127 @@
+// Modelo de datos de Gestión de Activos.
+// Traducido del diagrama ER (Mermaid) validado por el ingeniero líder: Modulado.txt
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+// ---------------------------------------------------------------------------
+// Catálogos
+// ---------------------------------------------------------------------------
+
+model Categoria {
+  id          Int    @id @default(autoincrement())
+  nombre      String
+  descripcion String
+
+  activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
+
+  @@map("categoria")
+}
+
+model Criticidad {
+  id    Int    @id @default(autoincrement())
+  nivel String
+
+  activos Activo[] // CRITICIDAD ||--o{ ACTIVO : "clasifica"
+
+  @@map("criticidad")
+}
+
+// ---------------------------------------------------------------------------
+// Inventario
+// ---------------------------------------------------------------------------
+
+model Activo {
+  id             Int      @id @default(autoincrement())
+  codigo         String   @unique
+  nombre         String
+  sistemas       String
+  custodio       String
+  ubicacion      String
+  cifrado        Boolean
+  ultimaRevision DateTime
+  categoriaId    Int
+  criticidadId   Int
+
+  categoria  Categoria  @relation(fields: [categoriaId], references: [id])
+  criticidad Criticidad @relation(fields: [criticidadId], references: [id])
+
+  bitacora         BitacoraHistorial[] // "registra cambios en"
+  respaldos        Respaldo[] // "tiene capas de"
+  mantenimientos   Mantenimiento[] // "sigue ciclo de"
+  vulnerabilidades Vulnerabilidad[] // "presenta ciclo de"
+
+  @@map("activo")
+}
+
+// ---------------------------------------------------------------------------
+// Tablas dependientes de ACTIVO
+// ---------------------------------------------------------------------------
+
+model BitacoraHistorial {
+  id          Int      @id @default(autoincrement())
+  activoId    Int
+  accion      String
+  responsable String
+  fecha       DateTime
+  detalle     String
+
+  activo Activo @relation(fields: [activoId], references: [id])
+
+  @@map("bitacora_historial")
+}
+
+model Respaldo {
+  id              Int      @id @default(autoincrement())
+  activoId        Int
+  // Capa 1: alcance
+  alcanceDetalle  String
+  // Capa 2: ejecución
+  estadoEjecucion String
+  fechaEjecucion  DateTime
+  rutaEvidencia   String
+  // Capa 3: restauración / pruebas
+  estadoPrueba    String
+  resultadoPrueba String
+  fechaPrueba     DateTime
+  createdAt       DateTime @default(now())
+
+  activo Activo @relation(fields: [activoId], references: [id])
+
+  @@map("respaldo")
+}
+
+model Mantenimiento {
+  id           Int      @id @default(autoincrement())
+  activoId     Int
+  fase         String
+  estadoEquipo String
+  actividad    String
+  resultado    String
+  fecha        DateTime
+
+  activo Activo @relation(fields: [activoId], references: [id])
+
+  @@map("mantenimiento")
+}
+
+model Vulnerabilidad {
+  id          Int      @id @default(autoincrement())
+  activoId    Int
+  descripcion String
+  nivelRiesgo String
+  estado      String
+  mitigacion  String
+  fecha       DateTime
+
+  activo Activo @relation(fields: [activoId], references: [id])
+
+  @@map("vulnerabilidad")
+}
