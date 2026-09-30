@@ -9,6 +9,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
+import { configureApp } from './../src/app.setup.js';
 import { Roles } from './../src/auth/decorators/roles.decorator.js';
 
 /** Endpoints que solo existen en el test, para comprobar @Roles. */
@@ -75,6 +76,7 @@ describe('Autenticación con Keycloak (e2e)', () => {
       controllers: [RolesTestController],
     }).compile();
     app = moduleFixture.createNestApplication();
+    configureApp(app);
     await app.init();
 
     tokens.admin = await getToken('admin.test');
@@ -92,13 +94,14 @@ describe('Autenticación con Keycloak (e2e)', () => {
   };
 
   describe('401: autenticación', () => {
-    it('GET / es público (@Public) y responde sin token', () =>
-      get('/').expect(200));
+    it('GET /api es público (@Public) y responde sin token', () =>
+      get('/api').expect(200));
 
-    it('GET /auth/me sin token → 401', () => get('/auth/me').expect(401));
+    it('GET /api/auth/me sin token → 401', () =>
+      get('/api/auth/me').expect(401));
 
     it('token con la firma alterada → 401', () =>
-      get('/auth/me', tamper(tokens.auditor)).expect(401));
+      get('/api/auth/me', tamper(tokens.auditor)).expect(401));
 
     it('token válido pero de OTRO realm (master) → 401 por issuer', async () => {
       const masterToken = await getToken(
@@ -107,13 +110,13 @@ describe('Autenticación con Keycloak (e2e)', () => {
         'master',
         'admin-cli',
       );
-      await get('/auth/me', masterToken).expect(401);
+      await get('/api/auth/me', masterToken).expect(401);
     });
   });
 
-  describe('GET /auth/me', () => {
+  describe('GET /api/auth/me', () => {
     it('devuelve el usuario del token solo con roles de la aplicación', async () => {
-      const res = await get('/auth/me', tokens.auditor).expect(200);
+      const res = await get('/api/auth/me', tokens.auditor).expect(200);
       expect(res.body).toMatchObject({
         username: 'auditor.test',
         email: 'auditor.test@gestion-activos.local',
@@ -125,18 +128,18 @@ describe('Autenticación con Keycloak (e2e)', () => {
 
   describe('403: autorización por rol', () => {
     it('auditor → endpoint @Roles(admin) → 403', () =>
-      get('/test-roles/admin', tokens.auditor).expect(403));
+      get('/api/test-roles/admin', tokens.auditor).expect(403));
 
     it('analista → endpoint @Roles(admin) → 403', () =>
-      get('/test-roles/admin', tokens.analista).expect(403));
+      get('/api/test-roles/admin', tokens.analista).expect(403));
 
     it('admin → endpoint @Roles(admin) → 200', () =>
-      get('/test-roles/admin', tokens.admin).expect(200));
+      get('/api/test-roles/admin', tokens.admin).expect(200));
 
     it('analista → endpoint @Roles(admin, analista) → 200', () =>
-      get('/test-roles/escritura', tokens.analista).expect(200));
+      get('/api/test-roles/escritura', tokens.analista).expect(200));
 
     it('auditor → endpoint @Roles(admin, analista) → 403', () =>
-      get('/test-roles/escritura', tokens.auditor).expect(403));
+      get('/api/test-roles/escritura', tokens.auditor).expect(403));
   });
 });

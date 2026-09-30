@@ -1,5 +1,11 @@
 import { plainToInstance } from 'class-transformer';
-import { IsNotEmpty, IsString, IsUrl, validateSync } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUrl,
+  validateSync,
+} from 'class-validator';
 
 const URL_OPTIONS = {
   require_tld: false,
@@ -30,6 +36,11 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   CORS_ORIGINS: string;
+
+  /** URL pública de la API vista desde el navegador (Swagger). Por defecto http://localhost:PORT. */
+  @IsOptional()
+  @IsUrl(URL_OPTIONS)
+  API_PUBLIC_URL?: string;
 }
 
 export function validateEnv(config: Record<string, unknown>) {

@@ -4,8 +4,8 @@
 
 .DESCRIPTION
   Solo para DESARROLLO. Usa la API de administración de Keycloak con el usuario
-  administrador del realm master. Es idempotente: si el realm o los usuarios ya
-  existen, los deja como están.
+  administrador del realm master. Es idempotente: si el realm ya existe, solo
+  sincroniza sus clientes con el JSON; los usuarios existentes no se tocan.
 
   Las contraseñas NO están en este archivo: se pasan como parámetros.
 
@@ -45,11 +45,24 @@ $script:Token = (Invoke-RestMethod -Method Post `
 ).access_token
 
 # 2. Realm.
+$realmJson = [IO.File]::ReadAllText($RealmFile, [Text.Encoding]::UTF8)
 $existing = Invoke-KcApi GET '' | Where-Object { $_.realm -eq $Realm }
 if ($existing) {
-  Write-Host "Realm '$Realm' ya existe: no se modifica."
+  # El realm ya existe: sincronizamos los clientes con el JSON (URLs de retorno,
+  # orígenes, flujos...) para que el archivo versionado siga siendo la fuente de verdad.
+  foreach ($client in ($realmJson | ConvertFrom-Json).clients) {
+    $current = Invoke-KcApi GET "/$Realm/clients?clientId=$($client.clientId)"
+    if ($current) {
+      $client | Add-Member -NotePropertyName id -NotePropertyValue $current[0].id -Force
+      Invoke-KcApi PUT "/$Realm/clients/$($current[0].id)" $client | Out-Null
+      Write-Host "Cliente '$($client.clientId)' sincronizado con el JSON."
+    } else {
+      Invoke-KcApi POST "/$Realm/clients" $client | Out-Null
+      Write-Host "Cliente '$($client.clientId)' creado."
+    }
+  }
 } else {
-  Invoke-KcApi POST '' ([IO.File]::ReadAllText($RealmFile, [Text.Encoding]::UTF8)) | Out-Null
+  Invoke-KcApi POST '' $realmJson | Out-Null
   Write-Host "Realm '$Realm' importado."
 }
 

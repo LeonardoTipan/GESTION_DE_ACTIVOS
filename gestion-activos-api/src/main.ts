@@ -1,23 +1,16 @@
-import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { configureApp } from './app.setup.js';
+import { setupSwagger } from './swagger.js';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const config = app.get(ConfigService);
+  configureApp(app);
 
-  // El frontend se sirve desde otro origen: el navegador solo le permite llamar
-  // a la API (con el header Authorization) si la API autoriza ese origen.
-  // Sin cookies: la sesión viaja como Bearer token, así que no hace falta credentials.
-  app.enableCors({
-    origin: config
-      .getOrThrow<string>('CORS_ORIGINS')
-      .split(',')
-      .map((origin) => origin.trim())
-      .filter(Boolean),
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Authorization', 'Content-Type'],
-  });
+  // La documentación expone el mapa completo de la API: solo fuera de producción.
+  if (process.env.NODE_ENV !== 'production') {
+    setupSwagger(app);
+  }
 
   await app.listen(process.env.PORT ?? 3000);
 }
