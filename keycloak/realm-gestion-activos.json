@@ -1,0 +1,73 @@
+{
+  "realm": "gestion-activos",
+  "displayName": "Gestión de Activos",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "bruteForceProtected": true,
+  "accessTokenLifespan": 300,
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Gestión total: activos, catálogos, respaldos, mantenimientos, vulnerabilidades y borrados."
+      },
+      {
+        "name": "analista",
+        "description": "Registra y actualiza activos, respaldos, mantenimientos y vulnerabilidades."
+      },
+      {
+        "name": "auditor",
+        "description": "Solo lectura, para revisiones de cumplimiento."
+      }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "gestion-activos-api",
+      "name": "Gestión de Activos - API",
+      "description": "Representa al backend NestJS. Solo se usa como audiencia (aud) de los tokens; no inicia sesiones.",
+      "enabled": true,
+      "publicClient": false,
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false
+    },
+    {
+      "clientId": "gestion-activos-web",
+      "name": "Gestión de Activos - Web",
+      "description": "Frontend (cliente público con PKCE). Direct Access Grants activo SOLO para pruebas en desarrollo.",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "redirectUris": [
+        "http://localhost/*",
+        "http://localhost:4200/*",
+        "http://localhost:5173/*"
+      ],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "+"
+      },
+      "protocolMappers": [
+        {
+          "name": "audience-gestion-activos-api",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "config": {
+            "included.client.audience": "gestion-activos-api",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "introspection.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ]
+}

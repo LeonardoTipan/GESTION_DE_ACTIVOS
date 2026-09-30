@@ -16,7 +16,11 @@ services:
       # Los valores vienen del archivo .env junto a este compose.
       # ${VAR:?msg} detiene el arranque si la variable falta, en vez de conectar con valores vacíos.
       DATABASE_URL: "mysql://${DB_USER:?Falta DB_USER en .env}:${DB_PASSWORD:?Falta DB_PASSWORD en .env}@${DB_HOST:?Falta DB_HOST en .env}:${DB_PORT:-3306}/${DB_NAME:?Falta DB_NAME en .env}"
+      CORS_ORIGINS: "${CORS_ORIGINS:?Falta CORS_ORIGINS en .env}"
       KEYCLOAK_URL: "${KEYCLOAK_URL:?Falta KEYCLOAK_URL en .env}"
+      KEYCLOAK_REALM: "${KEYCLOAK_REALM:?Falta KEYCLOAK_REALM en .env}"
+      KEYCLOAK_ISSUER: "${KEYCLOAK_ISSUER:?Falta KEYCLOAK_ISSUER en .env}"
+      KEYCLOAK_AUDIENCE: "${KEYCLOAK_AUDIENCE:?Falta KEYCLOAK_AUDIENCE en .env}"
       KEYCLOAK_ADMIN: "${KEYCLOAK_ADMIN:?Falta KEYCLOAK_ADMIN en .env}"
       KEYCLOAK_PASSWORD: "${KEYCLOAK_PASSWORD:?Falta KEYCLOAK_PASSWORD en .env}"
       # En Windows los cambios de archivos no llegan al contenedor como eventos;
