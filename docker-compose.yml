@@ -1,0 +1,38 @@
+# Entorno de DESARROLLO de Gestión de Activos.
+# MySQL y Keycloak NO están aquí: corren aparte en Docker Desktop
+# y el backend los alcanza a través de host.docker.internal.
+
+services:
+  backend:
+    build:
+      context: ./gestion-activos-api
+      dockerfile: Dockerfile
+    container_name: gestion-activos-backend
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      # Los valores vienen del archivo .env junto a este compose.
+      # ${VAR:?msg} detiene el arranque si la variable falta, en vez de conectar con valores vacíos.
+      DATABASE_URL: "mysql://${DB_USER:?Falta DB_USER en .env}:${DB_PASSWORD:?Falta DB_PASSWORD en .env}@${DB_HOST:?Falta DB_HOST en .env}:${DB_PORT:-3306}/${DB_NAME:?Falta DB_NAME en .env}"
+      KEYCLOAK_URL: "${KEYCLOAK_URL:?Falta KEYCLOAK_URL en .env}"
+      KEYCLOAK_ADMIN: "${KEYCLOAK_ADMIN:?Falta KEYCLOAK_ADMIN en .env}"
+      KEYCLOAK_PASSWORD: "${KEYCLOAK_PASSWORD:?Falta KEYCLOAK_PASSWORD en .env}"
+      # En Windows los cambios de archivos no llegan al contenedor como eventos;
+      # forzamos a TypeScript (nest start --watch) a detectarlos por sondeo.
+      TSC_WATCHFILE: DynamicPriorityPolling
+      TSC_WATCHDIRECTORY: RecursiveDirectoryUsingDynamicPriorityPolling
+    volumes:
+      - ./gestion-activos-api:/app
+      - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    image: nginx:alpine
+    container_name: gestion-activos-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
