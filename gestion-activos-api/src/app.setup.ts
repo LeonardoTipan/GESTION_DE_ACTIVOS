@@ -1,5 +1,6 @@
 import { ValidationPipe, type INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaExceptionFilter } from './common/filters/prisma-exception.filter.js';
 
 /** Prefijo de todas las rutas: /api/... (el frontend/Nginx enruta /api/* al backend). */
 export const API_PREFIX = 'api';
@@ -23,6 +24,9 @@ export function configureApp(app: INestApplication): void {
       transform: true,
     }),
   );
+
+  // Errores de base de datos (duplicados, no encontrados...) → 409/404 en vez de 500.
+  app.useGlobalFilters(new PrismaExceptionFilter());
 
   // El frontend se sirve desde otro origen: el navegador solo le permite llamar
   // a la API (con el header Authorization) si la API autoriza ese origen.

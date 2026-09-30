@@ -11,6 +11,7 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { Roles } from './../src/auth/decorators/roles.decorator.js';
+import { getToken, getTokensDePrueba, tamper } from './utils/keycloak.js';
 
 /** Endpoints que solo existen en el test, para comprobar @Roles. */
 @Controller('test-roles')
@@ -28,47 +29,9 @@ class RolesTestController {
   }
 }
 
-async function getToken(
-  username: string,
-  password = process.env.KEYCLOAK_TEST_PASSWORD ?? '',
-  realm = process.env.KEYCLOAK_REALM ?? '',
-  clientId = 'gestion-activos-web',
-): Promise<string> {
-  const res = await fetch(
-    `${process.env.KEYCLOAK_URL}/realms/${realm}/protocol/openid-connect/token`,
-    {
-      method: 'POST',
-      body: new URLSearchParams({
-        grant_type: 'password',
-        client_id: clientId,
-        username,
-        password,
-      }),
-    },
-  );
-  if (!res.ok) {
-    throw new Error(
-      `No se pudo obtener el token de ${username}: HTTP ${res.status}`,
-    );
-  }
-  return ((await res.json()) as { access_token: string }).access_token;
-}
-
-/** Cambia un carácter en medio de la firma: el token sigue "bien formado" pero es falso. */
-function tamper(token: string): string {
-  const [header, payload, signature] = token.split('.');
-  const i = Math.floor(signature.length / 2);
-  const swapped = signature[i] === 'A' ? 'B' : 'A';
-  return `${header}.${payload}.${signature.slice(0, i)}${swapped}${signature.slice(i + 1)}`;
-}
-
 describe('Autenticación con Keycloak (e2e)', () => {
   let app: INestApplication<App>;
-  const tokens: Record<'admin' | 'analista' | 'auditor', string> = {
-    admin: '',
-    analista: '',
-    auditor: '',
-  };
+  let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -79,9 +42,7 @@ describe('Autenticación con Keycloak (e2e)', () => {
     configureApp(app);
     await app.init();
 
-    tokens.admin = await getToken('admin.test');
-    tokens.analista = await getToken('analista.test');
-    tokens.auditor = await getToken('auditor.test');
+    tokens = await getTokensDePrueba();
   });
 
   afterAll(async () => {

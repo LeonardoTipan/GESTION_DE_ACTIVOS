@@ -15,6 +15,11 @@ const URL_OPTIONS = {
 
 /** Variables obligatorias. Si falta alguna o es inválida, la aplicación no arranca. */
 class EnvironmentVariables {
+  /** Cadena de conexión a MySQL: mysql://usuario:clave@host:puerto/base */
+  @IsString()
+  @IsNotEmpty()
+  DATABASE_URL: string;
+
   /** URL por la que la API alcanza Keycloak (para descargar las claves JWKS). */
   @IsUrl(URL_OPTIONS)
   KEYCLOAK_URL: string;

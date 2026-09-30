@@ -121,6 +121,10 @@ describe('Bases de la API (e2e)', () => {
         .expect(200);
       expect(res.body.openapi).toMatch(/^3\./);
       expect(res.body.paths).toHaveProperty('/api/auth/me');
+      expect(res.body.paths).toHaveProperty('/api/activos');
+      expect(res.body.paths).toHaveProperty('/api/activos/{id}/bitacora');
+      expect(res.body.paths).toHaveProperty('/api/categorias');
+      expect(res.body.paths).toHaveProperty('/api/criticidades');
       expect(res.body.components.securitySchemes.keycloak.type).toBe('oauth2');
     });
 

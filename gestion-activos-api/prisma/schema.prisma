@@ -17,7 +17,7 @@ datasource db {
 
 model Categoria {
   id          Int    @id @default(autoincrement())
-  nombre      String
+  nombre      String @unique
   descripcion String
 
   activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
@@ -27,7 +27,7 @@ model Categoria {
 
 model Criticidad {
   id    Int    @id @default(autoincrement())
-  nivel String
+  nivel String @unique
 
   activos Activo[] // CRITICIDAD ||--o{ ACTIVO : "clasifica"
 
@@ -50,6 +50,12 @@ model Activo {
   categoriaId    Int
   criticidadId   Int
 
+  // Sincronización con el frontend: permite pedir "lo que cambió desde X".
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  // Baja lógica: el activo deja de listarse pero conserva su historial.
+  deletedAt DateTime?
+
   categoria  Categoria  @relation(fields: [categoriaId], references: [id])
   criticidad Criticidad @relation(fields: [criticidadId], references: [id])
 
@@ -58,6 +64,7 @@ model Activo {
   mantenimientos   Mantenimiento[] // "sigue ciclo de"
   vulnerabilidades Vulnerabilidad[] // "presenta ciclo de"
 
+  @@index([updatedAt])
   @@map("activo")
 }
 
@@ -71,7 +78,8 @@ model BitacoraHistorial {
   accion      String
   responsable String
   fecha       DateTime
-  detalle     String
+  // JSON con los campos modificados: {"campo": {"antes": ..., "despues": ...}}
+  detalle     String   @db.Text
 
   activo Activo @relation(fields: [activoId], references: [id])
 
