@@ -87,23 +87,37 @@ model BitacoraHistorial {
 }
 
 model Respaldo {
-  id              Int      @id @default(autoincrement())
+  id              Int             @id @default(autoincrement())
   activoId        Int
-  // Capa 1: alcance
+  // Capa 1: alcance (se define al crear el respaldo)
   alcanceDetalle  String
-  // Capa 2: ejecución
-  estadoEjecucion String
-  fechaEjecucion  DateTime
-  rutaEvidencia   String
-  // Capa 3: restauración / pruebas
-  estadoPrueba    String
-  resultadoPrueba String
-  fechaPrueba     DateTime
-  createdAt       DateTime @default(now())
+  // Capa 2: ejecución (se completa al ejecutar el respaldo)
+  estadoEjecucion EstadoEjecucion @default(PENDIENTE)
+  fechaEjecucion  DateTime?
+  rutaEvidencia   String? // URL o ruta de red donde está la evidencia
+  // Capa 3: restauración / pruebas (solo tras una ejecución EXITOSA)
+  estadoPrueba    EstadoPrueba    @default(PENDIENTE)
+  resultadoPrueba String?
+  fechaPrueba     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   activo Activo @relation(fields: [activoId], references: [id])
 
+  @@index([updatedAt])
   @@map("respaldo")
+}
+
+enum EstadoEjecucion {
+  PENDIENTE
+  EXITOSA
+  FALLIDA
+}
+
+enum EstadoPrueba {
+  PENDIENTE
+  APROBADA
+  FALLIDA
 }
 
 model Mantenimiento {
