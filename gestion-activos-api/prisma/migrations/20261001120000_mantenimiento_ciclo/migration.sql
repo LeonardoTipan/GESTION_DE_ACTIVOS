@@ -1,0 +1,12 @@
+-- AlterTable
+ALTER TABLE `mantenimiento` ADD COLUMN `createdAt` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `fechaFin` DATETIME(3) NULL,
+    ADD COLUMN `fechaInicio` DATETIME(3) NULL,
+    ADD COLUMN `tipo` ENUM('PREVENTIVO', 'CORRECTIVO') NOT NULL,
+    ADD COLUMN `updatedAt` DATETIME(3) NOT NULL,
+    MODIFY `fase` ENUM('PROGRAMADO', 'EN_EJECUCION', 'FINALIZADO', 'CANCELADO') NOT NULL DEFAULT 'PROGRAMADO',
+    MODIFY `estadoEquipo` ENUM('OPERATIVO', 'DEGRADADO', 'FUERA_DE_SERVICIO') NULL,
+    MODIFY `resultado` VARCHAR(191) NULL;
+
+-- CreateIndex
+CREATE INDEX `mantenimiento_updatedAt_idx` ON `mantenimiento`(`updatedAt`);

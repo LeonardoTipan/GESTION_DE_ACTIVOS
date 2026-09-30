@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { BackupsModule } from './backups/backups.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { InventoryModule } from './inventory/inventory.module.js';
+import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 
 @Module({
@@ -15,6 +16,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     AuthModule,
     InventoryModule,
     BackupsModule,
+    MaintenanceModule,
   ],
   controllers: [AppController],
   providers: [AppService],

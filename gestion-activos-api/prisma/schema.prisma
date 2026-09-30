@@ -121,17 +121,45 @@ enum EstadoPrueba {
 }
 
 model Mantenimiento {
-  id           Int      @id @default(autoincrement())
+  id           Int               @id @default(autoincrement())
   activoId     Int
-  fase         String
-  estadoEquipo String
+  tipo         TipoMantenimiento
+  // Ciclo: PROGRAMADO → EN_EJECUCION → FINALIZADO (o CANCELADO)
+  fase         FaseMantenimiento @default(PROGRAMADO)
+  // Cómo quedó el equipo: se registra al FINALIZAR
+  estadoEquipo EstadoEquipo?
   actividad    String
-  resultado    String
+  // Resultado al finalizar, o motivo al cancelar
+  resultado    String?
+  // Fecha programada
   fecha        DateTime
+  fechaInicio  DateTime?
+  fechaFin     DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
 
   activo Activo @relation(fields: [activoId], references: [id])
 
+  @@index([updatedAt])
   @@map("mantenimiento")
+}
+
+enum TipoMantenimiento {
+  PREVENTIVO
+  CORRECTIVO
+}
+
+enum FaseMantenimiento {
+  PROGRAMADO
+  EN_EJECUCION
+  FINALIZADO
+  CANCELADO
+}
+
+enum EstadoEquipo {
+  OPERATIVO
+  DEGRADADO
+  FUERA_DE_SERVICIO
 }
 
 model Vulnerabilidad {
