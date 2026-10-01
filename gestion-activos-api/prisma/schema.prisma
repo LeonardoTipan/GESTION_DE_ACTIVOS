@@ -163,15 +163,42 @@ enum EstadoEquipo {
 }
 
 model Vulnerabilidad {
-  id          Int      @id @default(autoincrement())
+  id          Int                  @id @default(autoincrement())
   activoId    Int
-  descripcion String
-  nivelRiesgo String
-  estado      String
-  mitigacion  String
+  // Identificador público opcional, p. ej. CVE-2026-12345
+  cve         String?
+  descripcion String               @db.Text
+  nivelRiesgo NivelRiesgo
+  // Ciclo: ABIERTA → EN_MITIGACION → MITIGADA (o ACEPTADA)
+  estado      EstadoVulnerabilidad @default(ABIERTA)
+  // Acción aplicada al mitigar, o justificación al aceptar el riesgo
+  mitigacion  String?              @db.Text
+  // Fecha de detección
   fecha       DateTime
+  // Plazo para remediarla (SLA) y fecha en que se cerró
+  fechaLimite DateTime?
+  fechaCierre DateTime?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
 
   activo Activo @relation(fields: [activoId], references: [id])
 
+  @@index([updatedAt])
   @@map("vulnerabilidad")
+}
+
+// Orden de menor a mayor: MySQL ordena los ENUM por posición, así que
+// "orderBy nivelRiesgo desc" pone CRITICO primero.
+enum NivelRiesgo {
+  BAJO
+  MEDIO
+  ALTO
+  CRITICO
+}
+
+enum EstadoVulnerabilidad {
+  ABIERTA
+  EN_MITIGACION
+  MITIGADA
+  ACEPTADA
 }

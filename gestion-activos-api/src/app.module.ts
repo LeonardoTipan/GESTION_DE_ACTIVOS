@@ -8,6 +8,7 @@ import { validateEnv } from './config/env.validation.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.js';
 
 @Module({
   imports: [
@@ -17,6 +18,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
     InventoryModule,
     BackupsModule,
     MaintenanceModule,
+    VulnerabilitiesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
