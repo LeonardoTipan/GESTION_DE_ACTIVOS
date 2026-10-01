@@ -2,6 +2,9 @@ import { createBrowserRouter } from 'react-router'
 import { AuthGate } from '../features/auth/AuthGate.tsx'
 import { RequireRole } from '../features/auth/RequireRole.tsx'
 import { DashboardPage } from '../features/dashboard/DashboardPage.tsx'
+import { ActivosPage } from '../features/inventario/activos/ActivosPage.tsx'
+import { CatalogosPage } from '../features/inventario/catalogos/CatalogosPage.tsx'
+import { ActivoFichaPage } from '../features/inventario/ficha/ActivoFichaPage.tsx'
 import { EnConstruccion } from '../shared/components/EnConstruccion.tsx'
 import { PaginaNoEncontrada } from '../shared/components/PaginaNoEncontrada.tsx'
 import { AppLayout } from './layout/AppLayout.tsx'
@@ -20,7 +23,8 @@ export const router = createBrowserRouter([
     ),
     children: [
       { index: true, element: <DashboardPage /> },
-      { path: 'activos', element: <EnConstruccion modulo="Inventario" fase={2} /> },
+      { path: 'activos', element: <ActivosPage /> },
+      { path: 'activos/:id', element: <ActivoFichaPage /> },
       { path: 'respaldos', element: <EnConstruccion modulo="Respaldos" fase={3} /> },
       {
         path: 'mantenimientos',
@@ -34,7 +38,7 @@ export const router = createBrowserRouter([
         path: 'catalogos',
         element: (
           <RequireRole roles={['admin']}>
-            <EnConstruccion modulo="Catálogos" fase={2} />
+            <CatalogosPage />
           </RequireRole>
         ),
       },
