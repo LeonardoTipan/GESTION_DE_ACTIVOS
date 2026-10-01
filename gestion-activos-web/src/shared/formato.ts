@@ -1,3 +1,5 @@
+import dayjs from 'dayjs'
+
 const fechaCorta = new Intl.DateTimeFormat('es', {
   day: '2-digit',
   month: 'short',
@@ -34,4 +36,23 @@ export function diaAIso(dia: string): string {
 /** "2026-09-15T00:00:00.000Z" → "2026-09-15" (para precargar un DateInput). */
 export function isoADia(iso: string): string {
   return iso.slice(0, 10)
+}
+
+/** Formato de los valores de DateTimePicker de Mantine (hora LOCAL del usuario). */
+export const FORMATO_FECHA_HORA_LOCAL = 'YYYY-MM-DD HH:mm:ss'
+
+/** "2026-10-01 14:30:00" (hora local) → ISO en UTC para la API. */
+export function fechaHoraLocalAIso(valor: string): string {
+  // El núcleo de dayjs interpreta "AAAA-MM-DD HH:mm:ss" como hora local.
+  return dayjs(valor).toISOString()
+}
+
+/** ISO de la API → "2026-10-01 14:30:00" en hora local (para un DateTimePicker). */
+export function isoAFechaHoraLocal(iso: string): string {
+  return dayjs(iso).format(FORMATO_FECHA_HORA_LOCAL)
+}
+
+/** Ahora, en el formato del DateTimePicker (valor inicial de los formularios). */
+export function ahoraLocal(): string {
+  return dayjs().format(FORMATO_FECHA_HORA_LOCAL)
 }

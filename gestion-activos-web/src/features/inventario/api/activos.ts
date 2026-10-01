@@ -26,12 +26,13 @@ export function useActivos(filtros: FiltrosApiActivos) {
   })
 }
 
-export function useActivo(id: number) {
+export function useActivo(id: number, { enabled = true } = {}) {
   return useQuery({
     queryKey: claves.activo(id),
     queryFn: () =>
       ejecutar(api.GET('/api/activos/{id}', { params: { path: { id } } })),
     retry: false,
+    enabled,
   })
 }
 
