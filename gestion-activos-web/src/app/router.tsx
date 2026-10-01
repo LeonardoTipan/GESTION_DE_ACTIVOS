@@ -9,14 +9,12 @@ import { MantenimientoPage } from '../features/mantenimientos/MantenimientoPage.
 import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPage.tsx'
 import { RespaldoPage } from '../features/respaldos/RespaldoPage.tsx'
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
-import { EnConstruccion } from '../shared/components/EnConstruccion.tsx'
+import { VulnerabilidadPage } from '../features/vulnerabilidades/VulnerabilidadPage.tsx'
+import { VulnerabilidadesPage } from '../features/vulnerabilidades/VulnerabilidadesPage.tsx'
 import { PaginaNoEncontrada } from '../shared/components/PaginaNoEncontrada.tsx'
 import { AppLayout } from './layout/AppLayout.tsx'
 
-/**
- * Rutas de la aplicación. Todo cuelga de AuthGate (exige sesión) y AppLayout.
- * Cada fase sustituirá un EnConstruccion por la página real de su feature.
- */
+/** Rutas de la aplicación. Todo cuelga de AuthGate (exige sesión) y AppLayout. */
 export const router = createBrowserRouter([
   {
     path: '/',
@@ -33,10 +31,8 @@ export const router = createBrowserRouter([
       { path: 'respaldos/:id', element: <RespaldoPage /> },
       { path: 'mantenimientos', element: <MantenimientosPage /> },
       { path: 'mantenimientos/:id', element: <MantenimientoPage /> },
-      {
-        path: 'vulnerabilidades',
-        element: <EnConstruccion modulo="Vulnerabilidades" fase={3} />,
-      },
+      { path: 'vulnerabilidades', element: <VulnerabilidadesPage /> },
+      { path: 'vulnerabilidades/:id', element: <VulnerabilidadPage /> },
       {
         path: 'catalogos',
         element: (

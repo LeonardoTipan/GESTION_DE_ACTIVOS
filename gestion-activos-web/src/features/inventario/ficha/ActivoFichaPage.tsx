@@ -19,7 +19,7 @@ import { notifications } from '@mantine/notifications'
 import { IconArchive, IconLock, IconLockOpen, IconPencil } from '@tabler/icons-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { formatearFecha, formatearFechaHora } from '../../../shared/formato.ts'
-import { usePuede, usePuedeOperar } from '../../auth/use-puede.ts'
+import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import { useActivo, useDarDeBajaActivo } from '../api/activos.ts'
 import { ActivoFormModal } from '../activos/ActivoFormModal.tsx'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
@@ -42,7 +42,7 @@ export function ActivoFichaPage() {
   const { data: activo, isPending, error } = useActivo(id)
   const darDeBaja = useDarDeBajaActivo()
   const puedeEditar = usePuedeOperar()
-  const puedeDarDeBaja = usePuede(['admin'])
+  const puedeDarDeBaja = usePuedeAdministrar()
   const [editando, edicion] = useDisclosure()
 
   const volver = (

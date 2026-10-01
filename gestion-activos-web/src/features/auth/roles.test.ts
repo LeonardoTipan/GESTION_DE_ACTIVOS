@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { puedeOperar, tieneRol } from './roles.ts'
+import { puedeAdministrar, puedeOperar, tieneRol } from './roles.ts'
 
 describe('tieneRol', () => {
   it('lista vacía = cualquier usuario autenticado', () => {
@@ -25,5 +25,13 @@ describe('puedeOperar', () => {
   it('el auditor solo lee: nunca opera', () => {
     expect(puedeOperar(['auditor'])).toBe(false)
     expect(puedeOperar([])).toBe(false)
+  })
+})
+
+describe('puedeAdministrar', () => {
+  it('solo el admin (p. ej. aceptar riesgo)', () => {
+    expect(puedeAdministrar(['admin'])).toBe(true)
+    expect(puedeAdministrar(['analista'])).toBe(false)
+    expect(puedeAdministrar(['auditor'])).toBe(false)
   })
 })

@@ -30,12 +30,22 @@ export function tieneRol(
 /**
  * Roles que pueden OPERAR (crear, registrar, ejecutar, editar) en los módulos
  * de inventario, respaldos, mantenimientos y vulnerabilidades. El auditor no
- * está: solo lectura. Las acciones exclusivas del admin (dar de baja,
- * catálogos) siguen usando ['admin'].
+ * está: solo lectura.
  */
 export const ROLES_OPERACION: readonly Rol[] = ['admin', 'analista']
+
+/**
+ * Roles para las acciones reservadas al administrador: aceptar el riesgo de
+ * una vulnerabilidad, dar de baja un activo y gestionar catálogos.
+ */
+export const ROLES_ADMINISTRACION: readonly Rol[] = ['admin']
 
 /** ¿Estos roles permiten operar? (versión pura de usePuedeOperar) */
 export function puedeOperar(rolesDelUsuario: readonly Rol[]): boolean {
   return tieneRol(rolesDelUsuario, ROLES_OPERACION)
+}
+
+/** ¿Estos roles permiten las acciones de administrador? (versión pura de usePuedeAdministrar) */
+export function puedeAdministrar(rolesDelUsuario: readonly Rol[]): boolean {
+  return tieneRol(rolesDelUsuario, ROLES_ADMINISTRACION)
 }
