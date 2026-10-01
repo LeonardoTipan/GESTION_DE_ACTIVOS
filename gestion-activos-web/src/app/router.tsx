@@ -5,6 +5,8 @@ import { DashboardPage } from '../features/dashboard/DashboardPage.tsx'
 import { ActivosPage } from '../features/inventario/activos/ActivosPage.tsx'
 import { CatalogosPage } from '../features/inventario/catalogos/CatalogosPage.tsx'
 import { ActivoFichaPage } from '../features/inventario/ficha/ActivoFichaPage.tsx'
+import { MantenimientoPage } from '../features/mantenimientos/MantenimientoPage.tsx'
+import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPage.tsx'
 import { RespaldoPage } from '../features/respaldos/RespaldoPage.tsx'
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
 import { EnConstruccion } from '../shared/components/EnConstruccion.tsx'
@@ -29,10 +31,8 @@ export const router = createBrowserRouter([
       { path: 'activos/:id', element: <ActivoFichaPage /> },
       { path: 'respaldos', element: <RespaldosPage /> },
       { path: 'respaldos/:id', element: <RespaldoPage /> },
-      {
-        path: 'mantenimientos',
-        element: <EnConstruccion modulo="Mantenimientos" fase={3} />,
-      },
+      { path: 'mantenimientos', element: <MantenimientosPage /> },
+      { path: 'mantenimientos/:id', element: <MantenimientoPage /> },
       {
         path: 'vulnerabilidades',
         element: <EnConstruccion modulo="Vulnerabilidades" fase={3} />,

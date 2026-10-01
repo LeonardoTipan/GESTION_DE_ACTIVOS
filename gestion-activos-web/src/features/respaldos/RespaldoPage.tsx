@@ -19,7 +19,7 @@ import {
 import { IconCheck, IconCopy, IconLock, IconX } from '@tabler/icons-react'
 import { Link, useParams } from 'react-router'
 import { formatearFechaHora } from '../../shared/formato.ts'
-import { usePuede } from '../auth/use-puede.ts'
+import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useRespaldo, type Respaldo } from './api/respaldos.ts'
 import { BadgeEtapa } from './componentes/BadgeEtapa.tsx'
 import { FormEjecucion } from './componentes/FormEjecucion.tsx'
@@ -93,7 +93,7 @@ function DetallePrueba({ respaldo }: { respaldo: Respaldo }) {
 export function RespaldoPage() {
   const id = Number(useParams().id)
   const { data: respaldo, isPending, error } = useRespaldo(id)
-  const puedeRegistrar = usePuede(['admin', 'analista'])
+  const puedeRegistrar = usePuedeOperar()
 
   const migas = (
     <Breadcrumbs>

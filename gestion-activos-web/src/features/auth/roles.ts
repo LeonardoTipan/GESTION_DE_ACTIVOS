@@ -26,3 +26,16 @@ export function tieneRol(
     rolesDelUsuario.some((rol) => rolesPermitidos.includes(rol))
   )
 }
+
+/**
+ * Roles que pueden OPERAR (crear, registrar, ejecutar, editar) en los módulos
+ * de inventario, respaldos, mantenimientos y vulnerabilidades. El auditor no
+ * está: solo lectura. Las acciones exclusivas del admin (dar de baja,
+ * catálogos) siguen usando ['admin'].
+ */
+export const ROLES_OPERACION: readonly Rol[] = ['admin', 'analista']
+
+/** ¿Estos roles permiten operar? (versión pura de usePuedeOperar) */
+export function puedeOperar(rolesDelUsuario: readonly Rol[]): boolean {
+  return tieneRol(rolesDelUsuario, ROLES_OPERACION)
+}

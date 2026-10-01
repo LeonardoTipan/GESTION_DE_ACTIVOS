@@ -14,7 +14,7 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { IconAlertTriangle, IconPlus } from '@tabler/icons-react'
 import { useNavigate, useSearchParams } from 'react-router'
-import { usePuede } from '../../auth/use-puede.ts'
+import { usePuedeOperar } from '../../auth/use-puede.ts'
 import { useActivos } from '../api/activos.ts'
 import { ActivoFormModal } from './ActivoFormModal.tsx'
 import { FiltrosActivos } from './FiltrosActivos.tsx'
@@ -31,7 +31,7 @@ export function ActivosPage() {
   const [params, setParams] = useSearchParams()
   const filtros = leerFiltros(params)
   const { data, isPending, isFetching, error } = useActivos(aConsultaApi(filtros))
-  const puedeRegistrar = usePuede(['admin', 'analista'])
+  const puedeRegistrar = usePuedeOperar()
   const [modalAbierto, modal] = useDisclosure()
 
   const actualizar = (cambios: Partial<Filtros>) =>

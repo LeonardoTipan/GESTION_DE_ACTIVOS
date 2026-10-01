@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
-import { usePuede } from '../auth/use-puede.ts'
+import { usePuedeOperar } from '../auth/use-puede.ts'
 import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import { useRespaldos, type Etapa, type Respaldo } from './api/respaldos.ts'
 import { BadgeEtapa } from './componentes/BadgeEtapa.tsx'
@@ -83,7 +83,7 @@ export function RespaldosPage() {
   const navigate = useNavigate()
   const { filtros, actualizar, limpiar } = useFiltrosUrl(leerFiltros, escribirFiltros)
   const consulta = useRespaldos(aConsultaApi(filtros))
-  const puedeRegistrar = usePuede(['admin', 'analista'])
+  const puedeRegistrar = usePuedeOperar()
   const [modalAbierto, modal] = useDisclosure()
   const hayFiltros = filtros.etapa !== undefined || filtros.activoId !== undefined
 
