@@ -16,6 +16,10 @@ export interface ActivoLocal {
   custodio: string;
   ubicacion: string;
   cifrado: boolean;
+  numeroSerie: string | null;
+  estado: string | null;
+  fabricante: string | null;
+  comentario: string | null;
   deletedAt: Date | null;
   /** Ya tiene entradas de historial firmadas por GLPI (sincronizado antes). */
   enlazadoConGlpi: boolean;

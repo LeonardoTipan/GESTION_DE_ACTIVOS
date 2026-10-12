@@ -114,6 +114,25 @@ describe('GlpiClient · autenticación OAuth2', () => {
     expect((error as Error).message).not.toContain('secreto');
   });
 
+  it('si la conexión falla, el error dice la causa real (p. ej. certificado caducado)', async () => {
+    const fallo = Object.assign(new TypeError('fetch failed'), {
+      cause: Object.assign(new Error('certificate has expired'), {
+        code: 'CERT_HAS_EXPIRED',
+      }),
+    });
+    const cliente = new GlpiClient({
+      apiUrl: 'https://glpi.test/api.php',
+      apiVersion: 'v2',
+      credenciales: CREDENCIALES_PRUEBA,
+      timeoutMs: 1000,
+      fetch: (() => Promise.reject(fallo)) as typeof fetch,
+    });
+    const error = await cliente.autenticar().catch((e: unknown) => e);
+    expect(error).toMatchObject({ codigo: 'CERT_HAS_EXPIRED' });
+    expect((error as Error).message).toContain('certificate has expired');
+    expect((error as Error).message).toContain('ha caducado');
+  });
+
   it('descarta el token al terminar, aunque la tarea falle', async () => {
     const { falso, cliente } = montar({ elementos: { Computer: equipos(1) } });
     await expect(

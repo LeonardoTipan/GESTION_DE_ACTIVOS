@@ -29,6 +29,22 @@ export class ActivoDto {
   @ApiProperty({ type: String, format: 'date-time' })
   ultimaRevision: Date;
 
+  @ApiProperty({ type: String, nullable: true, example: '00330-80000-00000-AA990' })
+  numeroSerie: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Bueno' })
+  estado: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'ASUSTeK COMPUTER INC.' })
+  fabricante: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Características técnicas (texto largo, admite saltos de línea).',
+  })
+  comentario: string | null;
+
   @ApiProperty({ example: 1 })
   categoriaId: number;
 

@@ -47,6 +47,12 @@ model Activo {
   ubicacion      String
   cifrado        Boolean
   ultimaRevision DateTime
+  // Datos técnicos (los informa GLPI; también se pueden registrar a mano)
+  numeroSerie    String?
+  estado         String?
+  fabricante     String?
+  // Características técnicas: texto largo, conserva los saltos de línea
+  comentario     String?  @db.Text
   categoriaId    Int
   criticidadId   Int
 

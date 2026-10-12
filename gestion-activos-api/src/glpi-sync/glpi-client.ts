@@ -173,9 +173,21 @@ export class GlpiClient {
         signal: AbortSignal.timeout(this.opciones.timeoutMs),
       });
     } catch (error) {
+      // fetch solo dice "fetch failed": la causa real (DNS, TLS, timeout) va en `cause`.
+      const causa =
+        error instanceof Error && error.cause instanceof Error
+          ? error.cause
+          : error;
+      const codigo = (causa as { code?: string } | null)?.code;
+      const detalle = causa instanceof Error ? causa.message : String(causa);
+      const pista =
+        codigo === 'CERT_HAS_EXPIRED'
+          ? ' El certificado HTTPS del servidor GLPI ha caducado: debe renovarlo quien administra el servidor.'
+          : '';
       throw new GlpiError(
-        `No se pudo contactar con GLPI (${this.opciones.apiUrl}): ${error instanceof Error ? error.message : String(error)}`,
+        `No se pudo contactar con GLPI (${this.opciones.apiUrl}): ${detalle}${codigo ? ` [${codigo}]` : ''}.${pista}`,
         0,
+        codigo,
       );
     }
   }

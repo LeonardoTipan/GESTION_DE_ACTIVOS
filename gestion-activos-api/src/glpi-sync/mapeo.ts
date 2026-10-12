@@ -1,6 +1,13 @@
 import type { Itemtype } from './config.js';
 import type { GlpiItem } from './glpi-client.js';
-import { fechaGlpiAUtc, MAX_TEXTO, textoGlpi, truncar } from './saneamiento.js';
+import {
+  fechaGlpiAUtc,
+  MAX_TEXTO,
+  MAX_TEXTO_LARGO,
+  textoGlpi,
+  textoLargoGlpi,
+  truncar,
+} from './saneamiento.js';
 
 /** Prefijo del código generado cuando GLPI no tiene número de inventario. */
 const PREFIJO: Record<Itemtype, string> = {
@@ -17,6 +24,18 @@ export interface CamposGlpi {
   ubicacion: string;
 }
 
+/** Datos técnicos, opcionales en nuestro modelo: si GLPI no los trae, quedan vacíos. */
+export interface CamposTecnicos {
+  /** GLPI: serial */
+  numeroSerie: string;
+  /** GLPI: status.name */
+  estado: string;
+  /** GLPI: manufacturer.name */
+  fabricante: string;
+  /** GLPI: comment (texto largo, con sus saltos de línea) */
+  comentario: string;
+}
+
 /** Un elemento de GLPI ya convertido a los campos de nuestro modelo Activo. */
 export interface ActivoGlpi {
   itemtype: Itemtype;
@@ -30,9 +49,10 @@ export interface ActivoGlpi {
    * SOLO lo que GLPI realmente informa. Es lo que se compara y actualiza: un
    * campo vacío en GLPI nunca pisa un dato bueno registrado en local.
    */
-  datos: Partial<CamposGlpi>;
+  datos: Partial<CamposGlpi & CamposTecnicos>;
   /** Registro completo para un alta: `datos` + valores de relleno. */
-  alCrear: CamposGlpi & { cifrado: boolean; ultimaRevision: Date };
+  alCrear: CamposGlpi &
+    Partial<CamposTecnicos> & { cifrado: boolean; ultimaRevision: Date };
   /** Constancia de saneamientos: truncados, valores de relleno, fechas ausentes. */
   avisos: string[];
 }
@@ -79,17 +99,26 @@ export function mapearActivo(
   ahora: Date = new Date(),
 ): ActivoGlpi {
   const avisos: string[] = [];
-  const datos: Partial<CamposGlpi> = {};
+  const datos: Partial<CamposGlpi & CamposTecnicos> = {};
 
-  /** Trunca a 191 dejando constancia. */
-  const recortar = (nombre: string, valor: string): string => {
-    const t = truncar(valor);
+  /** Trunca (a 191 por defecto) dejando constancia. */
+  const recortar = (nombre: string, valor: string, max = MAX_TEXTO): string => {
+    const t = truncar(valor, max);
     if (t.truncado) {
       avisos.push(
-        `${nombre}: truncado de ${t.longitudOriginal} a ${MAX_TEXTO} caracteres`,
+        `${nombre}: truncado de ${t.longitudOriginal} a ${max} caracteres`,
       );
     }
     return t.valor;
+  };
+
+  /** Dato técnico opcional: si GLPI no lo trae, ni se guarda ni se avisa. */
+  const tecnico = (
+    nombre: keyof CamposTecnicos,
+    valor: string | null,
+    max = MAX_TEXTO,
+  ): void => {
+    if (valor !== null) datos[nombre] = recortar(nombre, valor, max);
   };
 
   /** Texto que GLPI informa → entra en `datos`. Si viene vacío → relleno solo para altas. */
@@ -124,6 +153,12 @@ export function mapearActivo(
   );
   const ubicacion = campo('ubicacion', textoGlpi(item.location), RELLENO.ubicacion);
 
+  tecnico('numeroSerie', textoGlpi(item.serial));
+  tecnico('estado', textoGlpi(item.status));
+  tecnico('fabricante', textoGlpi(item.manufacturer));
+  // Columna TEXT: se guarda completo, con sus saltos de línea.
+  tecnico('comentario', textoLargoGlpi(item.comment), MAX_TEXTO_LARGO);
+
   const fechaCruda =
     item.last_inventory_update ?? item.date_mod ?? item.date_creation;
   let ultimaRevision = fechaGlpiAUtc(fechaCruda, zonaHoraria);
@@ -144,6 +179,7 @@ export function mapearActivo(
         : undefined,
     datos,
     alCrear: {
+      ...datos,
       nombre,
       sistemas,
       custodio,

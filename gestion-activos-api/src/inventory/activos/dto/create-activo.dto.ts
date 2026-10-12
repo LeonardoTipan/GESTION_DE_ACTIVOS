@@ -1,10 +1,11 @@
-import { ApiProperty, PartialType } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsDate,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   MaxLength,
   Min,
@@ -74,6 +75,41 @@ export class CreateActivoDto {
   @Type(() => Date)
   @IsDate()
   ultimaRevision: Date;
+
+  @ApiPropertyOptional({ example: '00330-80000-00000-AA990', maxLength: 191 })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  numeroSerie?: string;
+
+  @ApiPropertyOptional({
+    example: 'Bueno',
+    maxLength: 191,
+    description: 'Estado físico u operativo del activo.',
+  })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  estado?: string;
+
+  @ApiPropertyOptional({ example: 'ASUSTeK COMPUTER INC.', maxLength: 191 })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  fabricante?: string;
+
+  @ApiPropertyOptional({
+    example: 'Memoria RAM 64 GB\nCapacidad de disco 1 TB',
+    maxLength: 5000,
+    description: 'Características técnicas (admite saltos de línea).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(5000)
+  comentario?: string;
 
   @ApiProperty({
     example: 1,

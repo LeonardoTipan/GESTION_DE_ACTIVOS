@@ -50,6 +50,10 @@ Un activo se considera "ya enlazado" cuando su historial tiene alguna entrada fi
 | `sistemas` | Equipos: línea "Sistema Operativo …" de `comment` → `model` → `type` · Software: `category` | El listado no trae el SO como campo |
 | `custodio` | `user` → `contact` → `user_tech` | |
 | `ubicacion` | `location` (nombre completo) | |
+| `numeroSerie` | `serial` | Opcional |
+| `estado` | `status.name` | Opcional |
+| `fabricante` | `manufacturer.name` | Opcional |
+| `comentario` | `comment` | Columna `TEXT`: se guarda completo con sus saltos de línea (tope de 5000 caracteres) |
 | `cifrado` | — | GLPI no lo informa en el listado: `false` al crear y después lo gestiona nuestra app |
 | `ultimaRevision` | `date_mod` → `date_creation` (con su desfase, p. ej. `-05:00`, se guardan en UTC) | **Solo al crear** |
 | `categoriaId` | Por tipo: Hardware, Red, Software | **Solo al crear** |
@@ -92,10 +96,14 @@ docker compose logs -f glpi-sync
 
 Sin `--profile glpi`, `docker compose up` sigue arrancando solo `backend` y `frontend`.
 
+## Problemas frecuentes
+
+- **`certificate has expired [CERT_HAS_EXPIRED]`:** el certificado HTTPS del servidor GLPI caducó. Debe renovarlo quien administra el servidor; el motor no desactiva la verificación porque por esa conexión viajan las credenciales.
+- **La API deja de compilar en Docker tras añadir una dependencia** (`Cannot find module …`): reconstruye la imagen y renueva el volumen de `node_modules` con `docker compose up -d --build --renew-anon-volumes backend`.
+
 ## Límites conocidos de esta iteración
 
 - La correspondencia de `Computer` está verificada con una respuesta real de la API v2.2. La de `NetworkEquipment` y `Software` y el parámetro de orden (`sort=id:asc`) salen de la documentación de GLPI: el primer `glpi:simular` los confirmará.
-- `comment`, `status`, `serial` y `manufacturer` de GLPI no se guardan: nuestro modelo `Activo` no tiene columnas para ellos.
 - No se lee el cifrado de discos de los equipos.
 - Si alguien cambia el n.º de inventario de un equipo en GLPI, se verá como un activo nuevo.
 - La sincronización es completa en cada ejecución; todavía no es incremental.

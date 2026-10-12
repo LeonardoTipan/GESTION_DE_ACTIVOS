@@ -141,9 +141,47 @@ describe('mapearActivo · respuesta real de la API v2.2', () => {
         sistemas: 'Windows 11 Pro',
         custodio: 'jpacha',
         ubicacion: 'TICs',
+        numeroSerie: '00330-80000-00000-AA990',
+        estado: 'Bueno',
+        fabricante: 'ASUSTeK COMPUTER INC.',
       },
       avisos: [],
     });
+  });
+
+  it('comment se guarda completo, conservando sus saltos de línea', () => {
+    const activo = mapearActivo('Computer', real, ZONA, AHORA);
+    expect(activo.datos.comentario).toBe(
+      'Memoria RAM 64 GB\nCapacidad de Disco 1T\nSistema Operativo Windows 11 Pro\nIncluye cargador\nQUITO TURISMO: 7-1-22-177',
+    );
+    expect(activo.alCrear).toMatchObject({
+      numeroSerie: '00330-80000-00000-AA990',
+      estado: 'Bueno',
+      fabricante: 'ASUSTeK COMPUTER INC.',
+      comentario: activo.datos.comentario,
+    });
+  });
+
+  it('los datos técnicos son opcionales: si GLPI no los trae, ni se guardan ni se avisa', () => {
+    const activo = mapearActivo(
+      'Computer',
+      { ...real, serial: '', status: null, manufacturer: { id: 0, name: '' }, comment: '\r\n' },
+      ZONA,
+      AHORA,
+    );
+    expect(activo.datos).toEqual({
+      nombre: 'LAPTOP',
+      sistemas: 'ROG Zephyrus M16 GU604VI_GU604VI',
+      custodio: 'jpacha',
+      ubicacion: 'TICs',
+    });
+    expect(activo.avisos).toEqual([]);
+  });
+
+  it('un comentario enorme se recorta a 5000 caracteres, con constancia', () => {
+    const activo = mapearActivo('Computer', { ...real, comment: 'x'.repeat(6000) }, ZONA, AHORA);
+    expect(activo.datos.comentario).toHaveLength(5000);
+    expect(activo.avisos).toContain('comentario: truncado de 6000 a 5000 caracteres');
   });
 
   it('date_mod con desfase -05:00 se guarda en UTC', () => {
@@ -172,6 +210,10 @@ describe('planificar', () => {
     custodio: 'jperez',
     ubicacion: 'Matriz > Piso 2',
     cifrado: true,
+    numeroSerie: 'SN123',
+    estado: null,
+    fabricante: null,
+    comentario: null,
     deletedAt: null,
     enlazadoConGlpi: true,
   };

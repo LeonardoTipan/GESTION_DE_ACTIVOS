@@ -111,3 +111,21 @@ export function fechaGlpiAUtc(valor: unknown, zona: string): Date | null {
   instante = comoUtc - desfaseMs(instante, zona);
   return new Date(instante);
 }
+
+/** Tope de los campos TEXT (el mismo que aplica la API a los textos largos). */
+export const MAX_TEXTO_LARGO = 5000;
+
+/**
+ * Texto de varias líneas de GLPI (p. ej. `comment`), o null si viene vacío.
+ * Conserva los saltos de línea (unificados a "\n") y quita los espacios
+ * sobrantes al final de cada línea, para que la comparación sea estable.
+ */
+export function textoLargoGlpi(valor: unknown): string | null {
+  if (typeof valor !== 'string') return null;
+  const limpio = decodificarHtml(valor)
+    .split(/\r\n|\r|\n/)
+    .map((linea) => linea.trimEnd())
+    .join('\n')
+    .trim();
+  return limpio === '' ? null : limpio;
+}
