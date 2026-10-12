@@ -9,6 +9,11 @@ export interface GlpiSyncConfig {
   apiUrl: string;
   /** Versión de la API en la ruta (por defecto "v2"). */
   apiVersion: string;
+  /**
+   * ⚠️ Solo desarrollo: no valida el certificado HTTPS de GLPI
+   * (GLPI_IGNORE_SSL=true). Prohibido con NODE_ENV=production.
+   */
+  ignorarSsl: boolean;
   /** OAuth2 "password": cliente + usuario de servicio. */
   credenciales: CredencialesGlpi;
   /** Zona horaria (IANA) del servidor GLPI: sus fechas llegan en hora local sin desfase. */
@@ -93,6 +98,12 @@ export function leerConfig(env: Env): GlpiSyncConfig {
       );
     }
   }
+  const ignorarSsl = texto('GLPI_IGNORE_SSL').toLowerCase() === 'true';
+  if (ignorarSsl && texto('NODE_ENV').toLowerCase() === 'production') {
+    errores.push(
+      'GLPI_IGNORE_SSL=true no está permitido con NODE_ENV=production: sin validar el certificado, las credenciales de GLPI quedan expuestas',
+    );
+  }
   const databaseUrl = obligatorio('DATABASE_URL');
 
   const credenciales: CredencialesGlpi = {
@@ -130,6 +141,7 @@ export function leerConfig(env: Env): GlpiSyncConfig {
   const config: GlpiSyncConfig = {
     apiUrl,
     apiVersion: texto('GLPI_API_VERSION') || 'v2',
+    ignorarSsl,
     credenciales,
     zonaHoraria,
     itemtypes: itemtypes as Itemtype[],

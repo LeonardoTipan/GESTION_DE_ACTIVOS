@@ -74,6 +74,7 @@ class InventarioEnMemoria implements InventarioLocal {
 const CONFIG: GlpiSyncConfig = {
   apiUrl: 'https://glpi.test/api.php',
   apiVersion: 'v2',
+  ignorarSsl: false,
   credenciales: CREDENCIALES_PRUEBA,
   zonaHoraria: 'America/Guayaquil',
   itemtypes: ['Computer', 'NetworkEquipment', 'Software'],

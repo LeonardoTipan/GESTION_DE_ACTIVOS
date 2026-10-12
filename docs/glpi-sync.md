@@ -98,7 +98,7 @@ Sin `--profile glpi`, `docker compose up` sigue arrancando solo `backend` y `fro
 
 ## Problemas frecuentes
 
-- **`certificate has expired [CERT_HAS_EXPIRED]`:** el certificado HTTPS del servidor GLPI caducó. Debe renovarlo quien administra el servidor; el motor no desactiva la verificación porque por esa conexión viajan las credenciales.
+- **`certificate has expired [CERT_HAS_EXPIRED]`:** el certificado HTTPS del servidor GLPI caducó. La solución es que lo renueve quien administra el servidor. Mientras tanto, **solo en desarrollo**, `GLPI_IGNORE_SSL=true` hace que el motor no valide el certificado. Es un riesgo: sin validación, alguien en la red podría suplantar al servidor y leer las credenciales. El motor avisa en cada ejecución y lo rechaza con `NODE_ENV=production`; quita la variable en cuanto se renueve el certificado.
 - **La API deja de compilar en Docker tras añadir una dependencia** (`Cannot find module …`): reconstruye la imagen y renueva el volumen de `node_modules` con `docker compose up -d --build --renew-anon-volumes backend`.
 
 ## Límites conocidos de esta iteración

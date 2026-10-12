@@ -64,6 +64,15 @@ describe('leerConfig', () => {
     );
   });
 
+  it('GLPI_IGNORE_SSL: apagado por defecto, solo "true" lo activa y nunca en producción', () => {
+    expect(leerConfig(BASE).ignorarSsl).toBe(false);
+    expect(leerConfig({ ...BASE, GLPI_IGNORE_SSL: '1' }).ignorarSsl).toBe(false);
+    expect(leerConfig({ ...BASE, GLPI_IGNORE_SSL: 'true' }).ignorarSsl).toBe(true);
+    expect(() =>
+      leerConfig({ ...BASE, GLPI_IGNORE_SSL: 'true', NODE_ENV: 'production' }),
+    ).toThrow('no está permitido con NODE_ENV=production');
+  });
+
   it('exige la zona horaria: no hay valor por defecto', () => {
     expect(() => leerConfig({ ...BASE, GLPI_TIMEZONE: '' })).toThrow('Falta GLPI_TIMEZONE');
   });
