@@ -16,3 +16,6 @@ Thumbs.db
 
 # Informes de la sincronización con GLPI (contienen datos del inventario)
 glpi-informes/
+
+# Copias de seguridad de la base (contienen datos reales)
+respaldo*.sql

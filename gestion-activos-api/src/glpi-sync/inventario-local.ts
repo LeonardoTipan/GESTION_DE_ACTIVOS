@@ -1,6 +1,9 @@
 import type { PrismaClient } from '../generated/prisma/client.js';
 import type { BitacoraService } from '../inventory/bitacora/bitacora.service.js';
-import { cambiosDeCreacion } from '../inventory/bitacora/cambios.js';
+import {
+  calcularCambios,
+  cambiosDeCreacion,
+} from '../inventory/bitacora/cambios.js';
 import type { ActivoGlpi } from './mapeo.js';
 import { RESPONSABLE_GLPI, type ActivoLocal, type Plan } from './plan.js';
 
@@ -15,27 +18,30 @@ export interface Catalogos {
 export const claveCodigo = (codigo: string): string =>
   codigo.trim().toLowerCase();
 
+/** Activos locales relevantes para un bloque de elementos de GLPI. */
+export interface Encontrados {
+  /** Por referencia de GLPI ("Computer #12"): los ya enlazados. */
+  porReferencia: Map<string, ActivoLocal>;
+  /** Por código, indexados con claveCodigo() (incluye las bajas). */
+  porCodigo: Map<string, ActivoLocal>;
+}
+
 /**
  * Lo único que el motor necesita de nuestra base. Tenerlo como interfaz
  * permite probar toda la sincronización sin MySQL.
  */
 export interface InventarioLocal {
   catalogos(): Promise<Catalogos>;
-  /** Activos (incluidas las bajas) por código, indexados con claveCodigo(). */
-  buscarPorCodigos(codigos: string[]): Promise<Map<string, ActivoLocal>>;
-  /** Alta + entrada de historial firmada por GLPI. Devuelve el id nuevo. */
+  buscar(referencias: string[], codigos: string[]): Promise<Encontrados>;
+  /** Alta enlazada a GLPI + entrada de historial firmada por GLPI. Devuelve el id nuevo. */
   crear(
     glpi: ActivoGlpi,
+    codigo: string,
     ids: { categoriaId: number; criticidadId: number },
   ): Promise<number>;
   /** Aplica un plan ENLAZAR o ACTUALIZAR + entrada de historial firmada por GLPI. */
   aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void>;
 }
-
-/** Referencia al elemento de GLPI que queda en el historial al crear o enlazar. */
-const origen = (glpi: ActivoGlpi) => ({
-  origenGlpi: { antes: null, despues: `${glpi.itemtype} #${glpi.glpiId}` },
-});
 
 export class InventarioPrisma implements InventarioLocal {
   constructor(
@@ -54,60 +60,52 @@ export class InventarioPrisma implements InventarioLocal {
     };
   }
 
-  async buscarPorCodigos(codigos: string[]): Promise<Map<string, ActivoLocal>> {
-    if (codigos.length === 0) return new Map();
+  async buscar(referencias: string[], codigos: string[]): Promise<Encontrados> {
     const activos = await this.prisma.activo.findMany({
-      where: { codigo: { in: codigos } },
-    });
-    const enlazados = await this.prisma.bitacoraHistorial.findMany({
       where: {
-        activoId: { in: activos.map((a) => a.id) },
-        responsable: RESPONSABLE_GLPI,
+        OR: [{ origenGlpi: { in: referencias } }, { codigo: { in: codigos } }],
       },
-      select: { activoId: true },
-      distinct: ['activoId'],
     });
-    const conRastro = new Set(enlazados.map((e) => e.activoId));
-    return new Map(
-      activos.map((a) => [
-        claveCodigo(a.codigo),
-        { ...a, enlazadoConGlpi: conRastro.has(a.id) },
-      ]),
-    );
+    const porReferencia = new Map<string, ActivoLocal>();
+    const porCodigo = new Map<string, ActivoLocal>();
+    for (const activo of activos) {
+      if (activo.origenGlpi) porReferencia.set(activo.origenGlpi, activo);
+      porCodigo.set(claveCodigo(activo.codigo), activo);
+    }
+    return { porReferencia, porCodigo };
   }
 
   async crear(
     glpi: ActivoGlpi,
+    codigo: string,
     ids: { categoriaId: number; criticidadId: number },
   ): Promise<number> {
-    const data = { codigo: glpi.codigo, ...glpi.alCrear, ...ids };
+    const data = { codigo, origenGlpi: glpi.referencia, ...glpi.alCrear, ...ids };
     return this.prisma.$transaction(async (tx) => {
       const activo = await tx.activo.create({ data });
       await this.bitacora.registrar(tx, {
         activoId: activo.id,
         accion: 'CREAR',
         responsable: RESPONSABLE_GLPI,
-        cambios: { ...cambiosDeCreacion(data), ...origen(glpi) },
+        cambios: cambiosDeCreacion(data),
       });
       return activo.id;
     });
   }
 
   async aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
-    const hayDiferencias = Object.keys(plan.diferencias).length > 0;
+    // Al enlazar, el activo queda asociado a su elemento de GLPI.
+    const data =
+      plan.accion === 'ENLAZAR'
+        ? { ...glpi.datos, origenGlpi: glpi.referencia }
+        : glpi.datos;
     await this.prisma.$transaction(async (tx) => {
-      if (hayDiferencias) {
-        await tx.activo.update({ where: { id: local.id }, data: glpi.datos });
-      }
-      // Al enlazar siempre queda constancia, aunque los datos ya coincidieran.
+      await tx.activo.update({ where: { id: local.id }, data });
       await this.bitacora.registrar(tx, {
         activoId: local.id,
         accion: 'ACTUALIZAR',
         responsable: RESPONSABLE_GLPI,
-        cambios: {
-          ...plan.diferencias,
-          ...(plan.accion === 'ENLAZAR' ? origen(glpi) : {}),
-        },
+        cambios: calcularCambios(local, data),
       });
     });
   }

@@ -144,9 +144,20 @@ describe('mapearActivo · respuesta real de la API v2.2', () => {
         numeroSerie: '00330-80000-00000-AA990',
         estado: 'Bueno',
         fabricante: 'ASUSTeK COMPUTER INC.',
+        tipo: 'Laptop',
+        modelo: 'ROG Zephyrus M16 GU604VI_GU604VI',
+        tecnicoResponsable: 'pasantetic',
+        red: 'SI',
+        contacto: 'PasanteTIC',
       },
       avisos: [],
     });
+  });
+
+  it('date_creation se guarda como fecha de alta, en UTC', () => {
+    const activo = mapearActivo('Computer', real, ZONA, AHORA);
+    expect(activo.datos.fechaAlta?.toISOString()).toBe('2026-05-11T18:56:57.000Z');
+    expect(activo.alCrear.fechaAlta).toEqual(activo.datos.fechaAlta);
   });
 
   it('comment se guarda completo, conservando sus saltos de línea', () => {
@@ -165,13 +176,25 @@ describe('mapearActivo · respuesta real de la API v2.2', () => {
   it('los datos técnicos son opcionales: si GLPI no los trae, ni se guardan ni se avisa', () => {
     const activo = mapearActivo(
       'Computer',
-      { ...real, serial: '', status: null, manufacturer: { id: 0, name: '' }, comment: '\r\n' },
+      {
+        ...real,
+        serial: '',
+        status: null,
+        manufacturer: { id: 0, name: '' },
+        type: null,
+        user_tech: null,
+        network: null,
+        contact: '',
+        date_creation: null,
+        comment: '\r\n',
+      },
       ZONA,
       AHORA,
     );
     expect(activo.datos).toEqual({
       nombre: 'LAPTOP',
       sistemas: 'ROG Zephyrus M16 GU604VI_GU604VI',
+      modelo: 'ROG Zephyrus M16 GU604VI_GU604VI',
       custodio: 'jpacha',
       ubicacion: 'TICs',
     });
@@ -202,9 +225,11 @@ describe('mapearActivo · respuesta real de la API v2.2', () => {
 
 describe('planificar', () => {
   const glpi = mapearActivo('Computer', equipo, ZONA, AHORA);
+  /** Activo local ya enlazado a ese mismo elemento de GLPI. */
   const local: ActivoLocal = {
     id: 15,
     codigo: 'INV-0042',
+    origenGlpi: 'Computer #7',
     nombre: 'PC-CONTABILIDAD-01',
     sistemas: 'Latitude 5420',
     custodio: 'jperez',
@@ -214,19 +239,37 @@ describe('planificar', () => {
     estado: null,
     fabricante: null,
     comentario: null,
+    tipo: 'Laptop',
+    modelo: 'Latitude 5420',
+    tecnicoResponsable: null,
+    red: null,
+    contacto: 'jperez@WKS',
+    fechaAlta: null,
     deletedAt: null,
-    enlazadoConGlpi: true,
   };
+  const manual = { ...local, origenGlpi: null };
+  const nada = { enlazado: null, conMismoCodigo: null, conCodigoGenerado: null };
 
-  it('no existe en local → CREAR', () => {
-    expect(planificar(glpi, null).accion).toBe('CREAR');
+  it('la referencia de GLPI identifica el elemento', () => {
+    expect(glpi).toMatchObject({
+      referencia: 'Computer #7',
+      codigo: 'INV-0042',
+      codigoGenerado: 'GLPI-PC-7',
+    });
+  });
+
+  it('no existe en local → CREAR con el n.º de inventario como código', () => {
+    expect(planificar(glpi, nada)).toMatchObject({
+      accion: 'CREAR',
+      codigo: 'INV-0042',
+      avisos: [],
+    });
   });
 
   it('registrado a mano con el mismo código → ENLAZAR con las diferencias', () => {
     const plan = planificar(glpi, {
-      ...local,
-      enlazadoConGlpi: false,
-      custodio: 'Juan Pérez',
+      ...nada,
+      conMismoCodigo: { ...manual, custodio: 'Juan Pérez' },
     });
     expect(plan.accion).toBe('ENLAZAR');
     expect(plan.diferencias).toEqual({
@@ -235,19 +278,62 @@ describe('planificar', () => {
   });
 
   it('ya enlazado e igual → SIN_CAMBIOS; con cambios → ACTUALIZAR', () => {
-    expect(planificar(glpi, local).accion).toBe('SIN_CAMBIOS');
-    const plan = planificar(glpi, { ...local, ubicacion: 'Bodega' });
+    expect(planificar(glpi, { ...nada, enlazado: local }).accion).toBe('SIN_CAMBIOS');
+    const plan = planificar(glpi, {
+      ...nada,
+      enlazado: { ...local, ubicacion: 'Bodega' },
+    });
     expect(plan.accion).toBe('ACTUALIZAR');
     expect(Object.keys(plan.diferencias)).toEqual(['ubicacion']);
   });
 
+  it('el enlace sobrevive a un cambio de código en local', () => {
+    const plan = planificar(glpi, {
+      ...nada,
+      enlazado: { ...local, codigo: 'QT-7-1-22-177' },
+    });
+    expect(plan).toMatchObject({ accion: 'SIN_CAMBIOS', codigo: 'QT-7-1-22-177' });
+  });
+
+  it('n.º de inventario ya usado por OTRO elemento de GLPI → CREAR con código generado y aviso', () => {
+    // Otro elemento lo recibió en esta misma ejecución…
+    const enEjecucion = planificar(glpi, {
+      ...nada,
+      asignadoEnEstaEjecucion: 'Computer #1',
+    });
+    expect(enEjecucion).toMatchObject({ accion: 'CREAR', codigo: 'GLPI-PC-7' });
+    expect(enEjecucion.avisos[0]).toContain('ya lo usa Computer #1');
+    // …o en una sincronización anterior.
+    const anterior = planificar(glpi, {
+      ...nada,
+      conMismoCodigo: { ...local, id: 3, origenGlpi: 'Computer #1' },
+    });
+    expect(anterior).toMatchObject({ accion: 'CREAR', codigo: 'GLPI-PC-7' });
+  });
+
   it('nunca toca el cifrado local (GLPI no lo informa) ni pisa con campos vacíos', () => {
-    const sinModelo = mapearActivo('Computer', { ...equipo, model: null, type: null }, ZONA, AHORA);
+    const sinModelo = mapearActivo(
+      'Computer',
+      { ...equipo, model: null, type: null },
+      ZONA,
+      AHORA,
+    );
     expect(sinModelo.datos.sistemas).toBeUndefined();
-    expect(planificar(sinModelo, { ...local, sistemas: 'Windows 11' }).accion).toBe('SIN_CAMBIOS');
+    const plan = planificar(sinModelo, {
+      ...nada,
+      enlazado: { ...local, sistemas: 'Windows 11' },
+    });
+    expect(plan.accion).toBe('SIN_CAMBIOS');
   });
 
   it('dado de baja en local → OMITIR (no se reactiva)', () => {
-    expect(planificar(glpi, { ...local, deletedAt: new Date() }).accion).toBe('OMITIR');
+    const deBaja = { ...local, deletedAt: new Date() };
+    expect(planificar(glpi, { ...nada, enlazado: deBaja }).accion).toBe('OMITIR');
+    expect(
+      planificar(glpi, {
+        ...nada,
+        conMismoCodigo: { ...deBaja, origenGlpi: null },
+      }).accion,
+    ).toBe('OMITIR');
   });
 });

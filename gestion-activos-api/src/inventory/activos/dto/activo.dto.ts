@@ -11,6 +11,15 @@ export class ActivoDto {
   @ApiProperty({ example: 'SRV-001' })
   codigo: string;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'Computer #12',
+    description:
+      'Elemento de GLPI del que procede; null si se registró a mano. Lo gestiona la sincronización.',
+  })
+  origenGlpi: string | null;
+
   @ApiProperty({ example: 'Servidor de base de datos' })
   nombre: string;
 
@@ -37,6 +46,29 @@ export class ActivoDto {
 
   @ApiProperty({ type: String, nullable: true, example: 'ASUSTeK COMPUTER INC.' })
   fabricante: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Laptop' })
+  tipo: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'ROG Zephyrus M16' })
+  modelo: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'soporte' })
+  tecnicoResponsable: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'LAN administrativa' })
+  red: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'jperez' })
+  contacto: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Cuándo se registró en el inventario de origen (GLPI).',
+  })
+  fechaAlta: Date | null;
 
   @ApiProperty({
     type: String,

@@ -4,6 +4,7 @@ import { formatearInforme } from './informe.js';
 import {
   claveCodigo,
   type Catalogos,
+  type Encontrados,
   type InventarioLocal,
 } from './inventario-local.js';
 import type { ActivoGlpi } from './mapeo.js';
@@ -29,38 +30,54 @@ class InventarioEnMemoria implements InventarioLocal {
     });
   }
 
-  buscarPorCodigos(codigos: string[]): Promise<Map<string, ActivoLocal>> {
+  buscar(referencias: string[], codigos: string[]): Promise<Encontrados> {
     const claves = new Set(codigos.map(claveCodigo));
-    return Promise.resolve(
-      new Map(
-        this.activos
-          .filter((a) => claves.has(claveCodigo(a.codigo)))
-          .map((a) => [claveCodigo(a.codigo), { ...a }]),
-      ),
-    );
+    const porReferencia = new Map<string, ActivoLocal>();
+    const porCodigo = new Map<string, ActivoLocal>();
+    for (const a of this.activos) {
+      if (a.origenGlpi && referencias.includes(a.origenGlpi)) {
+        porReferencia.set(a.origenGlpi, { ...a });
+      }
+      if (claves.has(claveCodigo(a.codigo))) {
+        porCodigo.set(claveCodigo(a.codigo), { ...a });
+      }
+    }
+    return Promise.resolve({ porReferencia, porCodigo });
   }
 
-  crear(glpi: ActivoGlpi): Promise<number> {
+  crear(glpi: ActivoGlpi, codigo: string): Promise<number> {
     const id = this.activos.length + 100;
     const { ultimaRevision: _, ...campos } = glpi.alCrear;
     this.activos.push({
       id,
-      codigo: glpi.codigo,
+      codigo,
+      origenGlpi: glpi.referencia,
       numeroSerie: null,
       estado: null,
       fabricante: null,
       comentario: null,
+      tipo: null,
+      modelo: null,
+      tecnicoResponsable: null,
+      red: null,
+      contacto: null,
+      fechaAlta: null,
       ...campos,
       deletedAt: null,
-      enlazadoConGlpi: true,
     });
-    this.historial.push({ activoId: id, accion: 'CREAR', responsable: RESPONSABLE_GLPI, cambios: {} });
+    this.historial.push({
+      activoId: id,
+      accion: 'CREAR',
+      responsable: RESPONSABLE_GLPI,
+      cambios: {},
+    });
     return Promise.resolve(id);
   }
 
   aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
     const activo = this.activos.find((a) => a.id === local.id)!;
-    Object.assign(activo, glpi.datos, { enlazadoConGlpi: true });
+    Object.assign(activo, glpi.datos);
+    if (plan.accion === 'ENLAZAR') activo.origenGlpi = glpi.referencia;
     this.historial.push({
       activoId: local.id,
       accion: 'ACTUALIZAR',
@@ -110,6 +127,7 @@ function montar(datos: DatosGlpiFalso, config: Partial<GlpiSyncConfig> = {}) {
 const local = (extra: Partial<ActivoLocal>): ActivoLocal => ({
   id: 1,
   codigo: 'PC-INV-1',
+  origenGlpi: null,
   nombre: 'PC-1',
   sistemas: 'Windows 10',
   custodio: 'jperez',
@@ -119,8 +137,13 @@ const local = (extra: Partial<ActivoLocal>): ActivoLocal => ({
   estado: null,
   fabricante: null,
   comentario: null,
+  tipo: null,
+  modelo: null,
+  tecnicoResponsable: null,
+  red: null,
+  contacto: null,
+  fechaAlta: null,
   deletedAt: null,
-  enlazadoConGlpi: false,
   ...extra,
 });
 
@@ -228,15 +251,48 @@ describe('Sincronizador · aplicando cambios', () => {
     expect(inv.activos).toHaveLength(1);
   });
 
-  it('código repetido dentro de GLPI: el segundo se omite', async () => {
-    const repetidos = lista(2, 'PC').map((e) => ({ ...e, otherserial: 'MISMO' }));
+  it('n.º de inventario repetido en GLPI (muchos equipos con "001"): se importan TODOS, sin duplicar', async () => {
+    const repetidos = lista(4, 'PC').map((e) => ({ ...e, otherserial: '001' }));
     const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: repetidos } },
-      { dryRun: false, itemtypes: ['Computer'] },
+      {
+        elementos: {
+          Computer: repetidos,
+          NetworkEquipment: [{ ...lista(1, 'SW')[0], otherserial: '001' }],
+        },
+      },
+      { dryRun: false, itemtypes: ['Computer', 'NetworkEquipment'] },
     );
     const informe = await sincronizador.ejecutar();
-    expect(informe.elementos.map((e) => e.resultado)).toEqual(['CREAR', 'OMITIR']);
-    expect(informe.elementos[1].motivo).toContain('Computer #1');
+
+    expect(informe.elementos.map((e) => e.resultado)).toEqual(Array(5).fill('CREAR'));
+    expect(inv.activos.map((a) => a.codigo)).toEqual([
+      '001', // el primero conserva el n.º de inventario
+      'GLPI-PC-2',
+      'GLPI-PC-3',
+      'GLPI-PC-4',
+      'GLPI-RED-1', // también entre tipos distintos
+    ]);
+    expect(informe.elementos[1].avisos[0]).toContain('ya lo usa Computer #1');
+
+    // Segunda ejecución: cada uno se reconoce por su referencia de GLPI.
+    const segunda = await sincronizador.ejecutar();
+    expect(segunda.totales.Computer).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 4 });
+    expect(segunda.elementos.map((e) => e.codigo)).toEqual(inv.activos.map((a) => a.codigo));
+    expect(inv.activos).toHaveLength(5);
+  });
+
+  it('si cambian el código del activo en local, sigue enlazado y no se duplica', async () => {
+    const { local: inv, sincronizador } = montar(
+      { elementos: { Computer: lista(1, 'PC') } },
+      { dryRun: false, itemtypes: ['Computer'] },
+    );
+    await sincronizador.ejecutar();
+    inv.activos[0].codigo = 'QT-7-1-22-177';
+    const segunda = await sincronizador.ejecutar();
+    expect(segunda.elementos[0]).toMatchObject({
+      resultado: 'SIN_CAMBIOS',
+      codigo: 'QT-7-1-22-177',
+    });
     expect(inv.activos).toHaveLength(1);
   });
 

@@ -25,7 +25,7 @@ Recomendaciones:
 1. Pide el token.
 2. Por cada tipo, pide los elementos **por bloques** (`GET /api.php/v2/Assets/Computer?start=0&limit=10`), ordenados por id, hasta el total que GLPI informa en `Content-Range`.
 3. Convierte cada elemento a nuestro modelo `Activo`, saneando textos y fechas.
-4. Busca en local el activo con el **mismo código de inventario** y decide qué hacer.
+4. Busca en local el activo que procede de ese elemento (por su **referencia de GLPI**) o, si aún no está enlazado, el que tiene el **mismo código de inventario**, y decide qué hacer.
 5. Si no es una simulación, aplica el cambio y lo registra en el historial con el autor **`GLPI`**.
 6. Muestra el informe en consola y lo guarda en JSON (`glpi-informes/`).
 
@@ -33,19 +33,30 @@ Recomendaciones:
 
 | Resultado | Cuándo | Qué hace al aplicar |
 |---|---|---|
-| `CREAR` | No hay activo local con ese código | Alta + historial `CREAR` firmado por GLPI |
+| `CREAR` | No hay activo local enlazado ni con ese código | Alta + historial `CREAR` firmado por GLPI |
 | `ENLAZAR` | Existe, registrado a mano, con el mismo código | **No duplica.** Actualiza las diferencias y deja constancia del enlace en el historial |
 | `ACTUALIZAR` | Ya enlazado y GLPI trae cambios | Actualiza + historial `ACTUALIZAR` firmado por GLPI |
 | `SIN_CAMBIOS` | Ya enlazado y todo coincide | Nada |
-| `OMITIR` | Papelera o plantilla de GLPI, dado de baja en local, o código repetido en GLPI | Nada; el motivo queda en el informe |
+| `OMITIR` | Papelera o plantilla de GLPI, o dado de baja en local | Nada; el motivo queda en el informe |
 
-Un activo se considera "ya enlazado" cuando su historial tiene alguna entrada firmada por `GLPI`. No hizo falta cambiar el modelo de datos.
+### Identidad y código
+
+Cada activo guarda en `origenGlpi` el elemento de GLPI del que procede (por ejemplo `Computer #12`). **Esa referencia es la identidad**: las siguientes sincronizaciones reconocen el activo por ella, aunque alguien cambie su código en nuestra aplicación.
+
+El **código** se decide solo al crear:
+
+1. Se usa el n.º de inventario de GLPI (`otherserial`) si está libre.
+2. Si ese número ya pertenece a **otro elemento de GLPI**, se genera `GLPI-PC-<id>`, `GLPI-RED-<id>` o `GLPI-SW-<id>` y se avisa en el informe.
+3. Si lo tiene un activo **registrado a mano**, se enlaza con él en lugar de duplicarlo.
+
+El punto 2 existe porque en la práctica los n.º de inventario se repiten (en el GLPI de la empresa, 22 de 25 equipos tenían `001`). Sin él, solo se importaría el primero de cada grupo. Los códigos generados se pueden corregir después a mano sin perder el enlace.
 
 ## Correspondencia de campos
 
 | Activo | Origen en GLPI (API v2) | Notas |
 |---|---|---|
-| `codigo` | `otherserial` (n.º de inventario) | Si está vacío se genera `GLPI-PC-<id>`, `GLPI-RED-<id>` o `GLPI-SW-<id>` |
+| `origenGlpi` | Tipo e id del elemento (`Computer #12`) | Identidad del enlace; único |
+| `codigo` | `otherserial` (n.º de inventario) | **Solo al crear.** Si está vacío o ya lo usa otro elemento de GLPI, se genera `GLPI-PC-<id>`, `GLPI-RED-<id>` o `GLPI-SW-<id>` |
 | `nombre` | `name` | |
 | `sistemas` | Equipos: línea "Sistema Operativo …" de `comment` → `model` → `type` · Software: `category` | El listado no trae el SO como campo |
 | `custodio` | `user` → `contact` → `user_tech` | |
@@ -53,6 +64,12 @@ Un activo se considera "ya enlazado" cuando su historial tiene alguna entrada fi
 | `numeroSerie` | `serial` | Opcional |
 | `estado` | `status.name` | Opcional |
 | `fabricante` | `manufacturer.name` | Opcional |
+| `tipo` | `type.name` | Opcional |
+| `modelo` | `model.name` | Opcional |
+| `tecnicoResponsable` | `user_tech.name` | Opcional |
+| `red` | `network.name` | Opcional |
+| `contacto` | `contact` | Opcional |
+| `fechaAlta` | `date_creation` | Cuándo se registró en GLPI; se guarda en UTC |
 | `comentario` | `comment` | Columna `TEXT`: se guarda completo con sus saltos de línea (tope de 5000 caracteres) |
 | `cifrado` | — | GLPI no lo informa en el listado: `false` al crear y después lo gestiona nuestra app |
 | `ultimaRevision` | `date_mod` → `date_creation` (con su desfase, p. ej. `-05:00`, se guardan en UTC) | **Solo al crear** |
@@ -103,7 +120,7 @@ Sin `--profile glpi`, `docker compose up` sigue arrancando solo `backend` y `fro
 
 ## Límites conocidos de esta iteración
 
-- La correspondencia de `Computer` está verificada con una respuesta real de la API v2.2. La de `NetworkEquipment` y `Software` y el parámetro de orden (`sort=id:asc`) salen de la documentación de GLPI: el primer `glpi:simular` los confirmará.
 - No se lee el cifrado de discos de los equipos.
-- Si alguien cambia el n.º de inventario de un equipo en GLPI, se verá como un activo nuevo.
+- **Fecha de compra y dirección IP:** no se sincronizan. En el GLPI de la empresa ningún equipo tiene datos financieros (`Infocom`) ni tarjetas de red registradas, y la API v2 no expone las IP.
+- Cambiar el n.º de inventario de un equipo en GLPI no cambia el código del activo ya creado (el enlace es por referencia).
 - La sincronización es completa en cada ejecución; todavía no es incremental.

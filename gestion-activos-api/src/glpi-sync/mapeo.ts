@@ -34,13 +34,30 @@ export interface CamposTecnicos {
   fabricante: string;
   /** GLPI: comment (texto largo, con sus saltos de línea) */
   comentario: string;
+  /** GLPI: type.name (Laptop, Switch…) */
+  tipo: string;
+  /** GLPI: model.name */
+  modelo: string;
+  /** GLPI: user_tech.name */
+  tecnicoResponsable: string;
+  /** GLPI: network.name */
+  red: string;
+  /** GLPI: contact */
+  contacto: string;
+  /** GLPI: date_creation (cuándo se registró en GLPI), en UTC */
+  fechaAlta: Date;
 }
 
 /** Un elemento de GLPI ya convertido a los campos de nuestro modelo Activo. */
 export interface ActivoGlpi {
   itemtype: Itemtype;
   glpiId: number;
+  /** Identidad del elemento en GLPI: "Computer #12". */
+  referencia: string;
+  /** Código preferido: el n.º de inventario de GLPI (o el generado si no tiene). */
   codigo: string;
+  /** Código alternativo, siempre único: se usa si el preferido ya está ocupado. */
+  codigoGenerado: string;
   /** false = GLPI no tenía n.º de inventario y el código se generó. */
   codigoDeInventario: boolean;
   /** Motivo por el que no debe sincronizarse (papelera o plantilla de GLPI). */
@@ -114,7 +131,7 @@ export function mapearActivo(
 
   /** Dato técnico opcional: si GLPI no lo trae, ni se guarda ni se avisa. */
   const tecnico = (
-    nombre: keyof CamposTecnicos,
+    nombre: Exclude<keyof CamposTecnicos, 'fechaAlta'>,
     valor: string | null,
     max = MAX_TEXTO,
   ): void => {
@@ -137,9 +154,8 @@ export function mapearActivo(
   };
 
   const inventario = textoGlpi(item.otherserial);
-  const codigo = inventario
-    ? recortar('codigo', inventario)
-    : `GLPI-${PREFIJO[itemtype]}-${item.id}`;
+  const codigoGenerado = `GLPI-${PREFIJO[itemtype]}-${item.id}`;
+  const codigo = inventario ? recortar('codigo', inventario) : codigoGenerado;
   if (!inventario) {
     avisos.push(`codigo: sin n.º de inventario en GLPI, se genera "${codigo}"`);
   }
@@ -158,6 +174,13 @@ export function mapearActivo(
   tecnico('fabricante', textoGlpi(item.manufacturer));
   // Columna TEXT: se guarda completo, con sus saltos de línea.
   tecnico('comentario', textoLargoGlpi(item.comment), MAX_TEXTO_LARGO);
+  tecnico('tipo', textoGlpi(item.type));
+  tecnico('modelo', textoGlpi(item.model));
+  tecnico('tecnicoResponsable', textoGlpi(item.user_tech));
+  tecnico('red', textoGlpi(item.network));
+  tecnico('contacto', textoGlpi(item.contact));
+  const fechaAlta = fechaGlpiAUtc(item.date_creation, zonaHoraria);
+  if (fechaAlta) datos.fechaAlta = fechaAlta;
 
   const fechaCruda =
     item.last_inventory_update ?? item.date_mod ?? item.date_creation;
@@ -170,7 +193,9 @@ export function mapearActivo(
   return {
     itemtype,
     glpiId: item.id,
+    referencia: `${itemtype} #${item.id}`,
     codigo,
+    codigoGenerado,
     codigoDeInventario: inventario !== null,
     excluido: item.is_template
       ? 'Es una plantilla de GLPI, no un activo real.'

@@ -41,6 +41,9 @@ model Criticidad {
 model Activo {
   id             Int      @id @default(autoincrement())
   codigo         String   @unique
+  // Elemento de GLPI del que procede ("Computer #12"); null si se registró a mano.
+  // Es la identidad con la que la sincronización reconoce el activo.
+  origenGlpi     String?  @unique
   nombre         String
   sistemas       String
   custodio       String
@@ -51,6 +54,15 @@ model Activo {
   numeroSerie    String?
   estado         String?
   fabricante     String?
+  // Tipo de equipo (Laptop, Switch…) y modelo comercial
+  tipo           String?
+  modelo         String?
+  // Técnico a cargo del soporte, red a la que se conecta y contacto de uso
+  tecnicoResponsable String?
+  red            String?
+  contacto       String?
+  // Cuándo se registró en el inventario de origen (GLPI)
+  fechaAlta      DateTime?
   // Características técnicas: texto largo, conserva los saltos de línea
   comentario     String?  @db.Text
   categoriaId    Int

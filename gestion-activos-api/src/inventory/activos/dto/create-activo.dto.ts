@@ -101,6 +101,52 @@ export class CreateActivoDto {
   @MaxLength(191)
   fabricante?: string;
 
+  @ApiPropertyOptional({ example: 'Laptop', maxLength: 191, description: 'Tipo de equipo.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  tipo?: string;
+
+  @ApiPropertyOptional({ example: 'ROG Zephyrus M16', maxLength: 191 })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  modelo?: string;
+
+  @ApiPropertyOptional({ example: 'soporte', maxLength: 191, description: 'Técnico a cargo del soporte.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  tecnicoResponsable?: string;
+
+  @ApiPropertyOptional({ example: 'LAN administrativa', maxLength: 191, description: 'Red a la que se conecta.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  red?: string;
+
+  @ApiPropertyOptional({ example: 'jperez', maxLength: 191, description: 'Persona o usuario de contacto.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  contacto?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    example: '2026-05-11T18:56:57.000Z',
+    description: 'Cuándo se registró en el inventario de origen.',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaAlta?: Date;
+
   @ApiPropertyOptional({
     example: 'Memoria RAM 64 GB\nCapacidad de disco 1 TB',
     maxLength: 5000,

@@ -62,10 +62,10 @@ export class Sincronizador {
       // Simulando se sigue para ver el resto del informe; aplicando, no se escribe a medias.
       if (faltan.length === 0 || this.config.dryRun) {
         await this.glpi.conSesion(async () => {
-          /** Códigos ya vistos en esta ejecución → detecta repetidos dentro de GLPI. */
-          const vistos = new Map<string, string>();
+          /** Código → elemento de GLPI que lo recibió en esta ejecución (n.º de inventario repetidos). */
+          const asignados = new Map<string, string>();
           for (const itemtype of this.config.itemtypes) {
-            await this.sincronizarTipo(itemtype, catalogos, vistos, informe);
+            await this.sincronizarTipo(itemtype, catalogos, asignados, informe);
           }
         });
       }
@@ -98,7 +98,7 @@ export class Sincronizador {
   private async sincronizarTipo(
     itemtype: Itemtype,
     catalogos: Catalogos,
-    vistos: Map<string, string>,
+    asignados: Map<string, string>,
     informe: Informe,
   ): Promise<void> {
     const totales = (informe.totales[itemtype] = totalesVacios());
@@ -115,7 +115,7 @@ export class Sincronizador {
           itemtype,
           bloque,
           catalogos,
-          vistos,
+          asignados,
         );
         for (const elemento of elementos) {
           totales.leidos += 1;
@@ -133,15 +133,16 @@ export class Sincronizador {
     itemtype: Itemtype,
     bloque: GlpiItem[],
     catalogos: Catalogos,
-    vistos: Map<string, string>,
+    asignados: Map<string, string>,
   ): Promise<ElementoInforme[]> {
     const mapeados: ActivoGlpi[] = bloque.map((item) =>
       mapearActivo(itemtype, item, this.config.zonaHoraria),
     );
 
     // Una sola consulta a la base por bloque.
-    const locales = await this.local.buscarPorCodigos(
-      mapeados.map((m) => m.codigo),
+    const locales = await this.local.buscar(
+      mapeados.map((m) => m.referencia),
+      mapeados.flatMap((m) => [m.codigo, m.codigoGenerado]),
     );
 
     const resultados: ElementoInforme[] = [];
@@ -163,26 +164,32 @@ export class Sincronizador {
         continue;
       }
 
-      const clave = claveCodigo(glpi.codigo);
-      const repetido = vistos.get(clave);
-      if (repetido) {
-        elemento.resultado = 'OMITIR';
-        elemento.motivo = `Código repetido en GLPI: ya lo usa ${repetido}.`;
-        continue;
+      const enlazado = locales.porReferencia.get(glpi.referencia) ?? null;
+      const conMismoCodigo =
+        locales.porCodigo.get(claveCodigo(glpi.codigo)) ?? null;
+      const plan = planificar(glpi, {
+        enlazado,
+        conMismoCodigo,
+        asignadoEnEstaEjecucion: asignados.get(claveCodigo(glpi.codigo)),
+        conCodigoGenerado:
+          locales.porCodigo.get(claveCodigo(glpi.codigoGenerado)) ?? null,
+      });
+      // El código queda reservado para este elemento durante toda la ejecución.
+      if (plan.accion === 'CREAR' || plan.accion === 'ENLAZAR') {
+        asignados.set(claveCodigo(plan.codigo), glpi.referencia);
       }
-      vistos.set(clave, `${itemtype} #${glpi.glpiId}`);
-
-      const local = locales.get(clave) ?? null;
-      const plan = planificar(glpi, local);
+      const local = enlazado ?? (plan.accion === 'ENLAZAR' ? conMismoCodigo : null);
+      elemento.codigo = plan.codigo;
       elemento.resultado = plan.accion;
       elemento.diferencias = plan.diferencias;
       elemento.motivo = plan.motivo;
+      elemento.avisos = [...plan.avisos, ...glpi.avisos];
       elemento.activoId = local?.id;
 
       if (this.config.dryRun) continue;
       try {
         if (plan.accion === 'CREAR') {
-          elemento.activoId = await this.local.crear(glpi, {
+          elemento.activoId = await this.local.crear(glpi, plan.codigo, {
             // Verificados en catalogosQueFaltan() antes de conectar con GLPI.
             categoriaId: catalogos.categorias.get(
               this.config.categoriaPorTipo[itemtype],

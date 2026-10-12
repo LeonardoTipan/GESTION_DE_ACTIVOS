@@ -52,6 +52,9 @@ export class ActivosService {
         { nombre: { contains: query.q } },
         { custodio: { contains: query.q } },
         { ubicacion: { contains: query.q } },
+        { numeroSerie: { contains: query.q } },
+        { fabricante: { contains: query.q } },
+        { modelo: { contains: query.q } },
       ];
     }
 
