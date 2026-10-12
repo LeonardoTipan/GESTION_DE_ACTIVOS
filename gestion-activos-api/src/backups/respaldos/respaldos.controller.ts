@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -13,6 +16,7 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -26,6 +30,7 @@ import {
   CreateRespaldoDto,
   RegistrarEjecucionDto,
   RegistrarPruebaDto,
+  UpdateRespaldoDto,
 } from './dto/capas.dto.js';
 import { QueryRespaldosDto } from './dto/query-respaldos.dto.js';
 import { PaginatedRespaldoDto, RespaldoDto } from './dto/respaldo.dto.js';
@@ -118,5 +123,36 @@ export class RespaldosController {
     @Body() dto: RegistrarPruebaDto,
   ): Promise<RespaldoDto> {
     return this.respaldos.registrarPrueba(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Editar (admin, analista)',
+    description: 'Corrige el alcance. Solo mientras la ejecución está PENDIENTE.',
+  })
+  @ApiOkResponse({ type: RespaldoDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'La ejecución ya fue registrada.' })
+  @Roles('admin', 'analista')
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: UpdateRespaldoDto,
+  ): Promise<RespaldoDto> {
+    return this.respaldos.update(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Eliminar (solo admin)',
+    description:
+      'Borrado definitivo del respaldo, en cualquier estado. No afecta al activo ni a su historial.',
+  })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @Roles('admin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.respaldos.remove(id);
   }
 }

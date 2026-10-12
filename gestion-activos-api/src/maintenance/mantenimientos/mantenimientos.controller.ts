@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -13,6 +16,7 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -24,6 +28,7 @@ import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
   CancelarMantenimientoDto,
+  EditarMantenimientoDto,
   FinalizarMantenimientoDto,
   IniciarMantenimientoDto,
   ProgramarMantenimientoDto,
@@ -134,5 +139,36 @@ export class MantenimientosController {
     @Body() dto: CancelarMantenimientoDto,
   ): Promise<MantenimientoDto> {
     return this.mantenimientos.cancelar(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Editar (admin, analista)',
+    description: 'Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO.',
+  })
+  @ApiOkResponse({ type: MantenimientoDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya no está en fase PROGRAMADO.' })
+  @Roles('admin', 'analista')
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: EditarMantenimientoDto,
+  ): Promise<MantenimientoDto> {
+    return this.mantenimientos.update(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Eliminar (solo admin)',
+    description:
+      'Borrado definitivo del mantenimiento, en cualquier estado. No afecta al activo ni a su historial.',
+  })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @Roles('admin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.mantenimientos.remove(id);
   }
 }

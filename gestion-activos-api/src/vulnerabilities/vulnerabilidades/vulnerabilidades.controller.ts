@@ -1,7 +1,10 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   ParseIntPipe,
   Patch,
@@ -13,6 +16,7 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
+  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
@@ -24,6 +28,7 @@ import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
   AceptarRiesgoDto,
+  EditarVulnerabilidadDto,
   MitigarVulnerabilidadDto,
   RegistrarVulnerabilidadDto,
 } from './dto/acciones.dto.js';
@@ -147,5 +152,36 @@ export class VulnerabilidadesController {
     @Body() dto: AceptarRiesgoDto,
   ): Promise<VulnerabilidadDto> {
     return this.vulnerabilidades.aceptarRiesgo(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Editar (admin, analista)',
+    description: 'Corrige CVE, descripción, nivel de riesgo o fechas. Solo mientras está pendiente.',
+  })
+  @ApiOkResponse({ type: VulnerabilidadDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya está cerrada, o el activo ya tiene ese CVE pendiente.' })
+  @Roles('admin', 'analista')
+  @Patch(':id')
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: EditarVulnerabilidadDto,
+  ): Promise<VulnerabilidadDto> {
+    return this.vulnerabilidades.update(id, dto);
+  }
+
+  @ApiOperation({
+    summary: 'Eliminar (solo admin)',
+    description:
+      'Borrado definitivo de la vulnerabilidad, en cualquier estado. No afecta al activo ni a su historial.',
+  })
+  @ApiNoContentResponse()
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @Roles('admin')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @Delete(':id')
+  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
+    return this.vulnerabilidades.remove(id);
   }
 }

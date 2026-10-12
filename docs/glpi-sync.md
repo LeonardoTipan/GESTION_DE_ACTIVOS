@@ -29,6 +29,8 @@ Trabaja en dos fases:
 
 Al terminar muestra el informe en consola y lo guarda en JSON (`glpi-informes/`).
 
+**Antes de escribir comprueba la integridad:** si hay registros (respaldos, mantenimientos, vulnerabilidades o historial) que apuntan a un activo que no existe, la sincronización real se niega a escribir. Un alta reutilizaría ese id y heredaría registros ajenos. Esos huérfanos solo aparecen si alguien vacía la tabla de activos saltándose las claves foráneas.
+
 **Nunca borra ni da de baja activos.** Que un elemento falte en una respuesta, o que GLPI falle, no es una orden de borrado:
 
 - Si la lectura de un tipo falla (red, error de GLPI, respuesta que no es una lista), ese tipo **no se procesa** y queda como error. Los demás tipos continúan.
@@ -72,7 +74,8 @@ El **código** (`activo.codigo`) es el identificador visible y único en nuestra
 
 Reglas:
 
-- El código **nunca se renombra** después: ni por una nueva regla ni porque GLPI cambie. Si lo corriges a mano, la sincronización lo respeta.
+- El código **no se renombra** después por sí solo: ni por una nueva regla ni porque GLPI cambie. Si lo corriges a mano, la sincronización lo respeta siempre.
+- **Mejorar códigos de respaldo (opción explícita):** con `--mejorar-codigos` (o `GLPI_MEJORAR_CODIGOS=true`), un activo que siga con su código de respaldo (`GLPI-PC-12`) pasa al mejor código disponible con las mismas reglas de arriba. Solo afecta a códigos generados; el cambio queda en el historial. Sirve, por ejemplo, si la primera importación se hizo sin configurar la etiqueta institucional.
 - Si dos elementos comparten el código institucional, **se conservan los dos** y ninguno lo recibe como código: ambos usan el siguiente candidato y quedan marcados para revisión.
 - El valor **original** se guarda siempre aparte, sin corregir: `codigoInstitucional` y `numeroInventario`. Un código mal formado (`7-1722-47`, `7-1-7-22--76`) se conserva tal cual, pero no se usa como código operativo.
 - Un valor con prefijo, como `S/N: 7-1-22-183`, se guarda **entero** y tampoco se usa como código: no se da por hecho qué parte es el código. Solo un `S/N` a secas se entiende como "sin número" y no se guarda.
@@ -144,7 +147,7 @@ npm run glpi:sync -- --aplicar  # escribe en la base
 npm run glpi:worker             # worker con node-cron (GLPI_SYNC_CRON)
 ```
 
-Opciones de `glpi:sync`: `--simular` o `--aplicar`, `--max=N` (tope por tipo) y `--bloque=N`.
+Opciones de `glpi:sync`: `--simular` o `--aplicar`, `--max=N` (tope por tipo), `--bloque=N` y `--mejorar-codigos`.
 
 **La simulación es el modo por defecto.** Solo se escribe con `--aplicar` o con `GLPI_DRY_RUN=false`.
 

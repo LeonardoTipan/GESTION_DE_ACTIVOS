@@ -35,6 +35,11 @@ export class ActivoDuplicadoError extends Error {
 export interface InventarioLocal {
   catalogos(): Promise<Catalogos>;
   /**
+   * Registros que apuntan a un activo que no existe (por tabla). Con huérfanos,
+   * un alta podría reutilizar su id y heredarlos: no se debe escribir.
+   */
+  huerfanos(): Promise<{ tabla: string; cantidad: number }[]>;
+  /**
    * Activos (incluidas las bajas) vinculados a alguna de esas referencias de
    * GLPI, o cuyo código operativo, n.º de inventario o código institucional
    * coincida con alguno de esos valores.
@@ -69,6 +74,22 @@ export class InventarioPrisma implements InventarioLocal {
       categorias: new Map(categorias.map((c) => [c.nombre, c.id])),
       criticidades: new Map(criticidades.map((c) => [c.nivel, c.id])),
     };
+  }
+
+  async huerfanos(): Promise<{ tabla: string; cantidad: number }[]> {
+    const encontrados: { tabla: string; cantidad: number }[] = [];
+    for (const tabla of [
+      'respaldo',
+      'mantenimiento',
+      'vulnerabilidad',
+      'bitacora_historial',
+    ]) {
+      const [{ n }] = await this.prisma.$queryRawUnsafe<{ n: bigint }[]>(
+        `SELECT COUNT(*) AS n FROM \`${tabla}\` t LEFT JOIN activo a ON a.id = t.activoId WHERE a.id IS NULL`,
+      );
+      if (Number(n) > 0) encontrados.push({ tabla, cantidad: Number(n) });
+    }
+    return encontrados;
   }
 
   buscar(referencias: string[], valores: string[]): Promise<ActivoLocal[]> {
@@ -113,11 +134,13 @@ export class InventarioPrisma implements InventarioLocal {
 
   async aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
     // Al vincular, el activo queda asociado a su elemento de GLPI. El código
-    // operativo NUNCA se cambia aquí.
-    const data =
-      plan.accion === 'ENLAZAR'
-        ? { ...glpi.datos, origenGlpi: glpi.referencia }
-        : glpi.datos;
+    // operativo solo cambia si el plan lo pide expresamente (nuevoCodigo).
+    const data = {
+      ...glpi.datos,
+      ...(plan.accion === 'ENLAZAR' ? { origenGlpi: glpi.referencia } : {}),
+      // Solo con la política explícita de mejorar códigos de respaldo.
+      ...(plan.nuevoCodigo ? { codigo: plan.nuevoCodigo } : {}),
+    };
     try {
       await this.prisma.$transaction(async (tx) => {
         // Solo si sigue vigente y, al vincular, si nadie lo vinculó entretanto.

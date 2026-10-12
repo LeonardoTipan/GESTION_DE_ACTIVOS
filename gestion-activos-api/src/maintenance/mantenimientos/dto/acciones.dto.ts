@@ -1,4 +1,9 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  OmitType,
+  PartialType,
+} from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDate,
@@ -51,6 +56,11 @@ export class ProgramarMantenimientoDto {
   @IsDate()
   fecha: Date;
 }
+
+/** Edición: tipo, actividad y fecha programada; solo mientras está PROGRAMADO. */
+export class EditarMantenimientoDto extends PartialType(
+  OmitType(ProgramarMantenimientoDto, ['activoId'] as const),
+) {}
 
 /** Iniciar: PROGRAMADO → EN_EJECUCION. */
 export class IniciarMantenimientoDto {

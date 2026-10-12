@@ -36,6 +36,7 @@ const CONFIG: GlpiSyncConfig = {
   itemtypes: ['Computer', 'NetworkEquipment'],
   tamanoBloque: 50,
   dryRun: false,
+  mejorarCodigos: false,
   cron: '0 2 * * *',
   criticidadPorDefecto: 'Media',
   codigoInstitucional: REGLA,
@@ -318,6 +319,92 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
         expect(await prisma.activo.count()).toBe(27);
         expect(await prisma.activo.findUniqueOrThrow({ where: { id: previo.id } })).toEqual(previo);
         expect(await prisma.bitacoraHistorial.count({ where: { activoId: previo.id } })).toBe(0);
+      },
+      LENTO,
+    );
+  });
+
+  describe('integridad: registros huérfanos', () => {
+    beforeAll(vaciarActivos, LENTO);
+
+    it(
+      'con un registro huérfano la sincronización real NO escribe nada',
+      async () => {
+        // Como en el incidente real: un respaldo que apunta a un activo borrado.
+        await prisma.$transaction([
+          prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 0'),
+          prisma.$executeRawUnsafe(
+            "INSERT INTO respaldo (activoId, alcanceDetalle, updatedAt) VALUES (1, 'huérfano', NOW(3))",
+          ),
+          prisma.$executeRawUnsafe('SET FOREIGN_KEY_CHECKS = 1'),
+        ]);
+        try {
+          const informe = await motor(INVENTARIO()).ejecutar();
+          expect(informe.errores[0]).toContain('1 en respaldo');
+          expect(informe.errores[0]).toContain('No se escribe nada');
+          expect(await prisma.activo.count()).toBe(0);
+
+          // La simulación sí informa, avisando del bloqueo.
+          const simulacion = await motor(INVENTARIO(), { dryRun: true }).ejecutar();
+          expect(simulacion.errores[0]).toContain('se negaría a escribir');
+          expect(simulacion.totales.Computer).toMatchObject({ CREAR: 25 });
+        } finally {
+          await prisma.respaldo.deleteMany();
+        }
+        // Resuelto el huérfano, importa con normalidad.
+        const informe = await motor(INVENTARIO()).ejecutar();
+        expect(informe.errores).toEqual([]);
+        expect(await prisma.activo.count()).toBe(26);
+      },
+      LENTO,
+    );
+  });
+
+  describe('mejorar códigos de respaldo', () => {
+    beforeAll(vaciarActivos, LENTO);
+    const SIN_ETIQUETA = { codigoInstitucional: { ...REGLA, etiqueta: '' } };
+
+    it(
+      'importación sin etiqueta → todo con código de respaldo; después se mejora sin duplicar ni perder el vínculo',
+      async () => {
+        await motor(INVENTARIO(), SIN_ETIQUETA).ejecutar();
+        const antes = await prisma.activo.findMany({ orderBy: { id: 'asc' } });
+        expect(antes.every((a) => a.codigo.startsWith('GLPI-') && a.codigoInstitucional === null)).toBe(true);
+
+        // Simulación de la mejora: informa, no escribe.
+        const simulacion = await motor(INVENTARIO(), { mejorarCodigos: true, dryRun: true }).ejecutar();
+        expect(simulacion.elementos.filter((e) => e.diferencias.codigo)).toHaveLength(12);
+        expect(await prisma.activo.findMany({ orderBy: { id: 'asc' } })).toEqual(antes);
+
+        const informe = await motor(INVENTARIO(), { mejorarCodigos: true }).ejecutar();
+        expect(informe.errores).toEqual([]);
+        expect(informe.totales.Computer).toMatchObject({ CREAR: 0, ERROR: 0 });
+
+        const despues = await prisma.activo.findMany({ orderBy: { id: 'asc' } });
+        expect(despues).toHaveLength(26);
+        // Mismos activos (mismo id y misma referencia), con el código definitivo.
+        expect(despues.map((a) => [a.id, a.origenGlpi])).toEqual(antes.map((a) => [a.id, a.origenGlpi]));
+        const codigos = Object.fromEntries(
+          despues
+            .filter((a) => a.origenGlpi!.startsWith('Computer'))
+            .map((a) => [Number(a.origenGlpi!.split('#')[1]), a.codigo]),
+        );
+        expect(codigos).toEqual(CODIGOS_ESPERADOS);
+
+        // El cambio de código queda en el historial, firmado por GLPI.
+        const pc2 = despues.find((a) => a.origenGlpi === 'Computer #2')!;
+        const entrada = await prisma.bitacoraHistorial.findFirstOrThrow({
+          where: { activoId: pc2.id, accion: 'ACTUALIZAR' },
+        });
+        expect(entrada.responsable).toBe('GLPI');
+        expect(JSON.parse(entrada.detalle)).toMatchObject({
+          codigo: { antes: 'GLPI-PC-2', despues: '7-1-22-69' },
+          codigoInstitucional: { antes: null, despues: '7-1-22-69' },
+        });
+
+        // Idempotente.
+        const otra = await motor(INVENTARIO(), { mejorarCodigos: true }).ejecutar();
+        expect(otra.totales.Computer).toMatchObject({ ACTUALIZAR: 0, SIN_CAMBIOS: 25 });
       },
       LENTO,
     );

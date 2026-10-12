@@ -49,6 +49,8 @@ export interface Plan {
   accion: Accion;
   /** Código operativo: el que el activo ya tiene o el que tendrá al crearse. */
   codigo: string;
+  /** Solo con la política "mejorar códigos": el código que sustituye al de respaldo. */
+  nuevoCodigo?: string;
   /** Activo local sobre el que se actúa (vinculado o por vincular). */
   local: ActivoLocal | null;
   /** Diferencias local → GLPI: { campo: { antes, despues } }. */
@@ -80,6 +82,8 @@ export interface Contexto {
   candidatos: CandidatoEvaluado[];
   /** Activo local que ya ocupa el código de respaldo (caso muy raro). */
   conCodigoRespaldo: ActivoLocal | null;
+  /** Política explícita: sustituir un código de respaldo por uno definitivo. */
+  mejorarCodigoDeRespaldo: boolean;
   /** Códigos y activos ya comprometidos en esta misma ejecución. */
   reservados: {
     /** claveCodigo(código) → referencia de GLPI que lo recibió. */
@@ -101,6 +105,42 @@ const otros = (referencias: string[]): string =>
   referencias.length <= 3
     ? referencias.join(', ')
     : `${referencias.slice(0, 3).join(', ')} y ${referencias.length - 3} más`;
+
+/**
+ * El mejor código libre entre los candidatos: no repetido en GLPI, no usado por
+ * otro activo local y no asignado ya en esta ejecución. null si no hay ninguno.
+ * Deja constancia de por qué se descarta cada candidato.
+ */
+function elegirCodigo(
+  contexto: Contexto,
+  revision: string[],
+  propio: ActivoLocal | null = null,
+): string | null {
+  for (const candidato of contexto.candidatos) {
+    const nombre = NOMBRE_ORIGEN[candidato.origen];
+    const reservadoPor = contexto.reservados.codigos.get(clave(candidato.valor));
+    const otro =
+      candidato.conEseCodigo && candidato.conEseCodigo.id !== propio?.id
+        ? candidato.conEseCodigo
+        : null;
+    if (candidato.repetidoEn.length > 0) {
+      revision.push(
+        `El ${nombre} "${candidato.valor}" está repetido en GLPI (${otros(candidato.repetidoEn)}): no se usa como código.`,
+      );
+    } else if (otro) {
+      revision.push(
+        `El ${nombre} "${candidato.valor}" ya es el código del activo local id ${otro.id}${otro.origenGlpi ? ` (${otro.origenGlpi})` : otro.deletedAt ? ' (dado de baja)' : ''}: no se usa como código.`,
+      );
+    } else if (reservadoPor) {
+      revision.push(
+        `El ${nombre} "${candidato.valor}" ya se asignó a ${reservadoPor} en esta ejecución: no se usa como código.`,
+      );
+    } else {
+      return candidato.valor;
+    }
+  }
+  return null;
+}
 
 const lista = (activos: ActivoLocal[]): string =>
   activos.map((a) => `${a.codigo} (id ${a.id})`).join(', ');
@@ -135,10 +175,23 @@ export function planificar(glpi: ActivoGlpi, contexto: Contexto): Plan {
       };
     }
     const diferencias = calcularCambios(vinculado, glpi.datos);
+    // Política explícita (opcional): solo si el código sigue siendo el de
+    // respaldo generado. Un código corregido a mano jamás se renombra.
+    let nuevoCodigo: string | undefined;
+    if (
+      contexto.mejorarCodigoDeRespaldo &&
+      clave(vinculado.codigo) === clave(glpi.codigoRespaldo)
+    ) {
+      nuevoCodigo = elegirCodigo(contexto, revision, vinculado) ?? undefined;
+      if (nuevoCodigo) {
+        diferencias.codigo = { antes: vinculado.codigo, despues: nuevoCodigo };
+      }
+    }
     return {
       accion:
         Object.keys(diferencias).length === 0 ? 'SIN_CAMBIOS' : 'ACTUALIZAR',
       codigo: vinculado.codigo,
+      nuevoCodigo,
       local: vinculado,
       diferencias,
       revision,
@@ -176,28 +229,7 @@ export function planificar(glpi: ActivoGlpi, contexto: Contexto): Plan {
   }
 
   // ── 3. Alta: elegir el código operativo ──────────────────────────────────
-  let codigo: string | null = null;
-  for (const candidato of candidatos) {
-    const nombre = NOMBRE_ORIGEN[candidato.origen];
-    const reservadoPor = reservados.codigos.get(clave(candidato.valor));
-    if (candidato.repetidoEn.length > 0) {
-      revision.push(
-        `El ${nombre} "${candidato.valor}" está repetido en GLPI (${otros(candidato.repetidoEn)}): no se usa como código.`,
-      );
-    } else if (candidato.conEseCodigo) {
-      const otro = candidato.conEseCodigo;
-      revision.push(
-        `El ${nombre} "${candidato.valor}" ya es el código del activo local id ${otro.id}${otro.origenGlpi ? ` (${otro.origenGlpi})` : otro.deletedAt ? ' (dado de baja)' : ''}: no se usa como código.`,
-      );
-    } else if (reservadoPor) {
-      revision.push(
-        `El ${nombre} "${candidato.valor}" ya se asignó a ${reservadoPor} en esta ejecución: no se usa como código.`,
-      );
-    } else {
-      codigo = candidato.valor;
-      break;
-    }
-  }
+  let codigo = elegirCodigo(contexto, revision);
 
   if (codigo === null) {
     const ocupante =

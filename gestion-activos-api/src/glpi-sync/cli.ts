@@ -6,6 +6,7 @@
  *   npm run glpi:sync -- --aplicar escribe en la base
  *
  * Opciones: --simular | --aplicar · --max=N (tope por tipo) · --bloque=N
+ *           --mejorar-codigos (cambia códigos de respaldo por el institucional)
  * Sin --simular ni --aplicar manda GLPI_DRY_RUN (por defecto, simulación).
  */
 import 'dotenv/config';
@@ -30,6 +31,7 @@ async function main(): Promise<number> {
   const config = leerConfig(process.env);
   if (args.includes('--simular')) config.dryRun = true;
   if (args.includes('--aplicar')) config.dryRun = false;
+  if (args.includes('--mejorar-codigos')) config.mejorarCodigos = true;
   config.maxPorTipo = entero(args, 'max') ?? config.maxPorTipo;
   config.tamanoBloque = entero(args, 'bloque') ?? config.tamanoBloque;
 

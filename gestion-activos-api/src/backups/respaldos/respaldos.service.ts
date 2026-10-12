@@ -16,6 +16,7 @@ import type {
   CreateRespaldoDto,
   RegistrarEjecucionDto,
   RegistrarPruebaDto,
+  UpdateRespaldoDto,
 } from './dto/capas.dto.js';
 import type { QueryRespaldosDto } from './dto/query-respaldos.dto.js';
 import type { RespaldoDto } from './dto/respaldo.dto.js';
@@ -24,6 +25,14 @@ import { calcularEtapa, WHERE_POR_ETAPA } from './etapa.js';
 const INCLUDE = {
   activo: { select: { id: true, codigo: true, nombre: true } },
 } as const;
+
+/**
+ * Solo registros cuyo activo existe. Las claves foráneas lo garantizan, pero si
+ * alguien vacía la tabla de activos saltándoselas, un registro huérfano haría
+ * fallar la consulta entera (el activo es obligatorio): se ignora en vez de
+ * tumbar el módulo. La sincronización con GLPI los detecta y los denuncia.
+ */
+const CON_ACTIVO = { activo: { id: { gt: 0 } } } as const;
 
 type RespaldoConActivo = Prisma.RespaldoGetPayload<{ include: typeof INCLUDE }>;
 
@@ -48,7 +57,7 @@ export class RespaldosService {
     if (query.actualizadoDesde) {
       filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     }
-    const where: Prisma.RespaldoWhereInput = { AND: filtros };
+    const where: Prisma.RespaldoWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.respaldo.count({ where }),
@@ -64,8 +73,8 @@ export class RespaldosService {
   }
 
   async findOne(id: number): Promise<RespaldoDto> {
-    const respaldo = await this.prisma.respaldo.findUnique({
-      where: { id },
+    const respaldo = await this.prisma.respaldo.findFirst({
+      where: { id, ...CON_ACTIVO },
       include: INCLUDE,
     });
     if (!respaldo) {
@@ -149,6 +158,32 @@ export class RespaldosService {
       );
     }
     return this.findOne(id);
+  }
+
+  /** Corrige el alcance (capa 1). Con la ejecución ya registrada, el alcance es evidencia y no se toca. */
+  async update(id: number, dto: UpdateRespaldoDto): Promise<RespaldoDto> {
+    const actual = await this.findOne(id);
+    if (actual.estadoEjecucion !== 'PENDIENTE') {
+      throw new ConflictException(
+        `El respaldo ${id} ya tiene la ejecución registrada (${actual.estadoEjecucion}): su alcance no se puede modificar.`,
+      );
+    }
+    const { count } = await this.prisma.respaldo.updateMany({
+      where: { id, estadoEjecucion: 'PENDIENTE' },
+      data: dto,
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        `El respaldo ${id} cambió mientras se editaba; vuelve a consultarlo.`,
+      );
+    }
+    return this.findOne(id);
+  }
+
+  /** Borrado definitivo (solo admin). El activo y su bitácora no se ven afectados. */
+  async remove(id: number): Promise<void> {
+    await this.findOne(id);
+    await this.prisma.respaldo.delete({ where: { id } });
   }
 }
 

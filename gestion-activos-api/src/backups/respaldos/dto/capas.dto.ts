@@ -1,4 +1,4 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, PickType } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
   IsDate,
@@ -32,6 +32,11 @@ export class CreateRespaldoDto {
   @MaxLength(191)
   alcanceDetalle: string;
 }
+
+/** Edición de la capa 1: solo el alcance, y solo mientras la ejecución está PENDIENTE. */
+export class UpdateRespaldoDto extends PickType(CreateRespaldoDto, [
+  'alcanceDetalle',
+] as const) {}
 
 /** Capa 2: EJECUCIÓN. Solo se registra una vez, mientras está PENDIENTE. */
 export class RegistrarEjecucionDto {

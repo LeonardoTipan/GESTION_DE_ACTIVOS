@@ -58,6 +58,7 @@ const contexto = (extra: Partial<Contexto> = {}): Contexto => ({
   vinculado: null,
   candidatos: [candidato('institucional'), candidato('inventario')],
   conCodigoRespaldo: null,
+  mejorarCodigoDeRespaldo: false,
   reservados: { codigos: new Map(), manuales: new Map() },
   ...extra,
 });

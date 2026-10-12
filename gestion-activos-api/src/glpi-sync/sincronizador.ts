@@ -81,6 +81,19 @@ export class Sincronizador {
         );
       });
       const faltan = this.catalogosQueFaltan(catalogos);
+      // Integridad: con registros huérfanos, un alta reutilizaría su id y los heredaría.
+      const huerfanos = await this.local.huerfanos();
+      if (huerfanos.length > 0) {
+        faltan.push(
+          `Integridad: hay registros que apuntan a activos inexistentes (${huerfanos
+            .map((h) => `${h.cantidad} en ${h.tabla}`)
+            .join(', ')}). ${
+            this.config.dryRun
+              ? 'Una sincronización real se negaría a escribir'
+              : 'No se escribe nada'
+          } hasta resolverlos (docs/glpi-diagnostico.sql, consulta 8).`,
+        );
+      }
       informe.errores.push(...faltan);
       // Simulando se sigue para ver el resto del informe; aplicando, no se escribe a medias.
       if (faltan.length === 0 || this.config.dryRun) {
@@ -305,16 +318,20 @@ export class Sincronizador {
         vinculado: porReferencia.get(glpi.referencia) ?? null,
         candidatos,
         conCodigoRespaldo: conCodigo(glpi.codigoRespaldo),
+        mejorarCodigoDeRespaldo: this.config.mejorarCodigos,
         reservados: reservas,
       });
       // Lo decidido queda comprometido para el resto de la ejecución.
+      if (plan.nuevoCodigo) {
+        reservas.codigos.set(claveCodigo(plan.nuevoCodigo), glpi.referencia);
+      }
       if (plan.accion === 'CREAR') {
         reservas.codigos.set(claveCodigo(plan.codigo), glpi.referencia);
       } else if (plan.accion === 'ENLAZAR') {
         reservas.manuales.set(plan.local!.id, glpi.referencia);
       }
 
-      elemento.codigo = plan.codigo;
+      elemento.codigo = plan.nuevoCodigo ?? plan.codigo;
       elemento.resultado = plan.accion;
       elemento.diferencias = plan.diferencias;
       elemento.motivo = plan.motivo;

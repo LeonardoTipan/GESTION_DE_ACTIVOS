@@ -26,6 +26,12 @@ export interface GlpiSyncConfig {
   maxPorTipo?: number;
   /** true = solo lee, compara e informa; no escribe nada en la base. */
   dryRun: boolean;
+  /**
+   * Política explícita de códigos: un activo vinculado que sigue con el código de
+   * respaldo ("GLPI-PC-12") pasa a su código institucional o n.º de inventario
+   * cuando es válido y único. Nunca toca un código puesto a mano.
+   */
+  mejorarCodigos: boolean;
   /** Expresión de node-cron para el worker. */
   cron: string;
   /** Nivel de criticidad que reciben los activos creados desde GLPI. */
@@ -166,6 +172,7 @@ export function leerConfig(env: Env): GlpiSyncConfig {
       : undefined,
     // Seguro por defecto: solo se escribe si se pide explícitamente con "false".
     dryRun: texto('GLPI_DRY_RUN').toLowerCase() !== 'false',
+    mejorarCodigos: texto('GLPI_MEJORAR_CODIGOS').toLowerCase() === 'true',
     cron: texto('GLPI_SYNC_CRON') || '0 2 * * *',
     criticidadPorDefecto: texto('GLPI_CRITICIDAD_DEFECTO') || 'Media',
     codigoInstitucional: {

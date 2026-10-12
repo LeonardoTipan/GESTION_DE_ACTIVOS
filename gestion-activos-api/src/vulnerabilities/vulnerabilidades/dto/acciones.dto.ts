@@ -1,4 +1,9 @@
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import {
+  ApiProperty,
+  ApiPropertyOptional,
+  OmitType,
+  PartialType,
+} from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDate,
@@ -83,6 +88,11 @@ export class RegistrarVulnerabilidadDto {
   @IsDate()
   fechaLimite?: Date;
 }
+
+/** Edición de los datos del registro; solo mientras está pendiente (ABIERTA o EN_MITIGACION). */
+export class EditarVulnerabilidadDto extends PartialType(
+  OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const),
+) {}
 
 /** Mitigar: EN_MITIGACION → MITIGADA. */
 export class MitigarVulnerabilidadDto {

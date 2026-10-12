@@ -46,6 +46,12 @@ class InventarioEnMemoria implements InventarioLocal {
   activos: ActivoLocal[] = [];
   historial: { activoId: number; accion: string; responsable: string }[] = [];
   private siguienteId = 100;
+  /** Registros que apuntan a activos inexistentes (simulados). */
+  registrosHuerfanos: { tabla: string; cantidad: number }[] = [];
+
+  huerfanos() {
+    return Promise.resolve(this.registrosHuerfanos);
+  }
 
   catalogos(): Promise<Catalogos> {
     return Promise.resolve({
@@ -102,6 +108,7 @@ class InventarioEnMemoria implements InventarioLocal {
       activo.origenGlpi = glpi.referencia;
     }
     Object.assign(activo, glpi.datos);
+    if (plan.nuevoCodigo) activo.codigo = plan.nuevoCodigo;
     this.historial.push({ activoId: local.id, accion: 'ACTUALIZAR', responsable: RESPONSABLE_GLPI });
   }
 
@@ -134,6 +141,7 @@ const CONFIG: GlpiSyncConfig = {
   itemtypes: ['Computer', 'NetworkEquipment'],
   tamanoBloque: 50,
   dryRun: false,
+  mejorarCodigos: false,
   cron: '0 2 * * *',
   criticidadPorDefecto: 'Media',
   codigoInstitucional: REGLA,
@@ -509,5 +517,91 @@ describe('paginación', () => {
     const informe = await sincronizador.ejecutar();
     expect(informe.elementos.map((e) => e.resultado)).toEqual(['CREAR', 'OMITIR', 'OMITIR']);
     expect(inv.activos.map((a) => a.codigo)).toEqual(['A-1']);
+  });
+});
+
+describe('integridad: registros huérfanos', () => {
+  it('con huérfanos NO se escribe nada ni se contacta con GLPI (un alta heredaría esos registros)', async () => {
+    const { falso, inv, sincronizador } = montar(INVENTARIO());
+    inv.registrosHuerfanos = [
+      { tabla: 'respaldo', cantidad: 2 },
+      { tabla: 'mantenimiento', cantidad: 2 },
+    ];
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores[0]).toContain('2 en respaldo, 2 en mantenimiento');
+    expect(informe.errores[0]).toContain('No se escribe nada');
+    expect(inv.activos).toEqual([]);
+    expect(falso.peticiones).toEqual([]);
+  });
+
+  it('en simulación se avisa del bloqueo, pero el informe se genera igual', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO(), { dryRun: true });
+    inv.registrosHuerfanos = [{ tabla: 'respaldo', cantidad: 1 }];
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores[0]).toContain('se negaría a escribir');
+    expect(informe.totales.Computer).toMatchObject({ leidos: 25, CREAR: 25 });
+  });
+});
+
+describe('política explícita: mejorar códigos de respaldo', () => {
+  const SIN_ETIQUETA = { codigoInstitucional: { ...REGLA, etiqueta: '' } };
+
+  /** Reproduce lo ocurrido: primera importación sin la etiqueta configurada. */
+  const importarSinEtiqueta = async () => {
+    const montaje = montar(INVENTARIO(), SIN_ETIQUETA);
+    await montaje.sincronizador.ejecutar();
+    expect(montaje.inv.activos.every((a) => a.codigo.startsWith('GLPI-'))).toBe(true);
+    expect(montaje.inv.activos.every((a) => a.codigoInstitucional === null)).toBe(true);
+    return montaje.inv;
+  };
+
+  it('sin la opción: se rellena el código institucional original, pero NINGÚN código se renombra', async () => {
+    const inv = await importarSinEtiqueta();
+    const codigosAntes = inv.activos.map((a) => a.codigo);
+    const informe = await montar(INVENTARIO(), {}, inv).sincronizador.ejecutar();
+
+    expect(inv.activos.map((a) => a.codigo)).toEqual(codigosAntes);
+    expect(inv.activos.find((a) => a.origenGlpi === 'Computer #2')!.codigoInstitucional).toBe('7-1-22-69');
+    expect(informe.totales.Computer!.CREAR).toBe(0);
+    expect(inv.activos).toHaveLength(26);
+  });
+
+  it('con la opción: los códigos de respaldo pasan al institucional válido y único; el resto no cambia', async () => {
+    const inv = await importarSinEtiqueta();
+    const { sincronizador } = montar(INVENTARIO(), { mejorarCodigos: true }, inv);
+    const informe = await sincronizador.ejecutar();
+
+    const codigos = Object.fromEntries(
+      inv.activos
+        .filter((a) => a.origenGlpi!.startsWith('Computer'))
+        .map((a) => [Number(a.origenGlpi!.split('#')[1]), a.codigo]),
+    );
+    expect(codigos).toEqual(CODIGOS_ESPERADOS); // igual que una importación correcta desde cero
+    expect(inv.activos.find((a) => a.origenGlpi === 'NetworkEquipment #1')!.codigo).toBe('7-1-14-6');
+    expect(inv.activos).toHaveLength(26);
+    expect(new Set(inv.activos.map((a) => claveCodigo(a.codigo))).size).toBe(26);
+
+    const cambiado = informe.elementos.find((e) => e.glpiId === 2 && e.itemtype === 'Computer')!;
+    expect(cambiado).toMatchObject({ resultado: 'ACTUALIZAR', codigo: '7-1-22-69' });
+    expect(cambiado.diferencias.codigo).toEqual({ antes: 'GLPI-PC-2', despues: '7-1-22-69' });
+
+    // Repetirla no cambia nada más.
+    const otra = await sincronizador.ejecutar();
+    expect(otra.totales.Computer).toMatchObject({ ACTUALIZAR: 0, SIN_CAMBIOS: 25 });
+  });
+
+  it('un código puesto a mano nunca se renombra, ni con la opción activada', async () => {
+    const inv = await importarSinEtiqueta();
+    inv.activos.find((a) => a.origenGlpi === 'Computer #2')!.codigo = 'MI-CODIGO-2';
+    await montar(INVENTARIO(), { mejorarCodigos: true }, inv).sincronizador.ejecutar();
+    expect(inv.activos.find((a) => a.origenGlpi === 'Computer #2')!.codigo).toBe('MI-CODIGO-2');
+  });
+
+  it('en simulación la mejora solo se informa', async () => {
+    const inv = await importarSinEtiqueta();
+    const antes = foto(inv);
+    const informe = await montar(INVENTARIO(), { mejorarCodigos: true, dryRun: true }, inv).sincronizador.ejecutar();
+    expect(informe.elementos.filter((e) => e.diferencias.codigo)).toHaveLength(12);
+    expect(foto(inv)).toBe(antes);
   });
 });

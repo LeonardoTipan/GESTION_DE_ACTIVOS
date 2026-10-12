@@ -14,6 +14,7 @@ import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   CancelarMantenimientoDto,
+  EditarMantenimientoDto,
   FinalizarMantenimientoDto,
   IniciarMantenimientoDto,
   ProgramarMantenimientoDto,
@@ -30,6 +31,14 @@ import {
 const INCLUDE = {
   activo: { select: { id: true, codigo: true, nombre: true } },
 } as const;
+
+/**
+ * Solo registros cuyo activo existe. Las claves foráneas lo garantizan, pero si
+ * alguien vacía la tabla de activos saltándoselas, un registro huérfano haría
+ * fallar la consulta entera (el activo es obligatorio): se ignora en vez de
+ * tumbar el módulo. La sincronización con GLPI los detecta y los denuncia.
+ */
+const CON_ACTIVO = { activo: { id: { gt: 0 } } } as const;
 
 type MantenimientoConActivo = Prisma.MantenimientoGetPayload<{
   include: typeof INCLUDE;
@@ -66,7 +75,7 @@ export class MantenimientosService {
     if (query.actualizadoDesde) {
       filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     }
-    const where: Prisma.MantenimientoWhereInput = { AND: filtros };
+    const where: Prisma.MantenimientoWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.mantenimiento.count({ where }),
@@ -86,8 +95,8 @@ export class MantenimientosService {
   }
 
   async findOne(id: number): Promise<MantenimientoDto> {
-    const mantenimiento = await this.prisma.mantenimiento.findUnique({
-      where: { id },
+    const mantenimiento = await this.prisma.mantenimiento.findFirst({
+      where: { id, ...CON_ACTIVO },
       include: INCLUDE,
     });
     if (!mantenimiento) {
@@ -189,6 +198,35 @@ export class MantenimientosService {
       );
     }
     return this.findOne(id);
+  }
+
+  /** Reprograma o corrige un mantenimiento. Una vez iniciado, lo planificado es historial. */
+  async update(
+    id: number,
+    dto: EditarMantenimientoDto,
+  ): Promise<MantenimientoDto> {
+    const actual = await this.findOne(id);
+    if (actual.fase !== 'PROGRAMADO') {
+      throw new ConflictException(
+        `El mantenimiento ${id} está en fase ${actual.fase}: solo se puede editar mientras está PROGRAMADO.`,
+      );
+    }
+    const { count } = await this.prisma.mantenimiento.updateMany({
+      where: { id, fase: 'PROGRAMADO' },
+      data: dto,
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        `El mantenimiento ${id} cambió de fase mientras se editaba; vuelve a consultarlo.`,
+      );
+    }
+    return this.findOne(id);
+  }
+
+  /** Borrado definitivo (solo admin). El activo y su bitácora no se ven afectados. */
+  async remove(id: number): Promise<void> {
+    await this.findOne(id);
+    await this.prisma.mantenimiento.delete({ where: { id } });
   }
 }
 

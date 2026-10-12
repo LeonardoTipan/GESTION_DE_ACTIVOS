@@ -14,6 +14,7 @@ import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   AceptarRiesgoDto,
+  EditarVulnerabilidadDto,
   MitigarVulnerabilidadDto,
   RegistrarVulnerabilidadDto,
 } from './dto/acciones.dto.js';
@@ -30,6 +31,14 @@ import {
 const INCLUDE = {
   activo: { select: { id: true, codigo: true, nombre: true } },
 } as const;
+
+/**
+ * Solo registros cuyo activo existe. Las claves foráneas lo garantizan, pero si
+ * alguien vacía la tabla de activos saltándoselas, un registro huérfano haría
+ * fallar la consulta entera (el activo es obligatorio): se ignora en vez de
+ * tumbar el módulo. La sincronización con GLPI los detecta y los denuncia.
+ */
+const CON_ACTIVO = { activo: { id: { gt: 0 } } } as const;
 
 type VulnerabilidadConActivo = Prisma.VulnerabilidadGetPayload<{
   include: typeof INCLUDE;
@@ -69,7 +78,7 @@ export class VulnerabilidadesService {
     if (query.actualizadoDesde) {
       filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     }
-    const where: Prisma.VulnerabilidadWhereInput = { AND: filtros };
+    const where: Prisma.VulnerabilidadWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.vulnerabilidad.count({ where }),
@@ -90,8 +99,8 @@ export class VulnerabilidadesService {
   }
 
   async findOne(id: number): Promise<VulnerabilidadDto> {
-    const vulnerabilidad = await this.prisma.vulnerabilidad.findUnique({
-      where: { id },
+    const vulnerabilidad = await this.prisma.vulnerabilidad.findFirst({
+      where: { id, ...CON_ACTIVO },
       include: INCLUDE,
     });
     if (!vulnerabilidad) {
@@ -187,6 +196,59 @@ export class VulnerabilidadesService {
       );
     }
     return this.findOne(id);
+  }
+
+  /** Corrige los datos de una vulnerabilidad pendiente. Una vez cerrada es evidencia y no se toca. */
+  async update(
+    id: number,
+    dto: EditarVulnerabilidadDto,
+  ): Promise<VulnerabilidadDto> {
+    const actual = await this.findOne(id);
+    if (!ESTADOS_ABIERTOS.includes(actual.estado)) {
+      throw new ConflictException(
+        `La vulnerabilidad ${id} está ${actual.estado}: solo se puede editar mientras está pendiente.`,
+      );
+    }
+    // Las mismas reglas que al registrar, sobre el resultado de la edición.
+    const fecha = dto.fecha ?? actual.fecha;
+    const fechaLimite = dto.fechaLimite ?? actual.fechaLimite;
+    if (fechaLimite && fechaLimite < fecha) {
+      throw new BadRequestException(
+        'La fecha límite no puede ser anterior a la fecha de detección.',
+      );
+    }
+    if (dto.cve && dto.cve !== actual.cve) {
+      const pendiente = await this.prisma.vulnerabilidad.findFirst({
+        where: {
+          id: { not: id },
+          activoId: actual.activoId,
+          cve: dto.cve,
+          estado: { in: ESTADOS_ABIERTOS },
+        },
+        select: { id: true },
+      });
+      if (pendiente) {
+        throw new ConflictException(
+          `El activo ya tiene ${dto.cve} pendiente (vulnerabilidad ${pendiente.id}).`,
+        );
+      }
+    }
+    const { count } = await this.prisma.vulnerabilidad.updateMany({
+      where: { id, estado: { in: ESTADOS_ABIERTOS } },
+      data: dto,
+    });
+    if (count === 0) {
+      throw new ConflictException(
+        `La vulnerabilidad ${id} cambió de estado mientras se editaba; vuelve a consultarla.`,
+      );
+    }
+    return this.findOne(id);
+  }
+
+  /** Borrado definitivo (solo admin). El activo y su bitácora no se ven afectados. */
+  async remove(id: number): Promise<void> {
+    await this.findOne(id);
+    await this.prisma.vulnerabilidad.delete({ where: { id } });
   }
 }
 
