@@ -1,7 +1,7 @@
 import { Anchor, Badge, Table, Text, Tooltip } from '@mantine/core'
 import { IconLock, IconLockOpen } from '@tabler/icons-react'
 import { Link, useNavigate } from 'react-router'
-import { formatearFecha } from '../../../shared/formato.ts'
+import { formatearFecha, SIN_DATO } from '../../../shared/formato.ts'
 import type { Activo } from '../api/activos.ts'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
 
@@ -11,6 +11,15 @@ function descripcionEquipo(activo: Activo): string {
     .map((parte) => parte?.trim())
     .filter(Boolean)
     .join(' · ')
+}
+
+/** Dato opcional vacío: el mismo texto atenuado en toda la tabla. */
+function Vacio() {
+  return (
+    <Text size="xs" c="dimmed">
+      {SIN_DATO}
+    </Text>
+  )
 }
 
 export function TablaActivos({ activos }: { activos: Activo[] }) {
@@ -28,7 +37,7 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
             <Table.Th>Categoría</Table.Th>
             <Table.Th>Criticidad</Table.Th>
             <Table.Th>Cifrado</Table.Th>
-            <Table.Th>Custodio</Table.Th>
+            <Table.Th>Responsable</Table.Th>
             <Table.Th>Ubicación</Table.Th>
             <Table.Th>Última revisión</Table.Th>
           </Table.Tr>
@@ -36,6 +45,7 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
         <Table.Tbody>
           {activos.map((activo) => {
             const equipo = descripcionEquipo(activo)
+            const inventario = activo.numeroInventario?.trim()
             return (
               <Table.Tr
                 key={activo.id}
@@ -52,6 +62,12 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
                   >
                     {activo.codigo}
                   </Anchor>
+                  {/* El n.º de inventario de origen, solo cuando existe: no es el código. */}
+                  {inventario && (
+                    <Text size="xs" c="dimmed">
+                      Inv. {inventario}
+                    </Text>
+                  )}
                 </Table.Td>
                 <Table.Td maw={300}>
                   <Text size="sm" lineClamp={2}>
@@ -65,15 +81,19 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
                   )}
                 </Table.Td>
                 <Table.Td>
-                  <Text size="sm" ff="monospace">
-                    {activo.numeroSerie?.trim() || '—'}
-                  </Text>
+                  {activo.numeroSerie?.trim() ? (
+                    <Text size="sm" ff="monospace">
+                      {activo.numeroSerie}
+                    </Text>
+                  ) : (
+                    <Vacio />
+                  )}
                 </Table.Td>
                 <Table.Td>
                   {activo.estado?.trim() ? (
                     <Badge variant="default">{activo.estado}</Badge>
                   ) : (
-                    '—'
+                    <Vacio />
                   )}
                 </Table.Td>
                 <Table.Td>{activo.categoria.nombre}</Table.Td>

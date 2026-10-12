@@ -24,21 +24,22 @@ import {
   IconRefresh,
 } from '@tabler/icons-react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { formatearFecha, formatearFechaHora } from '../../../shared/formato.ts'
+import { formatearFecha, formatearFechaHora, SIN_DATO } from '../../../shared/formato.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import { useActivo, useDarDeBajaActivo } from '../api/activos.ts'
 import { ActivoFormModal } from '../activos/ActivoFormModal.tsx'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
 import { BitacoraTimeline } from './BitacoraTimeline.tsx'
 
-/** Un dato opcional vacío (null o "") se muestra como "—". */
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | null }) {
+/** Un dato opcional vacío (null o "") se muestra, atenuado, como "No registrado". */
+function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | null | undefined }) {
+  const texto = valor?.trim()
   return (
     <div>
       <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
         {etiqueta}
       </Text>
-      <Text>{valor?.trim() || '—'}</Text>
+      {texto ? <Text>{texto}</Text> : <Text c="dimmed">{SIN_DATO}</Text>}
     </div>
   )
 }
@@ -159,12 +160,12 @@ export function ActivoFichaPage() {
           Uso y responsables
         </Title>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
-          <Dato etiqueta="Sistemas" valor={activo.sistemas} />
-          <Dato etiqueta="Custodio" valor={activo.custodio} />
-          <Dato etiqueta="Ubicación" valor={activo.ubicacion} />
-          <Dato etiqueta="Contacto" valor={activo.contacto} />
-          <Dato etiqueta="Técnico responsable" valor={activo.tecnicoResponsable} />
+          <Dato etiqueta="Responsable" valor={activo.custodio} />
+          <Dato etiqueta="Técnico asignado" valor={activo.tecnicoResponsable} />
           <Dato etiqueta="Red" valor={activo.red} />
+          <Dato etiqueta="Contacto" valor={activo.contacto} />
+          <Dato etiqueta="Ubicación" valor={activo.ubicacion} />
+          <Dato etiqueta="Sistemas" valor={activo.sistemas} />
         </SimpleGrid>
       </Card>
 
@@ -173,18 +174,27 @@ export function ActivoFichaPage() {
           Datos del equipo
         </Title>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
+          <Dato etiqueta="Nombre" valor={activo.nombre} />
+          <Dato etiqueta="Código operativo" valor={activo.codigo} />
           <Dato etiqueta="Tipo" valor={activo.tipo} />
           <Dato etiqueta="Fabricante" valor={activo.fabricante} />
           <Dato etiqueta="Modelo" valor={activo.modelo} />
           <Dato etiqueta="Número de serie" valor={activo.numeroSerie} />
+          <Dato etiqueta="Número de inventario" valor={activo.numeroInventario} />
+          <Dato etiqueta="Dirección IP" valor={activo.direccionIp} />
           <Dato etiqueta="Estado" valor={activo.estado} />
+          <Dato etiqueta="Código institucional original" valor={activo.codigoInstitucional} />
         </SimpleGrid>
         <div style={{ marginTop: 'var(--mantine-spacing-lg)' }}>
           <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
             Comentario
           </Text>
           {/* pre-wrap: respeta los saltos de línea de las características técnicas. */}
-          <Text style={{ whiteSpace: 'pre-wrap' }}>{activo.comentario?.trim() || '—'}</Text>
+          {activo.comentario?.trim() ? (
+            <Text style={{ whiteSpace: 'pre-wrap' }}>{activo.comentario.trim()}</Text>
+          ) : (
+            <Text c="dimmed">{SIN_DATO}</Text>
+          )}
         </div>
       </Card>
 
@@ -192,11 +202,18 @@ export function ActivoFichaPage() {
         <Title order={4} mb="md">
           Fechas
         </Title>
-        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
-          <Dato etiqueta="Fecha de alta" valor={formatearFechaHora(activo.fechaAlta)} />
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
+          <Dato
+            etiqueta="Fecha de alta"
+            valor={activo.fechaAlta && formatearFechaHora(activo.fechaAlta)}
+          />
+          <Dato
+            etiqueta="Fecha de compra"
+            valor={activo.fechaCompra && formatearFecha(activo.fechaCompra)}
+          />
           <Dato etiqueta="Última revisión" valor={formatearFecha(activo.ultimaRevision)} />
-          <Dato etiqueta="Registrado aquí" valor={formatearFechaHora(activo.createdAt)} />
-          <Dato etiqueta="Última modificación" valor={formatearFechaHora(activo.updatedAt)} />
+          <Dato etiqueta="Registrado en la aplicación" valor={formatearFechaHora(activo.createdAt)} />
+          <Dato etiqueta="Última actualización" valor={formatearFechaHora(activo.updatedAt)} />
         </SimpleGrid>
       </Card>
 

@@ -41,7 +41,7 @@ export function FiltrosActivos({
     <Group gap="sm" align="flex-end" wrap="wrap">
       <TextInput
         label="Buscar"
-        placeholder="Código, nombre, serie, modelo, custodio…"
+        placeholder="Nombre, código, inventario, serie, fabricante, modelo…"
         leftSection={<IconSearch size={16} />}
         value={busqueda}
         onChange={(e) => setBusqueda(e.currentTarget.value)}

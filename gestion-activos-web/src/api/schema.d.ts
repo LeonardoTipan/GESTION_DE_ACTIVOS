@@ -537,6 +537,16 @@ export interface components {
              * @example Computer #12
              */
             origenGlpi: string | null;
+            /**
+             * @description N.º de inventario tal como está en GLPI. Puede repetirse.
+             * @example 001
+             */
+            numeroInventario: string | null;
+            /**
+             * @description Código institucional original, sin corregir. Puede repetirse.
+             * @example 7-1-22-177
+             */
+            codigoInstitucional: string | null;
             /** @example Servidor de base de datos */
             nombre: string;
             /** @example ERP, Nómina */
@@ -570,6 +580,16 @@ export interface components {
              * @description Cuándo se registró en el inventario de origen (GLPI).
              */
             fechaAlta: string | null;
+            /**
+             * @description Dato local: la sincronización con GLPI no lo modifica.
+             * @example 10.0.5.21
+             */
+            direccionIp: string | null;
+            /**
+             * Format: date-time
+             * @description Dato local: la sincronización con GLPI no lo modifica.
+             */
+            fechaCompra: string | null;
             /** @description Características técnicas (texto largo, admite saltos de línea). */
             comentario: string | null;
             /** @example 1 */
@@ -707,6 +727,26 @@ export interface components {
              */
             fechaAlta?: string;
             /**
+             * @description N.º de inventario de origen. Puede repetirse.
+             * @example 001
+             */
+            numeroInventario?: string;
+            /**
+             * @description Código institucional original. Puede repetirse.
+             * @example 7-1-22-177
+             */
+            codigoInstitucional?: string;
+            /**
+             * @description Dirección IPv4 o IPv6. Cadena vacía para borrarla.
+             * @example 10.0.5.21
+             */
+            direccionIp?: string;
+            /**
+             * Format: date-time
+             * @example 2025-03-10T00:00:00.000Z
+             */
+            fechaCompra?: string;
+            /**
              * @description Características técnicas (admite saltos de línea).
              * @example Memoria RAM 64 GB
              *     Capacidad de disco 1 TB
@@ -790,6 +830,26 @@ export interface components {
              * @example 2026-05-11T18:56:57.000Z
              */
             fechaAlta?: string;
+            /**
+             * @description N.º de inventario de origen. Puede repetirse.
+             * @example 001
+             */
+            numeroInventario?: string;
+            /**
+             * @description Código institucional original. Puede repetirse.
+             * @example 7-1-22-177
+             */
+            codigoInstitucional?: string;
+            /**
+             * @description Dirección IPv4 o IPv6. Cadena vacía para borrarla.
+             * @example 10.0.5.21
+             */
+            direccionIp?: string;
+            /**
+             * Format: date-time
+             * @example 2025-03-10T00:00:00.000Z
+             */
+            fechaCompra?: string;
             /**
              * @description Características técnicas (admite saltos de línea).
              * @example Memoria RAM 64 GB

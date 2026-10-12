@@ -1,5 +1,8 @@
 import dayjs from 'dayjs'
 
+/** Cómo se muestra, en toda la aplicación, un dato opcional que no se ha registrado. */
+export const SIN_DATO = 'No registrado'
+
 const fechaCorta = new Intl.DateTimeFormat('es', {
   day: '2-digit',
   month: 'short',

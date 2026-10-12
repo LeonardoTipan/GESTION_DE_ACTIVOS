@@ -1,7 +1,7 @@
 import { formatearFecha, formatearFechaHora } from '../../../shared/formato.ts'
 
 export const ETIQUETA_CAMPO: Record<string, string> = {
-  codigo: 'Código',
+  codigo: 'Código operativo',
   nombre: 'Nombre',
   sistemas: 'Sistemas',
   custodio: 'Custodio',
@@ -12,6 +12,10 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   estado: 'Estado',
   fabricante: 'Fabricante',
   comentario: 'Comentario',
+  numeroInventario: 'Número de inventario',
+  codigoInstitucional: 'Código institucional original',
+  direccionIp: 'Dirección IP',
+  fechaCompra: 'Fecha de compra',
   tipo: 'Tipo',
   modelo: 'Modelo',
   tecnicoResponsable: 'Técnico responsable',
