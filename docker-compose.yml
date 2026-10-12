@@ -33,6 +33,85 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
+  # ── Perfil "glpi" (opcional) ───────────────────────────────────────────────
+  # Nada de esto arranca con un `docker compose up` normal. Para levantarlo:
+  #   docker compose --profile glpi up -d
+  #
+  # GLPI local de pruebas, con su PROPIA base de datos (no toca la principal).
+  # Web: http://localhost:8081 (el 8080 es de Keycloak). Primer acceso: glpi / glpi.
+  glpi-db:
+    profiles: ["glpi"]
+    image: mysql:8.4
+    container_name: gestion-activos-glpi-db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: "${GLPI_DB_NAME:-glpi}"
+      MYSQL_USER: "${GLPI_DB_USER:-glpi}"
+      MYSQL_PASSWORD: "${GLPI_DB_PASSWORD:-glpi_local}"
+      MYSQL_ROOT_PASSWORD: "${GLPI_DB_ROOT_PASSWORD:-glpi_root_local}"
+    volumes:
+      - glpi_db_data:/var/lib/mysql
+    # Sin puerto publicado: solo GLPI la alcanza, por la red interna de Docker. Por eso
+    # las contraseñas tienen un valor por defecto local; cámbialas en .env si quieres.
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  glpi:
+    profiles: ["glpi"]
+    # Imagen oficial. Fija aquí la MISMA versión que usa la empresa (p. ej. glpi/glpi:11.0.1).
+    image: glpi/glpi:latest
+    container_name: gestion-activos-glpi
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      # Con estas variables GLPI se instala solo en el primer arranque (tarda unos minutos).
+      GLPI_DB_HOST: glpi-db
+      GLPI_DB_PORT: 3306
+      GLPI_DB_NAME: "${GLPI_DB_NAME:-glpi}"
+      GLPI_DB_USER: "${GLPI_DB_USER:-glpi}"
+      GLPI_DB_PASSWORD: "${GLPI_DB_PASSWORD:-glpi_local}"
+    volumes:
+      - glpi_data:/var/glpi
+    depends_on:
+      glpi-db:
+        condition: service_healthy
+
+  # Worker de sincronización con GLPI (node-cron). Proceso aparte de la API:
+  # misma imagen, otro comando. Apunta a GLPI_API_URL: el GLPI local de arriba
+  # (http://glpi/api.php) o el de la empresa (https://…/api.php).
+  glpi-sync:
+    profiles: ["glpi"]
+    build:
+      context: ./gestion-activos-api
+      dockerfile: Dockerfile
+    container_name: gestion-activos-glpi-sync
+    command: ["npm", "run", "glpi:worker"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "mysql://${DB_USER:?Falta DB_USER en .env}:${DB_PASSWORD:?Falta DB_PASSWORD en .env}@${DB_HOST:?Falta DB_HOST en .env}:${DB_PORT:-3306}/${DB_NAME:?Falta DB_NAME en .env}"
+      GLPI_API_URL: "${GLPI_API_URL:-}"
+      # OAuth2: el worker pide un token fresco en cada sincronización (no se guarda ninguno).
+      GLPI_CLIENT_ID: "${GLPI_CLIENT_ID:-}"
+      GLPI_CLIENT_SECRET: "${GLPI_CLIENT_SECRET:-}"
+      GLPI_USERNAME: "${GLPI_USERNAME:-}"
+      GLPI_PASSWORD: "${GLPI_PASSWORD:-}"
+      GLPI_TIMEZONE: "${GLPI_TIMEZONE:-}"
+      # Seguro por defecto: simulación. Solo "false" escribe en la base.
+      GLPI_DRY_RUN: "${GLPI_DRY_RUN:-true}"
+      GLPI_SYNC_CRON: "${GLPI_SYNC_CRON:-0 2 * * *}"
+      # El cron se evalúa en la hora del contenedor: la misma zona que GLPI.
+      TZ: "${GLPI_TIMEZONE:-UTC}"
+    volumes:
+      - ./gestion-activos-api:/app
+      - /app/node_modules
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
   frontend:
     image: nginx:alpine
     container_name: gestion-activos-frontend
@@ -40,3 +119,8 @@ services:
       - "80:80"
     depends_on:
       - backend
+
+volumes:
+  # Datos del GLPI local de pruebas (perfil "glpi").
+  glpi_db_data:
+  glpi_data:

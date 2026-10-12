@@ -13,3 +13,6 @@ coverage/
 *.log
 .DS_Store
 Thumbs.db
+
+# Informes de la sincronización con GLPI (contienen datos del inventario)
+glpi-informes/
