@@ -1,5 +1,6 @@
 import {
   Button,
+  Divider,
   Group,
   Modal,
   Select,
@@ -9,11 +10,16 @@ import {
   Textarea,
   TextInput,
 } from '@mantine/core'
-import { DateInput } from '@mantine/dates'
+import { DateInput, DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useEffect } from 'react'
-import { diaAIso, isoADia } from '../../../shared/formato.ts'
+import {
+  diaAIso,
+  fechaHoraLocalAIso,
+  isoADia,
+  isoAFechaHoraLocal,
+} from '../../../shared/formato.ts'
 import { useGuardarActivo, type Activo } from '../api/activos.ts'
 import { useCategorias, useCriticidades } from '../api/catalogos.ts'
 
@@ -29,6 +35,13 @@ interface ValoresFormulario {
   estado: string
   fabricante: string
   comentario: string
+  tipo: string
+  modelo: string
+  tecnicoResponsable: string
+  red: string
+  contacto: string
+  /** Valor del DateTimePicker (hora local) o null. */
+  fechaAlta: string | null
   /** "AAAA-MM-DD", el formato del DateInput de Mantine. */
   ultimaRevision: string | null
   /** Los Select de Mantine trabajan con texto: "3" en vez de 3. */
@@ -48,6 +61,12 @@ function valoresIniciales(activo?: Activo): ValoresFormulario {
     estado: activo?.estado ?? '',
     fabricante: activo?.fabricante ?? '',
     comentario: activo?.comentario ?? '',
+    tipo: activo?.tipo ?? '',
+    modelo: activo?.modelo ?? '',
+    tecnicoResponsable: activo?.tecnicoResponsable ?? '',
+    red: activo?.red ?? '',
+    contacto: activo?.contacto ?? '',
+    fechaAlta: activo?.fechaAlta ? isoAFechaHoraLocal(activo.fechaAlta) : null,
     ultimaRevision: activo ? isoADia(activo.ultimaRevision) : null,
     categoriaId: activo ? String(activo.categoriaId) : null,
     criticidadId: activo ? String(activo.criticidadId) : null,
@@ -97,6 +116,11 @@ export function ActivoFormModal({
       estado: opcional(191),
       fabricante: opcional(191),
       comentario: opcional(5000),
+      tipo: opcional(191),
+      modelo: opcional(191),
+      tecnicoResponsable: opcional(191),
+      red: opcional(191),
+      contacto: opcional(191),
       ultimaRevision: obligatorio('Indica la fecha de la última revisión'),
       categoriaId: obligatorio('Elige una categoría'),
       criticidadId: obligatorio('Elige un nivel de criticidad'),
@@ -131,6 +155,12 @@ export function ActivoFormModal({
           estado: tecnico(v.estado),
           fabricante: tecnico(v.fabricante),
           comentario: tecnico(v.comentario),
+          tipo: tecnico(v.tipo),
+          modelo: tecnico(v.modelo),
+          tecnicoResponsable: tecnico(v.tecnicoResponsable),
+          red: tecnico(v.red),
+          contacto: tecnico(v.contacto),
+          fechaAlta: v.fechaAlta ? fechaHoraLocalAIso(v.fechaAlta) : undefined,
           ultimaRevision: diaAIso(v.ultimaRevision!),
           categoriaId: Number(v.categoriaId),
           criticidadId: Number(v.criticidadId),
@@ -161,7 +191,7 @@ export function ActivoFormModal({
       opened={opened}
       onClose={onClose}
       title={activo ? `Editar ${activo.codigo}` : 'Nuevo activo'}
-      size="lg"
+      size="xl"
     >
       <form onSubmit={enviar}>
         <Stack gap="sm">
@@ -228,16 +258,41 @@ export function ActivoFormModal({
             />
           </SimpleGrid>
           <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <TextInput label="Contacto" placeholder="jperez" {...form.getInputProps('contacto')} />
+            <TextInput
+              label="Técnico responsable"
+              placeholder="soporte"
+              {...form.getInputProps('tecnicoResponsable')}
+            />
+            <TextInput label="Red" placeholder="LAN administrativa" {...form.getInputProps('red')} />
+          </SimpleGrid>
+
+          <Divider label="Datos del equipo (opcionales)" labelPosition="left" mt="xs" />
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <TextInput label="Tipo" placeholder="Laptop" {...form.getInputProps('tipo')} />
+            <TextInput
+              label="Fabricante"
+              placeholder="ASUSTeK COMPUTER INC."
+              {...form.getInputProps('fabricante')}
+            />
+            <TextInput
+              label="Modelo"
+              placeholder="ROG Zephyrus M16"
+              {...form.getInputProps('modelo')}
+            />
             <TextInput
               label="Número de serie"
               placeholder="00330-80000-00000-AA990"
               {...form.getInputProps('numeroSerie')}
             />
             <TextInput label="Estado" placeholder="Bueno" {...form.getInputProps('estado')} />
-            <TextInput
-              label="Fabricante"
-              placeholder="ASUSTeK COMPUTER INC."
-              {...form.getInputProps('fabricante')}
+            <DateTimePicker
+              label="Fecha de alta"
+              description="Registro en el inventario de origen"
+              valueFormat="DD MMM YYYY HH:mm"
+              maxDate={new Date()}
+              clearable
+              {...form.getInputProps('fechaAlta')}
             />
           </SimpleGrid>
           <Textarea

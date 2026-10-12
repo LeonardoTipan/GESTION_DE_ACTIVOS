@@ -532,6 +532,11 @@ export interface components {
             id: number;
             /** @example SRV-001 */
             codigo: string;
+            /**
+             * @description Elemento de GLPI del que procede; null si se registró a mano. Lo gestiona la sincronización.
+             * @example Computer #12
+             */
+            origenGlpi: string | null;
             /** @example Servidor de base de datos */
             nombre: string;
             /** @example ERP, Nómina */
@@ -550,6 +555,21 @@ export interface components {
             estado: string | null;
             /** @example ASUSTeK COMPUTER INC. */
             fabricante: string | null;
+            /** @example Laptop */
+            tipo: string | null;
+            /** @example ROG Zephyrus M16 */
+            modelo: string | null;
+            /** @example soporte */
+            tecnicoResponsable: string | null;
+            /** @example LAN administrativa */
+            red: string | null;
+            /** @example jperez */
+            contacto: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se registró en el inventario de origen (GLPI).
+             */
+            fechaAlta: string | null;
             /** @description Características técnicas (texto largo, admite saltos de línea). */
             comentario: string | null;
             /** @example 1 */
@@ -659,6 +679,34 @@ export interface components {
             /** @example ASUSTeK COMPUTER INC. */
             fabricante?: string;
             /**
+             * @description Tipo de equipo.
+             * @example Laptop
+             */
+            tipo?: string;
+            /** @example ROG Zephyrus M16 */
+            modelo?: string;
+            /**
+             * @description Técnico a cargo del soporte.
+             * @example soporte
+             */
+            tecnicoResponsable?: string;
+            /**
+             * @description Red a la que se conecta.
+             * @example LAN administrativa
+             */
+            red?: string;
+            /**
+             * @description Persona o usuario de contacto.
+             * @example jperez
+             */
+            contacto?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se registró en el inventario de origen.
+             * @example 2026-05-11T18:56:57.000Z
+             */
+            fechaAlta?: string;
+            /**
              * @description Características técnicas (admite saltos de línea).
              * @example Memoria RAM 64 GB
              *     Capacidad de disco 1 TB
@@ -714,6 +762,34 @@ export interface components {
             estado?: string;
             /** @example ASUSTeK COMPUTER INC. */
             fabricante?: string;
+            /**
+             * @description Tipo de equipo.
+             * @example Laptop
+             */
+            tipo?: string;
+            /** @example ROG Zephyrus M16 */
+            modelo?: string;
+            /**
+             * @description Técnico a cargo del soporte.
+             * @example soporte
+             */
+            tecnicoResponsable?: string;
+            /**
+             * @description Red a la que se conecta.
+             * @example LAN administrativa
+             */
+            red?: string;
+            /**
+             * @description Persona o usuario de contacto.
+             * @example jperez
+             */
+            contacto?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se registró en el inventario de origen.
+             * @example 2026-05-11T18:56:57.000Z
+             */
+            fechaAlta?: string;
             /**
              * @description Características técnicas (admite saltos de línea).
              * @example Memoria RAM 64 GB

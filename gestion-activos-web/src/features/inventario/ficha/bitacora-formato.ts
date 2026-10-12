@@ -12,6 +12,12 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   estado: 'Estado',
   fabricante: 'Fabricante',
   comentario: 'Comentario',
+  tipo: 'Tipo',
+  modelo: 'Modelo',
+  tecnicoResponsable: 'Técnico responsable',
+  red: 'Red',
+  contacto: 'Contacto',
+  fechaAlta: 'Fecha de alta',
   // Lo anota la sincronización al crear o enlazar un activo desde GLPI.
   origenGlpi: 'Origen en GLPI',
   categoriaId: 'Categoría',
@@ -48,8 +54,10 @@ export function formatearValor(
     return nombres.criticidades.get(valor) ?? `#${valor}`
   }
   if (typeof valor === 'string' && ISO.test(valor)) {
-    // La baja tiene hora real; la revisión es solo una fecha.
-    return campo === 'deletedAt' ? formatearFechaHora(valor) : formatearFecha(valor)
+    // La baja y el alta tienen hora real; la revisión es solo una fecha.
+    return campo === 'deletedAt' || campo === 'fechaAlta'
+      ? formatearFechaHora(valor)
+      : formatearFecha(valor)
   }
   return String(valor)
 }

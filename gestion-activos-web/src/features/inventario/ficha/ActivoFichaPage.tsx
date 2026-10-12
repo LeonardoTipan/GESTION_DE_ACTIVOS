@@ -16,7 +16,13 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { modals } from '@mantine/modals'
 import { notifications } from '@mantine/notifications'
-import { IconArchive, IconLock, IconLockOpen, IconPencil } from '@tabler/icons-react'
+import {
+  IconArchive,
+  IconLock,
+  IconLockOpen,
+  IconPencil,
+  IconRefresh,
+} from '@tabler/icons-react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { formatearFecha, formatearFechaHora } from '../../../shared/formato.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
@@ -121,6 +127,11 @@ export function ActivoFichaPage() {
                 Sin cifrar
               </Badge>
             )}
+            {activo.origenGlpi && (
+              <Badge color="blue" variant="light" leftSection={<IconRefresh size={12} />}>
+                Sincronizado con GLPI · {activo.origenGlpi}
+              </Badge>
+            )}
           </Group>
         </div>
         <Group gap="sm">
@@ -144,16 +155,29 @@ export function ActivoFichaPage() {
       </Group>
 
       <Card withBorder padding="lg">
+        <Title order={4} mb="md">
+          Uso y responsables
+        </Title>
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
           <Dato etiqueta="Sistemas" valor={activo.sistemas} />
           <Dato etiqueta="Custodio" valor={activo.custodio} />
           <Dato etiqueta="Ubicación" valor={activo.ubicacion} />
+          <Dato etiqueta="Contacto" valor={activo.contacto} />
+          <Dato etiqueta="Técnico responsable" valor={activo.tecnicoResponsable} />
+          <Dato etiqueta="Red" valor={activo.red} />
+        </SimpleGrid>
+      </Card>
+
+      <Card withBorder padding="lg">
+        <Title order={4} mb="md">
+          Datos del equipo
+        </Title>
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="lg">
+          <Dato etiqueta="Tipo" valor={activo.tipo} />
+          <Dato etiqueta="Fabricante" valor={activo.fabricante} />
+          <Dato etiqueta="Modelo" valor={activo.modelo} />
           <Dato etiqueta="Número de serie" valor={activo.numeroSerie} />
           <Dato etiqueta="Estado" valor={activo.estado} />
-          <Dato etiqueta="Fabricante" valor={activo.fabricante} />
-          <Dato etiqueta="Última revisión" valor={formatearFecha(activo.ultimaRevision)} />
-          <Dato etiqueta="Registrado" valor={formatearFechaHora(activo.createdAt)} />
-          <Dato etiqueta="Última modificación" valor={formatearFechaHora(activo.updatedAt)} />
         </SimpleGrid>
         <div style={{ marginTop: 'var(--mantine-spacing-lg)' }}>
           <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
@@ -162,6 +186,18 @@ export function ActivoFichaPage() {
           {/* pre-wrap: respeta los saltos de línea de las características técnicas. */}
           <Text style={{ whiteSpace: 'pre-wrap' }}>{activo.comentario?.trim() || '—'}</Text>
         </div>
+      </Card>
+
+      <Card withBorder padding="lg">
+        <Title order={4} mb="md">
+          Fechas
+        </Title>
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 4 }} spacing="lg">
+          <Dato etiqueta="Fecha de alta" valor={formatearFechaHora(activo.fechaAlta)} />
+          <Dato etiqueta="Última revisión" valor={formatearFecha(activo.ultimaRevision)} />
+          <Dato etiqueta="Registrado aquí" valor={formatearFechaHora(activo.createdAt)} />
+          <Dato etiqueta="Última modificación" valor={formatearFechaHora(activo.updatedAt)} />
+        </SimpleGrid>
       </Card>
 
       <Card withBorder padding="lg">
