@@ -25,13 +25,14 @@ import { ActivoFormModal } from '../activos/ActivoFormModal.tsx'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
 import { BitacoraTimeline } from './BitacoraTimeline.tsx'
 
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+/** Un dato opcional vacío (null o "") se muestra como "—". */
+function Dato({ etiqueta, valor }: { etiqueta: string; valor: string | null }) {
   return (
     <div>
       <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
         {etiqueta}
       </Text>
-      <Text>{valor}</Text>
+      <Text>{valor?.trim() || '—'}</Text>
     </div>
   )
 }
@@ -147,10 +148,20 @@ export function ActivoFichaPage() {
           <Dato etiqueta="Sistemas" valor={activo.sistemas} />
           <Dato etiqueta="Custodio" valor={activo.custodio} />
           <Dato etiqueta="Ubicación" valor={activo.ubicacion} />
+          <Dato etiqueta="Número de serie" valor={activo.numeroSerie} />
+          <Dato etiqueta="Estado" valor={activo.estado} />
+          <Dato etiqueta="Fabricante" valor={activo.fabricante} />
           <Dato etiqueta="Última revisión" valor={formatearFecha(activo.ultimaRevision)} />
           <Dato etiqueta="Registrado" valor={formatearFechaHora(activo.createdAt)} />
           <Dato etiqueta="Última modificación" valor={formatearFechaHora(activo.updatedAt)} />
         </SimpleGrid>
+        <div style={{ marginTop: 'var(--mantine-spacing-lg)' }}>
+          <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
+            Comentario
+          </Text>
+          {/* pre-wrap: respeta los saltos de línea de las características técnicas. */}
+          <Text style={{ whiteSpace: 'pre-wrap' }}>{activo.comentario?.trim() || '—'}</Text>
+        </div>
       </Card>
 
       <Card withBorder padding="lg">

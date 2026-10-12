@@ -544,6 +544,14 @@ export interface components {
             cifrado: boolean;
             /** Format: date-time */
             ultimaRevision: string;
+            /** @example 00330-80000-00000-AA990 */
+            numeroSerie: string | null;
+            /** @example Bueno */
+            estado: string | null;
+            /** @example ASUSTeK COMPUTER INC. */
+            fabricante: string | null;
+            /** @description Características técnicas (texto largo, admite saltos de línea). */
+            comentario: string | null;
             /** @example 1 */
             categoriaId: number;
             /** @example 3 */
@@ -641,6 +649,21 @@ export interface components {
              * @example 2026-09-15T00:00:00.000Z
              */
             ultimaRevision: string;
+            /** @example 00330-80000-00000-AA990 */
+            numeroSerie?: string;
+            /**
+             * @description Estado físico u operativo del activo.
+             * @example Bueno
+             */
+            estado?: string;
+            /** @example ASUSTeK COMPUTER INC. */
+            fabricante?: string;
+            /**
+             * @description Características técnicas (admite saltos de línea).
+             * @example Memoria RAM 64 GB
+             *     Capacidad de disco 1 TB
+             */
+            comentario?: string;
             /**
              * @description ID de la categoría (GET /api/categorias).
              * @example 1
@@ -682,6 +705,21 @@ export interface components {
              * @example 2026-09-15T00:00:00.000Z
              */
             ultimaRevision?: string;
+            /** @example 00330-80000-00000-AA990 */
+            numeroSerie?: string;
+            /**
+             * @description Estado físico u operativo del activo.
+             * @example Bueno
+             */
+            estado?: string;
+            /** @example ASUSTeK COMPUTER INC. */
+            fabricante?: string;
+            /**
+             * @description Características técnicas (admite saltos de línea).
+             * @example Memoria RAM 64 GB
+             *     Capacidad de disco 1 TB
+             */
+            comentario?: string;
             /**
              * @description ID de la categoría (GET /api/categorias).
              * @example 1

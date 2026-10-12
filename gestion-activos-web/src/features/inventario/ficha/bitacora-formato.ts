@@ -8,6 +8,12 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   ubicacion: 'Ubicación',
   cifrado: 'Cifrado',
   ultimaRevision: 'Última revisión',
+  numeroSerie: 'Número de serie',
+  estado: 'Estado',
+  fabricante: 'Fabricante',
+  comentario: 'Comentario',
+  // Lo anota la sincronización al crear o enlazar un activo desde GLPI.
+  origenGlpi: 'Origen en GLPI',
   categoriaId: 'Categoría',
   criticidadId: 'Criticidad',
   deletedAt: 'Fecha de baja',

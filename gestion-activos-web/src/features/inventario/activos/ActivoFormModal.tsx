@@ -6,6 +6,7 @@ import {
   SimpleGrid,
   Stack,
   Switch,
+  Textarea,
   TextInput,
 } from '@mantine/core'
 import { DateInput } from '@mantine/dates'
@@ -23,6 +24,11 @@ interface ValoresFormulario {
   custodio: string
   ubicacion: string
   cifrado: boolean
+  /** Datos técnicos: opcionales. */
+  numeroSerie: string
+  estado: string
+  fabricante: string
+  comentario: string
   /** "AAAA-MM-DD", el formato del DateInput de Mantine. */
   ultimaRevision: string | null
   /** Los Select de Mantine trabajan con texto: "3" en vez de 3. */
@@ -38,6 +44,10 @@ function valoresIniciales(activo?: Activo): ValoresFormulario {
     custodio: activo?.custodio ?? '',
     ubicacion: activo?.ubicacion ?? '',
     cifrado: activo?.cifrado ?? false,
+    numeroSerie: activo?.numeroSerie ?? '',
+    estado: activo?.estado ?? '',
+    fabricante: activo?.fabricante ?? '',
+    comentario: activo?.comentario ?? '',
     ultimaRevision: activo ? isoADia(activo.ultimaRevision) : null,
     categoriaId: activo ? String(activo.categoriaId) : null,
     criticidadId: activo ? String(activo.criticidadId) : null,
@@ -51,6 +61,10 @@ const texto = (valor: string) =>
     : valor.trim().length > 191
       ? 'Máximo 191 caracteres'
       : null
+
+/** Campos opcionales: solo se comprueba la longitud máxima. */
+const opcional = (max: number) => (valor: string) =>
+  valor.trim().length > max ? `Máximo ${max} caracteres` : null
 
 const obligatorio = (mensaje: string) => (valor: string | null) =>
   valor ? null : mensaje
@@ -79,6 +93,10 @@ export function ActivoFormModal({
       sistemas: texto,
       custodio: texto,
       ubicacion: texto,
+      numeroSerie: opcional(191),
+      estado: opcional(191),
+      fabricante: opcional(191),
+      comentario: opcional(5000),
       ultimaRevision: obligatorio('Indica la fecha de la última revisión'),
       categoriaId: obligatorio('Elige una categoría'),
       criticidadId: obligatorio('Elige un nivel de criticidad'),
@@ -95,6 +113,9 @@ export function ActivoFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- solo al abrir
   }, [opened, activo])
 
+  /** Vacío en un alta = no se envía; en una edición se envía "" para poder borrar el dato. */
+  const tecnico = (valor: string) => valor.trim() || (activo ? '' : undefined)
+
   const enviar = form.onSubmit((v) => {
     guardar.mutate(
       {
@@ -106,6 +127,10 @@ export function ActivoFormModal({
           custodio: v.custodio.trim(),
           ubicacion: v.ubicacion.trim(),
           cifrado: v.cifrado,
+          numeroSerie: tecnico(v.numeroSerie),
+          estado: tecnico(v.estado),
+          fabricante: tecnico(v.fabricante),
+          comentario: tecnico(v.comentario),
           ultimaRevision: diaAIso(v.ultimaRevision!),
           categoriaId: Number(v.categoriaId),
           criticidadId: Number(v.criticidadId),
@@ -202,6 +227,28 @@ export function ActivoFormModal({
               {...form.getInputProps('cifrado', { type: 'checkbox' })}
             />
           </SimpleGrid>
+          <SimpleGrid cols={{ base: 1, sm: 3 }}>
+            <TextInput
+              label="Número de serie"
+              placeholder="00330-80000-00000-AA990"
+              {...form.getInputProps('numeroSerie')}
+            />
+            <TextInput label="Estado" placeholder="Bueno" {...form.getInputProps('estado')} />
+            <TextInput
+              label="Fabricante"
+              placeholder="ASUSTeK COMPUTER INC."
+              {...form.getInputProps('fabricante')}
+            />
+          </SimpleGrid>
+          <Textarea
+            label="Comentario"
+            description="Características técnicas; admite varias líneas"
+            placeholder={'Memoria RAM 64 GB\nCapacidad de disco 1 TB'}
+            autosize
+            minRows={3}
+            maxRows={10}
+            {...form.getInputProps('comentario')}
+          />
           <Group justify="flex-end" mt="md">
             <Button variant="default" onClick={onClose}>
               Cancelar
