@@ -40,10 +40,16 @@ model Criticidad {
 
 model Activo {
   id             Int      @id @default(autoincrement())
+  // Código OPERATIVO de la aplicación: único y editable. No es la identidad
+  // del activo sincronizado (esa es origenGlpi) ni el n.º de inventario de GLPI.
   codigo         String   @unique
   // Elemento de GLPI del que procede ("Computer #12"); null si se registró a mano.
   // Es la identidad con la que la sincronización reconoce el activo.
   origenGlpi     String?  @unique
+  // N.º de inventario tal como está en GLPI (otherserial). Puede repetirse.
+  numeroInventario    String?
+  // Código institucional ORIGINAL, tal como se anotó (sin corregir). Puede repetirse.
+  codigoInstitucional String?
   nombre         String
   sistemas       String
   custodio       String
@@ -63,6 +69,9 @@ model Activo {
   contacto       String?
   // Cuándo se registró en el inventario de origen (GLPI)
   fechaAlta      DateTime?
+  // Datos LOCALES: GLPI no los informa y la sincronización nunca los toca
+  direccionIp    String?
+  fechaCompra    DateTime?
   // Características técnicas: texto largo, conserva los saltos de línea
   comentario     String?  @db.Text
   categoriaId    Int
@@ -83,6 +92,8 @@ model Activo {
   vulnerabilidades Vulnerabilidad[] // "presenta ciclo de"
 
   @@index([updatedAt])
+  @@index([numeroInventario])
+  @@index([codigoInstitucional])
   @@map("activo")
 }
 

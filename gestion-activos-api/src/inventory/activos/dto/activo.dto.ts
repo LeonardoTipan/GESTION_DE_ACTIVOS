@@ -20,6 +20,22 @@ export class ActivoDto {
   })
   origenGlpi: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '001',
+    description: 'N.º de inventario tal como está en GLPI. Puede repetirse.',
+  })
+  numeroInventario: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '7-1-22-177',
+    description: 'Código institucional original, sin corregir. Puede repetirse.',
+  })
+  codigoInstitucional: string | null;
+
   @ApiProperty({ example: 'Servidor de base de datos' })
   nombre: string;
 
@@ -69,6 +85,22 @@ export class ActivoDto {
     description: 'Cuándo se registró en el inventario de origen (GLPI).',
   })
   fechaAlta: Date | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '10.0.5.21',
+    description: 'Dato local: la sincronización con GLPI no lo modifica.',
+  })
+  direccionIp: string | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'Dato local: la sincronización con GLPI no lo modifica.',
+  })
+  fechaCompra: Date | null;
 
   @ApiProperty({
     type: String,

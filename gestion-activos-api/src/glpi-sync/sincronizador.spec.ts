@@ -2,9 +2,9 @@ import type { GlpiSyncConfig } from './config.js';
 import { GlpiClient, type GlpiItem } from './glpi-client.js';
 import { formatearInforme } from './informe.js';
 import {
+  ActivoDuplicadoError,
   claveCodigo,
   type Catalogos,
-  type Encontrados,
   type InventarioLocal,
 } from './inventario-local.js';
 import type { ActivoGlpi } from './mapeo.js';
@@ -15,124 +15,17 @@ import {
   glpiFalso,
   type DatosGlpiFalso,
 } from './testing/glpi-falso.js';
+import {
+  CODIGOS_ESPERADOS,
+  equipoDeRed,
+  ordenador,
+  ordenadores,
+  REGLA,
+} from './testing/inventario-ejemplo.js';
 
-/** Inventario en memoria que apunta cada escritura y quién firma el historial. */
-class InventarioEnMemoria implements InventarioLocal {
-  activos: ActivoLocal[] = [];
-  historial: { activoId: number; accion: string; responsable: string; cambios: object }[] = [];
-  categorias = ['Hardware', 'Red', 'Software'];
-  criticidades = ['Baja', 'Media', 'Alta'];
-
-  catalogos(): Promise<Catalogos> {
-    return Promise.resolve({
-      categorias: new Map(this.categorias.map((c, i) => [c, i + 1])),
-      criticidades: new Map(this.criticidades.map((c, i) => [c, i + 1])),
-    });
-  }
-
-  buscar(referencias: string[], codigos: string[]): Promise<Encontrados> {
-    const claves = new Set(codigos.map(claveCodigo));
-    const porReferencia = new Map<string, ActivoLocal>();
-    const porCodigo = new Map<string, ActivoLocal>();
-    for (const a of this.activos) {
-      if (a.origenGlpi && referencias.includes(a.origenGlpi)) {
-        porReferencia.set(a.origenGlpi, { ...a });
-      }
-      if (claves.has(claveCodigo(a.codigo))) {
-        porCodigo.set(claveCodigo(a.codigo), { ...a });
-      }
-    }
-    return Promise.resolve({ porReferencia, porCodigo });
-  }
-
-  crear(glpi: ActivoGlpi, codigo: string): Promise<number> {
-    const id = this.activos.length + 100;
-    const { ultimaRevision: _, ...campos } = glpi.alCrear;
-    this.activos.push({
-      id,
-      codigo,
-      origenGlpi: glpi.referencia,
-      numeroSerie: null,
-      estado: null,
-      fabricante: null,
-      comentario: null,
-      tipo: null,
-      modelo: null,
-      tecnicoResponsable: null,
-      red: null,
-      contacto: null,
-      fechaAlta: null,
-      ...campos,
-      deletedAt: null,
-    });
-    this.historial.push({
-      activoId: id,
-      accion: 'CREAR',
-      responsable: RESPONSABLE_GLPI,
-      cambios: {},
-    });
-    return Promise.resolve(id);
-  }
-
-  aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
-    const activo = this.activos.find((a) => a.id === local.id)!;
-    Object.assign(activo, glpi.datos);
-    if (plan.accion === 'ENLAZAR') activo.origenGlpi = glpi.referencia;
-    this.historial.push({
-      activoId: local.id,
-      accion: 'ACTUALIZAR',
-      responsable: RESPONSABLE_GLPI,
-      cambios: plan.diferencias,
-    });
-    return Promise.resolve();
-  }
-}
-
-const CONFIG: GlpiSyncConfig = {
-  apiUrl: 'https://glpi.test/api.php',
-  apiVersion: 'v2',
-  ignorarSsl: false,
-  credenciales: CREDENCIALES_PRUEBA,
-  zonaHoraria: 'America/Guayaquil',
-  itemtypes: ['Computer', 'NetworkEquipment', 'Software'],
-  tamanoBloque: 10,
-  dryRun: true,
-  cron: '0 2 * * *',
-  criticidadPorDefecto: 'Media',
-  categoriaPorTipo: { Computer: 'Hardware', NetworkEquipment: 'Red', Software: 'Software' },
-  dirInformes: 'glpi-informes',
-  timeoutMs: 1000,
-  databaseUrl: 'mysql://no-se-usa',
-};
-
-const lista = (n: number, prefijo: string): GlpiItem[] =>
-  Array.from({ length: n }, (_, i) => ({
-    id: i + 1,
-    name: `${prefijo}-${i + 1}`,
-    otherserial: `${prefijo}-INV-${i + 1}`,
-    user: { id: 1, name: 'jperez' },
-    location: { id: 1, name: 'Matriz' },
-    date_mod: '2026-10-01 09:30:00',
-  }));
-
-function montar(datos: DatosGlpiFalso, config: Partial<GlpiSyncConfig> = {}) {
-  const falso = glpiFalso(datos);
-  const completa = { ...CONFIG, ...config };
-  const local = new InventarioEnMemoria();
-  const cliente = new GlpiClient({ ...completa, fetch: falso.fetch });
-  const sincronizador = new Sincronizador(completa, cliente, local, () => {});
-  return { falso, local, sincronizador };
-}
-
-const local = (extra: Partial<ActivoLocal>): ActivoLocal => ({
-  id: 1,
-  codigo: 'PC-INV-1',
-  origenGlpi: null,
-  nombre: 'PC-1',
-  sistemas: 'Windows 10',
-  custodio: 'jperez',
-  ubicacion: 'Matriz',
-  cifrado: false,
+const VACIOS = {
+  numeroInventario: null,
+  codigoInstitucional: null,
   numeroSerie: null,
   estado: null,
   fabricante: null,
@@ -143,181 +36,478 @@ const local = (extra: Partial<ActivoLocal>): ActivoLocal => ({
   red: null,
   contacto: null,
   fechaAlta: null,
-  deletedAt: null,
-  ...extra,
+};
+
+/**
+ * Inventario en memoria con las MISMAS restricciones únicas que MySQL
+ * (código y referencia de GLPI): así se prueba también la concurrencia.
+ */
+class InventarioEnMemoria implements InventarioLocal {
+  activos: ActivoLocal[] = [];
+  historial: { activoId: number; accion: string; responsable: string }[] = [];
+  private siguienteId = 100;
+
+  catalogos(): Promise<Catalogos> {
+    return Promise.resolve({
+      categorias: new Map([['Hardware', 1], ['Red', 2], ['Software', 3]]),
+      criticidades: new Map([['Baja', 1], ['Media', 2], ['Alta', 3]]),
+    });
+  }
+
+  async buscar(referencias: string[], valores: string[]): Promise<ActivoLocal[]> {
+    await Promise.resolve(); // cede el turno, como una consulta real
+    const claves = new Set(valores.map(claveCodigo));
+    const coincide = (v: string | null) => v !== null && claves.has(claveCodigo(v));
+    return this.activos
+      .filter(
+        (a) =>
+          (a.origenGlpi !== null && referencias.includes(a.origenGlpi)) ||
+          coincide(a.codigo) ||
+          coincide(a.numeroInventario) ||
+          coincide(a.codigoInstitucional),
+      )
+      .map((a) => ({ ...a }));
+  }
+
+  async crear(glpi: ActivoGlpi, codigo: string): Promise<number> {
+    await Promise.resolve();
+    if (
+      this.activos.some(
+        (a) =>
+          a.origenGlpi === glpi.referencia ||
+          claveCodigo(a.codigo) === claveCodigo(codigo),
+      )
+    ) {
+      throw new ActivoDuplicadoError(glpi.referencia);
+    }
+    const id = this.siguienteId++;
+    const { ultimaRevision: _, ...campos } = glpi.alCrear;
+    this.activos.push({
+      ...VACIOS,
+      id,
+      codigo,
+      origenGlpi: glpi.referencia,
+      ...campos,
+      deletedAt: null,
+    });
+    this.historial.push({ activoId: id, accion: 'CREAR', responsable: RESPONSABLE_GLPI });
+    return id;
+  }
+
+  async aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
+    await Promise.resolve();
+    const activo = this.activos.find((a) => a.id === local.id)!;
+    if (plan.accion === 'ENLAZAR') {
+      if (activo.origenGlpi) throw new Error('ya vinculado');
+      activo.origenGlpi = glpi.referencia;
+    }
+    Object.assign(activo, glpi.datos);
+    this.historial.push({ activoId: local.id, accion: 'ACTUALIZAR', responsable: RESPONSABLE_GLPI });
+  }
+
+  /** Activo registrado a mano. */
+  manual(extra: Partial<ActivoLocal>): ActivoLocal {
+    const activo: ActivoLocal = {
+      ...VACIOS,
+      id: this.siguienteId++,
+      codigo: 'MANUAL',
+      origenGlpi: null,
+      nombre: 'Equipo registrado a mano',
+      sistemas: 'Windows 10',
+      custodio: 'Juan Pérez',
+      ubicacion: 'Gerencia',
+      cifrado: true,
+      deletedAt: null,
+      ...extra,
+    };
+    this.activos.push(activo);
+    return activo;
+  }
+}
+
+const CONFIG: GlpiSyncConfig = {
+  apiUrl: 'https://glpi.test/api.php',
+  apiVersion: 'v2',
+  ignorarSsl: false,
+  credenciales: CREDENCIALES_PRUEBA,
+  zonaHoraria: 'America/Guayaquil',
+  itemtypes: ['Computer', 'NetworkEquipment'],
+  tamanoBloque: 50,
+  dryRun: false,
+  cron: '0 2 * * *',
+  criticidadPorDefecto: 'Media',
+  codigoInstitucional: REGLA,
+  categoriaPorTipo: { Computer: 'Hardware', NetworkEquipment: 'Red', Software: 'Software' },
+  dirInformes: 'glpi-informes',
+  timeoutMs: 1000,
+  databaseUrl: 'mysql://no-se-usa',
+};
+
+const INVENTARIO = (): DatosGlpiFalso => ({
+  elementos: { Computer: ordenadores(), NetworkEquipment: [equipoDeRed()] },
 });
 
-describe('Sincronizador · simulación (dry-run)', () => {
-  it('prueba con 10 de cada tipo: lee 30 y no escribe nada', async () => {
-    const { falso, local: inv, sincronizador } = montar(
-      {
-        elementos: {
-          Computer: lista(25, 'PC'),
-          NetworkEquipment: lista(12, 'SW'),
-          Software: lista(40, 'APP'),
-        },
-      },
-      { maxPorTipo: 10 },
-    );
+function montar(
+  datos: DatosGlpiFalso,
+  config: Partial<GlpiSyncConfig> = {},
+  inventario = new InventarioEnMemoria(),
+) {
+  const falso = glpiFalso(datos);
+  const completa = { ...CONFIG, ...config };
+  const cliente = new GlpiClient({ ...completa, fetch: falso.fetch });
+  const sincronizador = new Sincronizador(completa, cliente, inventario, () => {});
+  return { falso, datos, inv: inventario, sincronizador };
+}
+
+const foto = (inv: InventarioEnMemoria) => JSON.stringify(inv.activos);
+
+describe('importación inicial del inventario real (25 ordenadores + 1 equipo de red)', () => {
+  it('crea 26 activos distintos: ninguno se omite por compartir n.º de inventario', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
     const informe = await sincronizador.ejecutar();
 
-    expect(informe.dryRun).toBe(true);
     expect(informe.errores).toEqual([]);
-    for (const tipo of CONFIG.itemtypes) {
-      expect(informe.totales[tipo]).toMatchObject({ leidos: 10, CREAR: 10 });
-    }
+    expect(informe.totales.Computer).toMatchObject({ leidos: 25, CREAR: 25, OMITIR: 0, ERROR: 0 });
+    expect(informe.totales.NetworkEquipment).toMatchObject({ leidos: 1, CREAR: 1, OMITIR: 0, ERROR: 0 });
+    expect(inv.activos).toHaveLength(26);
+    expect(new Set(inv.activos.map((a) => a.origenGlpi)).size).toBe(26);
+    expect(new Set(inv.activos.map((a) => claveCodigo(a.codigo))).size).toBe(26);
+  });
+
+  it('los 22 equipos con inventario "001" y los 2 con "002" se conservan todos, con su n.º original', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    const ordenadoresLocales = inv.activos.filter((a) => a.origenGlpi!.startsWith('Computer'));
+    expect(ordenadoresLocales.filter((a) => a.numeroInventario === '001')).toHaveLength(22);
+    expect(ordenadoresLocales.filter((a) => a.numeroInventario === '002')).toHaveLength(2);
+    // El n.º de inventario repetido nunca se usa como código operativo.
+    expect(inv.activos.some((a) => a.codigo === '001' || a.codigo === '002')).toBe(false);
+  });
+
+  it('el equipo de red #1 no se confunde con el ordenador #1 (mismo id, mismo inventario)', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    const pc = inv.activos.find((a) => a.origenGlpi === 'Computer #1')!;
+    const red = inv.activos.find((a) => a.origenGlpi === 'NetworkEquipment #1')!;
+    expect(pc.id).not.toBe(red.id);
+    expect(pc.nombre).toBe('Laptop 1');
+    expect(red).toMatchObject({ nombre: 'Central Telefónica', codigo: '7-1-14-6' });
+  });
+
+  it('códigos operativos: institucional si es válido y único; si no, el de respaldo', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    const codigos = Object.fromEntries(
+      inv.activos
+        .filter((a) => a.origenGlpi!.startsWith('Computer'))
+        .map((a) => [Number(a.origenGlpi!.split('#')[1]), a.codigo]),
+    );
+    expect(codigos).toEqual(CODIGOS_ESPERADOS);
+    // 11 con código institucional y 14 con código de respaldo.
+    expect(Object.values(codigos).filter((c) => c.startsWith('GLPI-PC-'))).toHaveLength(14);
+  });
+
+  it('código institucional repetido: se conservan los DOS activos, con el original guardado y aviso', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    const informe = await sincronizador.ejecutar();
+    const repetidos = inv.activos.filter((a) => a.codigoInstitucional === '7-1-22-177');
+    expect(repetidos.map((a) => [a.origenGlpi, a.codigo])).toEqual([
+      ['Computer #1', 'GLPI-PC-1'],
+      ['Computer #10', 'GLPI-PC-10'],
+    ]);
+    const elemento = informe.elementos.find((e) => e.glpiId === 10 && e.itemtype === 'Computer')!;
+    expect(elemento.revision.join('\n')).toContain('"7-1-22-177" está repetido en GLPI (Computer #1)');
+  });
+
+  it('"S/N: …" y formato irregular: código de respaldo, original conservado e informe para revisión', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    const informe = await sincronizador.ejecutar();
+    const conPrefijo = inv.activos.find((a) => a.origenGlpi === 'Computer #6')!;
+    expect(conPrefijo).toMatchObject({ codigo: 'GLPI-PC-6', codigoInstitucional: 'S/N: 7-1-22-183' });
+    const sinMencion = inv.activos.find((a) => a.origenGlpi === 'Computer #4')!;
+    expect(sinMencion).toMatchObject({ codigo: 'GLPI-PC-4', codigoInstitucional: null });
+    const irregular = inv.activos.find((a) => a.origenGlpi === 'Computer #26')!;
+    expect(irregular).toMatchObject({ codigo: 'GLPI-PC-26', codigoInstitucional: '7-1-7-22--76' });
+
+    const texto = formatearInforme(informe);
+    expect(texto).toContain('REQUIEREN REVISIÓN MANUAL');
+    expect(texto).toContain('"S/N: 7-1-22-183" con formato irregular');
+    expect(texto).toContain('Sin código institucional');
+    // El n.º de inventario "001" lo comparten 23 elementos: se resume, no se listan todos.
+    expect(texto).toMatch(/"001" está repetido en GLPI \([^)]* y \d+ más\)/);
+    expect(texto).toContain('"7-1-7-22--76" con formato irregular');
+  });
+
+  it('toda alta queda en el historial firmada por GLPI', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    expect(inv.historial).toHaveLength(26);
+    expect(inv.historial.every((h) => h.responsable === 'GLPI' && h.accion === 'CREAR')).toBe(true);
+  });
+});
+
+describe('idempotencia', () => {
+  it('segunda sincronización idéntica: ningún activo nuevo, ningún cambio, ningún registro de historial', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    const antes = foto(inv);
+    const segunda = await sincronizador.ejecutar();
+
+    expect(segunda.totales.Computer).toMatchObject({ leidos: 25, CREAR: 0, SIN_CAMBIOS: 25 });
+    expect(segunda.totales.NetworkEquipment).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 1 });
+    expect(foto(inv)).toBe(antes);
+    expect(inv.historial).toHaveLength(26);
+  });
+
+  it('la simulación no escribe nada, ni la primera vez ni repetida', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO(), { dryRun: true });
+    const primera = await sincronizador.ejecutar();
+    const segunda = await sincronizador.ejecutar();
+    expect(primera.dryRun).toBe(true);
+    expect(primera.totales.Computer).toMatchObject({ CREAR: 25 });
+    expect(segunda.totales).toEqual(primera.totales);
+    expect(segunda.elementos.map((e) => e.codigo)).toEqual(primera.elementos.map((e) => e.codigo));
     expect(inv.activos).toEqual([]);
     expect(inv.historial).toEqual([]);
-    expect(falso.tokensEmitidos()).toBe(1);
-    expect(formatearInforme(informe)).toContain('SIMULACIÓN');
   });
 
-  it('activo registrado a mano con el mismo código: se informa ENLAZAR con sus diferencias, sin duplicar', async () => {
-    const { local: inv, sincronizador } = montar({ elementos: { Computer: lista(1, 'PC') } }, {
-      itemtypes: ['Computer'],
-    });
-    inv.activos.push(local({ custodio: 'Juan Pérez', codigo: 'pc-inv-1' }));
+  it('cambio del n.º de inventario en GLPI: se actualiza el activo existente, sin crear otro ni cambiar su código', async () => {
+    const montaje = montar(INVENTARIO());
+    await montaje.sincronizador.ejecutar();
+    const antes = montaje.inv.activos.find((a) => a.origenGlpi === 'Computer #2')!;
+    const [idAntes, codigoAntes] = [antes.id, antes.codigo];
+
+    // En GLPI corrigen el inventario del equipo #2.
+    const datos = INVENTARIO();
+    datos.elementos.Computer[1] = ordenador(2, 'INV-NUEVO-2', '7-1-22-69');
+    const { sincronizador } = montar(datos, {}, montaje.inv);
     const informe = await sincronizador.ejecutar();
 
-    expect(informe.elementos[0]).toMatchObject({
-      resultado: 'ENLAZAR',
-      activoId: 1,
-      diferencias: { custodio: { antes: 'Juan Pérez', despues: 'jperez' } },
-    });
-    expect(inv.activos).toHaveLength(1);
-    expect(inv.activos[0].custodio).toBe('Juan Pérez'); // simulación: intacto
+    expect(montaje.inv.activos).toHaveLength(26);
+    const despues = montaje.inv.activos.find((a) => a.origenGlpi === 'Computer #2')!;
+    expect(despues).toMatchObject({ id: idAntes, codigo: codigoAntes, numeroInventario: 'INV-NUEVO-2' });
+    expect(informe.totales.Computer).toMatchObject({ CREAR: 0, ACTUALIZAR: 1, SIN_CAMBIOS: 24 });
+  });
+
+  it('un código operativo corregido a mano se respeta: la sincronización no lo renombra', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    await sincronizador.ejecutar();
+    inv.activos.find((a) => a.origenGlpi === 'Computer #1')!.codigo = 'QT-7-1-22-177';
+    const segunda = await sincronizador.ejecutar();
+    expect(segunda.elementos[0]).toMatchObject({ resultado: 'SIN_CAMBIOS', codigo: 'QT-7-1-22-177' });
+    expect(inv.activos).toHaveLength(26);
+  });
+
+  it('un elemento que desaparece de GLPI NO se borra ni se da de baja en local', async () => {
+    const montaje = montar(INVENTARIO());
+    await montaje.sincronizador.ejecutar();
+    const datos = INVENTARIO();
+    datos.elementos.Computer = datos.elementos.Computer.slice(0, 10);
+    await montar(datos, {}, montaje.inv).sincronizador.ejecutar();
+    expect(montaje.inv.activos).toHaveLength(26);
+    expect(montaje.inv.activos.every((a) => a.deletedAt === null)).toBe(true);
   });
 });
 
-describe('Sincronizador · aplicando cambios', () => {
-  it('crea los nuevos y firma el historial como GLPI', async () => {
-    const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: lista(3, 'PC') } },
-      { dryRun: false, itemtypes: ['Computer'] },
-    );
-    const informe = await sincronizador.ejecutar();
+describe('concurrencia', () => {
+  it('dos sincronizaciones simultáneas no crean referencias ni códigos duplicados', async () => {
+    const inv = new InventarioEnMemoria();
+    const a = montar(INVENTARIO(), {}, inv).sincronizador;
+    const b = montar(INVENTARIO(), {}, inv).sincronizador;
+    const [informeA, informeB] = await Promise.all([a.ejecutar(), b.ejecutar()]);
 
-    expect(informe.totales.Computer).toMatchObject({ leidos: 3, CREAR: 3, ERROR: 0 });
-    expect(inv.activos.map((a) => a.codigo)).toEqual(['PC-INV-1', 'PC-INV-2', 'PC-INV-3']);
-    expect(inv.historial).toHaveLength(3);
-    expect(inv.historial.every((h) => h.responsable === 'GLPI')).toBe(true);
+    expect(inv.activos).toHaveLength(26);
+    expect(new Set(inv.activos.map((x) => x.origenGlpi)).size).toBe(26);
+    expect(new Set(inv.activos.map((x) => claveCodigo(x.codigo))).size).toBe(26);
+    // Lo que una no pudo crear porque la otra se adelantó queda como error explicado.
+    const errores = [...informeA.elementos, ...informeB.elementos].filter((e) => e.resultado === 'ERROR');
+    expect(errores.every((e) => e.error!.includes('impidió el duplicado'))).toBe(true);
+    const creados = [...informeA.elementos, ...informeB.elementos].filter((e) => e.resultado === 'CREAR');
+    expect(creados.length + errores.length).toBe(52);
+    expect(creados).toHaveLength(26);
+
+    // Y la siguiente ejecución lo encuentra todo en orden.
+    const despues = await a.ejecutar();
+    expect(despues.totales.Computer).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 25, ERROR: 0 });
+  });
+});
+
+describe('activos registrados a mano', () => {
+  const unico = (): DatosGlpiFalso => ({
+    elementos: { Computer: [ordenador(40, 'INV-40', '7-1-22-400')], NetworkEquipment: [] },
   });
 
-  it('enlaza el registrado a mano (sin duplicar) y actualiza solo lo que GLPI informa', async () => {
-    const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: lista(1, 'PC') } },
-      { dryRun: false, itemtypes: ['Computer'] },
-    );
-    inv.activos.push(local({ custodio: 'Juan Pérez' }));
-    await sincronizador.ejecutar();
+  it('coincidencia inequívoca: se vincula sin duplicar y sin perder sus datos propios', async () => {
+    const { inv, sincronizador } = montar(unico());
+    const manual = inv.manual({ codigo: 'INV-40', cifrado: true, modelo: 'Anotado a mano' });
+    const informe = await sincronizador.ejecutar();
 
+    expect(informe.elementos[0]).toMatchObject({ resultado: 'ENLAZAR', activoId: manual.id });
     expect(inv.activos).toHaveLength(1);
     expect(inv.activos[0]).toMatchObject({
-      custodio: 'jperez',
-      sistemas: 'Windows 10', // GLPI no informó del modelo: el dato local se conserva
+      id: manual.id,
+      codigo: 'INV-40', // su código operativo no cambia
+      origenGlpi: 'Computer #40',
+      cifrado: true, // dato local: GLPI no lo conoce
+      codigoInstitucional: '7-1-22-400',
     });
-    expect(inv.historial).toEqual([
-      {
-        activoId: 1,
-        accion: 'ACTUALIZAR',
-        responsable: 'GLPI',
-        cambios: { custodio: { antes: 'Juan Pérez', despues: 'jperez' } },
-      },
-    ]);
+    // Queda a la vista qué valores sustituyó GLPI.
+    expect(informe.elementos[0].diferencias.custodio).toEqual({ antes: 'Juan Pérez', despues: 'usuario40' });
+    expect(inv.historial).toEqual([{ activoId: manual.id, accion: 'ACTUALIZAR', responsable: 'GLPI' }]);
   });
 
-  it('es idempotente: una segunda ejecución no cambia ni registra nada', async () => {
-    const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: lista(5, 'PC') } },
-      { dryRun: false, itemtypes: ['Computer'] },
-    );
-    await sincronizador.ejecutar();
-    const segunda = await sincronizador.ejecutar();
-
-    expect(segunda.totales.Computer).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 5 });
-    expect(inv.activos).toHaveLength(5);
-    expect(inv.historial).toHaveLength(5);
-  });
-
-  it('lo que está en la papelera de GLPI o es plantilla se omite, con su motivo', async () => {
-    const [a, b, c] = lista(3, 'PC');
-    const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: [a, { ...b, is_deleted: true }, { ...c, is_template: true }] } },
-      { dryRun: false, itemtypes: ['Computer'] },
-    );
+  it('en simulación la vinculación solo se informa: el activo manual queda intacto', async () => {
+    const { inv, sincronizador } = montar(unico(), { dryRun: true });
+    inv.manual({ codigo: 'INV-40' });
+    const antes = foto(inv);
     const informe = await sincronizador.ejecutar();
-    expect(informe.elementos.map((e) => e.resultado)).toEqual(['CREAR', 'OMITIR', 'OMITIR']);
-    expect(informe.elementos[1].motivo).toContain('papelera');
-    expect(inv.activos).toHaveLength(1);
+    expect(informe.elementos[0].resultado).toBe('ENLAZAR');
+    expect(foto(inv)).toBe(antes);
   });
 
-  it('n.º de inventario repetido en GLPI (muchos equipos con "001"): se importan TODOS, sin duplicar', async () => {
-    const repetidos = lista(4, 'PC').map((e) => ({ ...e, otherserial: '001' }));
-    const { local: inv, sincronizador } = montar(
-      {
-        elementos: {
-          Computer: repetidos,
-          NetworkEquipment: [{ ...lista(1, 'SW')[0], otherserial: '001' }],
-        },
-      },
-      { dryRun: false, itemtypes: ['Computer', 'NetworkEquipment'] },
-    );
+  it('coincidencia AMBIGUA (n.º de inventario "001" repetido en GLPI): no se vincula ni se toca el activo manual', async () => {
+    const { inv, sincronizador } = montar(INVENTARIO());
+    const manual = inv.manual({ codigo: '001' });
+    const antes = JSON.stringify(manual);
     const informe = await sincronizador.ejecutar();
 
-    expect(informe.elementos.map((e) => e.resultado)).toEqual(Array(5).fill('CREAR'));
-    expect(inv.activos.map((a) => a.codigo)).toEqual([
-      '001', // el primero conserva el n.º de inventario
-      'GLPI-PC-2',
-      'GLPI-PC-3',
-      'GLPI-PC-4',
-      'GLPI-RED-1', // también entre tipos distintos
-    ]);
-    expect(informe.elementos[1].avisos[0]).toContain('ya lo usa Computer #1');
-
-    // Segunda ejecución: cada uno se reconoce por su referencia de GLPI.
-    const segunda = await sincronizador.ejecutar();
-    expect(segunda.totales.Computer).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 4 });
-    expect(segunda.elementos.map((e) => e.codigo)).toEqual(inv.activos.map((a) => a.codigo));
-    expect(inv.activos).toHaveLength(5);
+    expect(inv.activos).toHaveLength(27); // el manual + los 26 de GLPI
+    expect(JSON.stringify(inv.activos.find((a) => a.id === manual.id))).toBe(antes);
+    expect(informe.elementos.filter((e) => e.resultado === 'ENLAZAR')).toEqual([]);
+    expect(formatearInforme(informe)).toContain('No se vincula con 001');
   });
 
-  it('si cambian el código del activo en local, sigue enlazado y no se duplica', async () => {
-    const { local: inv, sincronizador } = montar(
-      { elementos: { Computer: lista(1, 'PC') } },
-      { dryRun: false, itemtypes: ['Computer'] },
+  it('dos activos manuales candidatos: no se vincula con ninguno', async () => {
+    const { inv, sincronizador } = montar(unico());
+    inv.manual({ codigo: 'A-1', numeroInventario: 'INV-40' });
+    inv.manual({ codigo: 'A-2', numeroInventario: 'INV-40' });
+    const informe = await sincronizador.ejecutar();
+    expect(informe.elementos[0]).toMatchObject({ resultado: 'CREAR', codigo: '7-1-22-400' });
+    expect(inv.activos).toHaveLength(3);
+    expect(inv.activos.filter((a) => a.origenGlpi === null)).toHaveLength(2);
+  });
+});
+
+describe('errores de GLPI y respuestas inesperadas', () => {
+  const sembrado = async () => {
+    const montaje = montar(INVENTARIO());
+    await montaje.sincronizador.ejecutar();
+    return montaje.inv;
+  };
+
+  it('error temporal de GLPI: no se borra ni se modifica ningún activo local', async () => {
+    const inv = await sembrado();
+    const antes = foto(inv);
+    const { sincronizador } = montar(
+      { ...INVENTARIO(), rutasRotas: ['/v2/Assets/Computer', '/v2/Assets/NetworkEquipment'] },
+      {},
+      inv,
     );
-    await sincronizador.ejecutar();
-    inv.activos[0].codigo = 'QT-7-1-22-177';
-    const segunda = await sincronizador.ejecutar();
-    expect(segunda.elementos[0]).toMatchObject({
-      resultado: 'SIN_CAMBIOS',
-      codigo: 'QT-7-1-22-177',
-    });
-    expect(inv.activos).toHaveLength(1);
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores).toHaveLength(2);
+    expect(informe.errores[0]).toContain('NO se procesó ningún elemento');
+    expect(foto(inv)).toBe(antes);
+  });
+
+  it('GLPI responde bien pero con CERO elementos: tampoco se borra nada, y no es un error', async () => {
+    const inv = await sembrado();
+    const antes = foto(inv);
+    const { sincronizador } = montar({ elementos: { Computer: [], NetworkEquipment: [] } }, {}, inv);
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores).toEqual([]); // se distingue de un fallo
+    expect(informe.totales.Computer).toMatchObject({ leidos: 0 });
+    expect(foto(inv)).toBe(antes);
+  });
+
+  it('respuesta que no es una lista: es un ERROR, no "cero elementos"', async () => {
+    const inv = await sembrado();
+    const antes = foto(inv);
+    const falso = glpiFalso(INVENTARIO());
+    const fetchRaro = ((url: string, init?: RequestInit) =>
+      String(url).includes('/Assets/')
+        ? Promise.resolve(new Response(JSON.stringify({ mensaje: 'mantenimiento' }), { status: 200 }))
+        : falso.fetch(url, init)) as typeof fetch;
+    const sincronizador = new Sincronizador(
+      CONFIG,
+      new GlpiClient({ ...CONFIG, fetch: fetchRaro }),
+      inv,
+      () => {},
+    );
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores[0]).toContain('respuesta inesperada');
+    expect(foto(inv)).toBe(antes);
+  });
+
+  it('un elemento sin id válido no crea un registro incompleto: error y el resto continúa', async () => {
+    const raros = [{ name: 'Sin id' } as unknown as GlpiItem, ordenador(41, 'INV-41', null)];
+    const { inv, sincronizador } = montar({ elementos: { Computer: raros, NetworkEquipment: [] } });
+    const informe = await sincronizador.ejecutar();
+    expect(informe.totales.Computer).toMatchObject({ leidos: 2, CREAR: 1, ERROR: 1 });
+    expect(inv.activos.map((a) => a.origenGlpi)).toEqual(['Computer #41']);
   });
 
   it('el fallo de un tipo no impide sincronizar los demás', async () => {
-    const { sincronizador } = montar(
-      {
-        elementos: { Computer: lista(2, 'PC'), Software: lista(2, 'APP') },
-        rutasRotas: ['/v2/Assets/Computer'],
-      },
-      { dryRun: false, itemtypes: ['Computer', 'Software'] },
-    );
+    const { inv, sincronizador } = montar({ ...INVENTARIO(), rutasRotas: ['/v2/Assets/Computer'] });
     const informe = await sincronizador.ejecutar();
     expect(informe.errores).toHaveLength(1);
-    expect(informe.errores[0]).toContain('Computer');
-    expect(informe.totales.Software).toMatchObject({ CREAR: 2 });
+    expect(informe.totales.NetworkEquipment).toMatchObject({ CREAR: 1 });
+    expect(inv.activos).toHaveLength(1);
   });
 
   it('si falta la criticidad por defecto no escribe nada (ni contacta con GLPI)', async () => {
-    const { falso, local: inv, sincronizador } = montar(
-      { elementos: { Computer: lista(2, 'PC') } },
-      { dryRun: false, criticidadPorDefecto: 'Inexistente' },
-    );
+    const { falso, inv, sincronizador } = montar(INVENTARIO(), { criticidadPorDefecto: 'Inexistente' });
     const informe = await sincronizador.ejecutar();
     expect(informe.errores[0]).toContain('Inexistente');
     expect(inv.activos).toEqual([]);
     expect(falso.peticiones).toEqual([]);
+  });
+});
+
+describe('paginación', () => {
+  it('con bloques de 10 se procesan los 25 ordenadores: 3 peticiones y ninguno perdido', async () => {
+    const { falso, inv, sincronizador } = montar(INVENTARIO(), { tamanoBloque: 10 });
+    const informe = await sincronizador.ejecutar();
+    const paginas = falso.peticiones
+      .filter((p) => p.ruta.startsWith('/v2/Assets/Computer'))
+      .map((p) => new URLSearchParams(p.ruta.split('?')[1]).get('start'));
+    expect(paginas).toEqual(['0', '10', '20']);
+    expect(informe.totales.Computer).toMatchObject({ leidos: 25, CREAR: 25 });
+    expect(inv.activos).toHaveLength(26);
+  });
+
+  it('el resultado no depende del tamaño de bloque (10, 50 o de uno en uno)', async () => {
+    const codigos = async (tamanoBloque: number) => {
+      const { inv, sincronizador } = montar(INVENTARIO(), { tamanoBloque });
+      await sincronizador.ejecutar();
+      return inv.activos.map((a) => `${a.origenGlpi}=${a.codigo}`).sort();
+    };
+    const de50 = await codigos(50);
+    expect(await codigos(10)).toEqual(de50);
+    expect(await codigos(1)).toEqual(de50);
+  });
+
+  it('con --max la lectura es parcial y el informe lo advierte', async () => {
+    const { sincronizador } = montar(INVENTARIO(), { maxPorTipo: 10, dryRun: true });
+    const informe = await sincronizador.ejecutar();
+    expect(informe.lecturaParcial).toBe(true);
+    expect(informe.totales.Computer).toMatchObject({ leidos: 10 });
+    expect(formatearInforme(informe)).toContain('Lectura PARCIAL');
+  });
+
+  it('papelera y plantillas de GLPI se omiten y no cuentan para los códigos repetidos', async () => {
+    const datos: DatosGlpiFalso = {
+      elementos: {
+        Computer: [
+          ordenador(1, 'A-1', null),
+          { ...ordenador(2, 'A-1', null), is_deleted: true },
+          { ...ordenador(3, 'A-1', null), is_template: true },
+        ],
+        NetworkEquipment: [],
+      },
+    };
+    const { inv, sincronizador } = montar(datos);
+    const informe = await sincronizador.ejecutar();
+    expect(informe.elementos.map((e) => e.resultado)).toEqual(['CREAR', 'OMITIR', 'OMITIR']);
+    expect(inv.activos.map((a) => a.codigo)).toEqual(['A-1']);
   });
 });

@@ -11,19 +11,41 @@ import {
   type InventarioLocal,
 } from './inventario-local.js';
 import { mapearActivo, type ActivoGlpi } from './mapeo.js';
-import { planificar } from './plan.js';
+import {
+  planificar,
+  type ActivoLocal,
+  type CandidatoEvaluado,
+} from './plan.js';
 
 const mensaje = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** Lo leído de GLPI para un tipo. */
+interface Lectura {
+  itemtype: Itemtype;
+  activos: ActivoGlpi[];
+  /** Elementos con datos inválidos: van al informe como error, sin tocar la base. */
+  invalidos: ElementoInforme[];
+}
+
+/** Códigos y activos manuales ya comprometidos durante la ejecución. */
+interface Reservas {
+  codigos: Map<string, string>;
+  manuales: Map<number, string>;
+}
+
 /**
- * Motor de sincronización GLPI → inventario local.
+ * Motor de sincronización GLPI → inventario local, en dos fases:
  *
- *   token OAuth2 → por cada tipo, bloques de N → mapear y sanear → comparar
- *   con el activo local del mismo código → (si no es simulación) aplicar con
- *   historial firmado por "GLPI" → informe.
+ *   1. LEER: token OAuth2 → por cada tipo, todos sus elementos en bloques de
+ *      N → mapear y sanear. Con todo leído se sabe qué códigos se repiten.
+ *   2. DECIDIR Y APLICAR: en bloques de N, comparar con la base (un activo se
+ *      reconoce por su referencia de GLPI) y, si no es simulación, escribir
+ *      con historial firmado por "GLPI".
  *
- * Un fallo en un elemento no detiene el resto: queda en el informe.
+ * Nunca borra ni da de baja activos: que un elemento falte en una respuesta,
+ * o que GLPI falle, no es una orden de borrado. Un fallo en un elemento no
+ * detiene el resto: queda en el informe.
  */
 export class Sincronizador {
   constructor(
@@ -41,6 +63,7 @@ export class Sincronizador {
       zonaHoraria: this.config.zonaHoraria,
       totales: {},
       elementos: [],
+      lecturaParcial: this.config.maxPorTipo !== undefined,
       errores: [],
     };
 
@@ -61,13 +84,14 @@ export class Sincronizador {
       informe.errores.push(...faltan);
       // Simulando se sigue para ver el resto del informe; aplicando, no se escribe a medias.
       if (faltan.length === 0 || this.config.dryRun) {
-        await this.glpi.conSesion(async () => {
-          /** Código → elemento de GLPI que lo recibió en esta ejecución (n.º de inventario repetidos). */
-          const asignados = new Map<string, string>();
-          for (const itemtype of this.config.itemtypes) {
-            await this.sincronizarTipo(itemtype, catalogos, asignados, informe);
-          }
-        });
+        // Fase 1: leer. El token solo vive mientras se consulta GLPI.
+        const lecturas = await this.glpi.conSesion(() => this.leerTodo(informe));
+        // Fase 2: decidir y aplicar.
+        const repetidos = this.valoresRepetidos(lecturas);
+        const reservas: Reservas = { codigos: new Map(), manuales: new Map() };
+        for (const lectura of lecturas) {
+          await this.procesarTipo(lectura, catalogos, repetidos, reservas, informe);
+        }
       }
     } catch (error) {
       informe.errores.push(mensaje(error));
@@ -95,66 +119,159 @@ export class Sincronizador {
     return faltan;
   }
 
-  private async sincronizarTipo(
-    itemtype: Itemtype,
-    catalogos: Catalogos,
-    asignados: Map<string, string>,
-    informe: Informe,
-  ): Promise<void> {
-    const totales = (informe.totales[itemtype] = totalesVacios());
+  // ── Fase 1: leer ──────────────────────────────────────────────────────────
+
+  /**
+   * Lee todos los tipos configurados. Si la lectura de un tipo falla (red,
+   * respuesta inesperada), ese tipo se descarta ENTERO: con datos a medias no
+   * se puede saber qué códigos son únicos. Los demás tipos continúan.
+   */
+  private async leerTodo(informe: Informe): Promise<Lectura[]> {
+    const lecturas: Lectura[] = [];
     const { tamanoBloque: tamano, maxPorTipo: max } = this.config;
-    try {
-      let n = 0;
-      for await (const bloque of this.glpi.listarPorBloques(itemtype, {
-        tamano,
-        max,
-      })) {
-        n += 1;
-        this.log(`[glpi] ${itemtype}: bloque ${n} (${bloque.length} elementos)`);
-        const elementos = await this.procesarBloque(
-          itemtype,
-          bloque,
-          catalogos,
-          asignados,
+    for (const itemtype of this.config.itemtypes) {
+      informe.totales[itemtype] = totalesVacios();
+      const lectura: Lectura = { itemtype, activos: [], invalidos: [] };
+      try {
+        let n = 0;
+        for await (const bloque of this.glpi.listarPorBloques(itemtype, {
+          tamano,
+          max,
+        })) {
+          n += 1;
+          this.log(`[glpi] ${itemtype}: bloque ${n} (${bloque.length} elementos)`);
+          for (const item of bloque) this.mapear(itemtype, item, lectura);
+        }
+        lecturas.push(lectura);
+      } catch (error) {
+        informe.errores.push(
+          `${itemtype}: no se pudo leer de GLPI y NO se procesó ningún elemento de este tipo (los activos locales no se tocan). Causa: ${mensaje(error)}`,
         );
-        for (const elemento of elementos) {
-          totales.leidos += 1;
-          totales[elemento.resultado] += 1;
-          informe.elementos.push(elemento);
+      }
+    }
+    return lecturas;
+  }
+
+  /** Un elemento sin id válido no puede identificarse: se rechaza sin escribir nada. */
+  private mapear(itemtype: Itemtype, item: GlpiItem, lectura: Lectura): void {
+    const id: unknown = (item as { id?: unknown } | null)?.id;
+    if (typeof id !== 'number' || !Number.isInteger(id) || id <= 0) {
+      lectura.invalidos.push({
+        itemtype,
+        glpiId: 0,
+        codigo: '—',
+        nombre: '(elemento sin identificador)',
+        resultado: 'ERROR',
+        diferencias: {},
+        avisos: [],
+        revision: [],
+        error: `GLPI devolvió un elemento sin "id" numérico válido (${JSON.stringify(id)}): no se puede identificar ni registrar.`,
+      });
+      return;
+    }
+    lectura.activos.push(
+      mapearActivo(
+        itemtype,
+        item,
+        this.config.zonaHoraria,
+        this.config.codigoInstitucional,
+      ),
+    );
+  }
+
+  /**
+   * Qué elementos de GLPI comparten cada valor candidato a código. Se cuenta
+   * por separado el código institucional y el n.º de inventario, entre TODOS
+   * los tipos leídos (un equipo de red puede repetir el de un ordenador).
+   */
+  private valoresRepetidos(
+    lecturas: Lectura[],
+  ): Map<string, string[]> {
+    const usos = new Map<string, string[]>();
+    for (const { activos } of lecturas) {
+      for (const activo of activos) {
+        if (activo.excluido) continue;
+        for (const { origen, valor } of activo.candidatos) {
+          const clave = `${origen}:${claveCodigo(valor)}`;
+          usos.set(clave, [...(usos.get(clave) ?? []), activo.referencia]);
         }
       }
-    } catch (error) {
-      // Lo ya procesado se conserva; el resto de tipos continúa.
-      informe.errores.push(`${itemtype}: ${mensaje(error)}`);
+    }
+    return usos;
+  }
+
+  // ── Fase 2: decidir y aplicar ─────────────────────────────────────────────
+
+  private async procesarTipo(
+    lectura: Lectura,
+    catalogos: Catalogos,
+    repetidos: Map<string, string[]>,
+    reservas: Reservas,
+    informe: Informe,
+  ): Promise<void> {
+    const totales = informe.totales[lectura.itemtype]!;
+    const anotar = (elemento: ElementoInforme) => {
+      totales.leidos += 1;
+      totales[elemento.resultado] += 1;
+      informe.elementos.push(elemento);
+    };
+    lectura.invalidos.forEach(anotar);
+
+    const { tamanoBloque } = this.config;
+    for (let i = 0; i < lectura.activos.length; i += tamanoBloque) {
+      const bloque = lectura.activos.slice(i, i + tamanoBloque);
+      try {
+        const elementos = await this.procesarBloque(
+          lectura.itemtype,
+          bloque,
+          catalogos,
+          repetidos,
+          reservas,
+        );
+        elementos.forEach(anotar);
+      } catch (error) {
+        // Fallo al consultar la base para este bloque: se informa y se sigue.
+        informe.errores.push(
+          `${lectura.itemtype}: bloque ${i / tamanoBloque + 1} sin procesar. Causa: ${mensaje(error)}`,
+        );
+      }
     }
   }
 
   private async procesarBloque(
     itemtype: Itemtype,
-    bloque: GlpiItem[],
+    bloque: ActivoGlpi[],
     catalogos: Catalogos,
-    asignados: Map<string, string>,
+    repetidos: Map<string, string[]>,
+    reservas: Reservas,
   ): Promise<ElementoInforme[]> {
-    const mapeados: ActivoGlpi[] = bloque.map((item) =>
-      mapearActivo(itemtype, item, this.config.zonaHoraria),
-    );
-
     // Una sola consulta a la base por bloque.
     const locales = await this.local.buscar(
-      mapeados.map((m) => m.referencia),
-      mapeados.flatMap((m) => [m.codigo, m.codigoGenerado]),
+      bloque.map((g) => g.referencia),
+      bloque.flatMap((g) => [
+        g.codigoRespaldo,
+        ...g.candidatos.map((c) => c.valor),
+      ]),
     );
+    const porReferencia = new Map(
+      locales.filter((l) => l.origenGlpi).map((l) => [l.origenGlpi!, l]),
+    );
+    const igual = (a: string | null, b: string) =>
+      a !== null && claveCodigo(a) === claveCodigo(b);
+    const conCodigo = (valor: string): ActivoLocal | null =>
+      locales.find((l) => igual(l.codigo, valor)) ?? null;
 
     const resultados: ElementoInforme[] = [];
-    for (const glpi of mapeados) {
+    for (const glpi of bloque) {
       const elemento: ElementoInforme = {
         itemtype,
         glpiId: glpi.glpiId,
-        codigo: glpi.codigo,
+        codigo: glpi.codigoRespaldo,
         nombre: glpi.alCrear.nombre,
         resultado: 'SIN_CAMBIOS',
         diferencias: {},
         avisos: glpi.avisos,
+        revision: glpi.revision,
       };
       resultados.push(elemento);
 
@@ -164,27 +281,45 @@ export class Sincronizador {
         continue;
       }
 
-      const enlazado = locales.porReferencia.get(glpi.referencia) ?? null;
-      const conMismoCodigo =
-        locales.porCodigo.get(claveCodigo(glpi.codigo)) ?? null;
+      const candidatos: CandidatoEvaluado[] = glpi.candidatos.map((c) => ({
+        ...c,
+        repetidoEn: (
+          repetidos.get(`${c.origen}:${claveCodigo(c.valor)}`) ?? []
+        ).filter((referencia) => referencia !== glpi.referencia),
+        conEseCodigo: conCodigo(c.valor),
+        manuales: locales.filter(
+          (l) =>
+            !l.origenGlpi &&
+            !l.deletedAt &&
+            (igual(l.codigo, c.valor) ||
+              igual(
+                c.origen === 'inventario'
+                  ? l.numeroInventario
+                  : l.codigoInstitucional,
+                c.valor,
+              )),
+        ),
+      }));
+
       const plan = planificar(glpi, {
-        enlazado,
-        conMismoCodigo,
-        asignadoEnEstaEjecucion: asignados.get(claveCodigo(glpi.codigo)),
-        conCodigoGenerado:
-          locales.porCodigo.get(claveCodigo(glpi.codigoGenerado)) ?? null,
+        vinculado: porReferencia.get(glpi.referencia) ?? null,
+        candidatos,
+        conCodigoRespaldo: conCodigo(glpi.codigoRespaldo),
+        reservados: reservas,
       });
-      // El código queda reservado para este elemento durante toda la ejecución.
-      if (plan.accion === 'CREAR' || plan.accion === 'ENLAZAR') {
-        asignados.set(claveCodigo(plan.codigo), glpi.referencia);
+      // Lo decidido queda comprometido para el resto de la ejecución.
+      if (plan.accion === 'CREAR') {
+        reservas.codigos.set(claveCodigo(plan.codigo), glpi.referencia);
+      } else if (plan.accion === 'ENLAZAR') {
+        reservas.manuales.set(plan.local!.id, glpi.referencia);
       }
-      const local = enlazado ?? (plan.accion === 'ENLAZAR' ? conMismoCodigo : null);
+
       elemento.codigo = plan.codigo;
       elemento.resultado = plan.accion;
       elemento.diferencias = plan.diferencias;
       elemento.motivo = plan.motivo;
-      elemento.avisos = [...plan.avisos, ...glpi.avisos];
-      elemento.activoId = local?.id;
+      elemento.revision = [...glpi.revision, ...plan.revision];
+      elemento.activoId = plan.local?.id;
 
       if (this.config.dryRun) continue;
       try {
@@ -199,7 +334,7 @@ export class Sincronizador {
             )!,
           });
         } else if (plan.accion === 'ENLAZAR' || plan.accion === 'ACTUALIZAR') {
-          await this.local.aplicar(local!, glpi, plan);
+          await this.local.aplicar(plan.local!, glpi, plan);
         }
       } catch (error) {
         elemento.resultado = 'ERROR';

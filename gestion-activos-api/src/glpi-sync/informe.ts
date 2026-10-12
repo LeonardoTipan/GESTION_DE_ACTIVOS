@@ -18,6 +18,8 @@ export interface ElementoInforme {
   diferencias: Cambios;
   /** Constancia de saneamientos (truncados, valores por defecto…). */
   avisos: string[];
+  /** Casos que una persona debería revisar (códigos repetidos, vínculos dudosos…). */
+  revision: string[];
   motivo?: string;
   error?: string;
 }
@@ -32,6 +34,8 @@ export interface Informe {
   zonaHoraria: string;
   totales: Partial<Record<Itemtype, Totales>>;
   elementos: ElementoInforme[];
+  /** true = se leyó solo una parte de GLPI (--max): la unicidad de los códigos es provisional. */
+  lecturaParcial: boolean;
   /** Problemas generales (configuración, catálogos, conexión). */
   errores: string[];
 }
@@ -71,6 +75,13 @@ export function formatearInforme(informe: Informe): string {
     );
   }
 
+  if (informe.lecturaParcial) {
+    lineas.push(
+      '',
+      'Lectura PARCIAL de GLPI (--max): la unicidad de los códigos solo se comprobó entre lo leído.',
+    );
+  }
+
   for (const e of informe.elementos) {
     if (e.resultado === 'SIN_CAMBIOS' && e.avisos.length === 0) continue;
     lineas.push(
@@ -84,6 +95,16 @@ export function formatearInforme(informe: Informe): string {
       lineas.push(`    ≠ ${campo}: local "${texto(antes)}" → GLPI "${texto(despues)}"`);
     }
     for (const aviso of e.avisos) lineas.push(`    ⚠ ${aviso}`);
+    if (e.revision.length > 0) lineas.push('    (ver "Requieren revisión manual")');
+  }
+
+  const porRevisar = informe.elementos.filter((e) => e.revision.length > 0);
+  if (porRevisar.length > 0) {
+    lineas.push('', `REQUIEREN REVISIÓN MANUAL (${porRevisar.length}):`);
+    for (const e of porRevisar) {
+      lineas.push(`  ${e.itemtype} #${e.glpiId} · ${e.codigo} · ${e.nombre}`);
+      for (const caso of e.revision) lineas.push(`      - ${caso}`);
+    }
   }
 
   if (informe.errores.length > 0) {

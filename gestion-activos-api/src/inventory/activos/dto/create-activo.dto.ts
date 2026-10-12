@@ -4,11 +4,13 @@ import {
   IsBoolean,
   IsDate,
   IsInt,
+  IsIP,
   IsNotEmpty,
   IsOptional,
   IsString,
   MaxLength,
   Min,
+  ValidateIf,
 } from 'class-validator';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
 
@@ -146,6 +148,40 @@ export class CreateActivoDto {
   @Type(() => Date)
   @IsDate()
   fechaAlta?: Date;
+
+  @ApiPropertyOptional({ example: '001', maxLength: 191, description: 'N.º de inventario de origen. Puede repetirse.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  numeroInventario?: string;
+
+  @ApiPropertyOptional({ example: '7-1-22-177', maxLength: 191, description: 'Código institucional original. Puede repetirse.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  codigoInstitucional?: string;
+
+  @ApiPropertyOptional({
+    example: '10.0.5.21',
+    description: 'Dirección IPv4 o IPv6. Cadena vacía para borrarla.',
+  })
+  @IsOptional()
+  @Trim()
+  @ValidateIf((_, valor) => valor !== '')
+  @IsIP()
+  direccionIp?: string;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    example: '2025-03-10T00:00:00.000Z',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaCompra?: Date;
 
   @ApiPropertyOptional({
     example: 'Memoria RAM 64 GB\nCapacidad de disco 1 TB',

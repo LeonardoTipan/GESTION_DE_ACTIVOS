@@ -129,9 +129,18 @@ export class GlpiClient {
       const respuesta = await this.get(
         `/${this.opciones.apiVersion}/Assets/${itemtype}?${consulta}`,
       );
-      const bloque = (await respuesta.json()) as GlpiItem[];
-      if (!Array.isArray(bloque) || bloque.length === 0) return;
-      yield bloque;
+      const bloque: unknown = await respuesta.json().catch(() => undefined);
+      // Una respuesta que no es una lista NO equivale a "cero elementos":
+      // es un fallo, y así debe tratarse para no sacar conclusiones falsas.
+      if (!Array.isArray(bloque)) {
+        throw new GlpiError(
+          `GLPI devolvió una respuesta inesperada para ${itemtype} (se esperaba una lista).`,
+          respuesta.status,
+          'RESPUESTA_INESPERADA',
+        );
+      }
+      if (bloque.length === 0) return;
+      yield bloque as GlpiItem[];
 
       // Content-Range: "0-9/137"
       const informado = Number(

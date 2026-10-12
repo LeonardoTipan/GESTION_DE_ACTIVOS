@@ -9,14 +9,22 @@ import {
   truncar,
 } from './saneamiento.js';
 
-/** Prefijo del código generado cuando GLPI no tiene número de inventario. */
+/** Prefijo del código de respaldo ("GLPI-PC-12"). */
 const PREFIJO: Record<Itemtype, string> = {
   Computer: 'PC',
   NetworkEquipment: 'RED',
   Software: 'SW',
 };
 
-/** Campos de nuestro modelo Activo que GLPI puede informar. */
+/** Cómo reconocer el código institucional dentro del comentario de GLPI. */
+export interface ReglaCodigoInstitucional {
+  /** Texto que lo precede en el comentario (p. ej. "QUITO TURISMO"). Vacío = no se busca. */
+  etiqueta: string;
+  /** Formato que debe cumplir para usarse como código operativo. */
+  formato: RegExp;
+}
+
+/** Campos obligatorios de nuestro modelo Activo que GLPI puede informar. */
 export interface CamposGlpi {
   nombre: string;
   sistemas: string;
@@ -24,8 +32,12 @@ export interface CamposGlpi {
   ubicacion: string;
 }
 
-/** Datos técnicos, opcionales en nuestro modelo: si GLPI no los trae, quedan vacíos. */
+/** Campos opcionales en nuestro modelo: si GLPI no los trae, quedan vacíos. */
 export interface CamposTecnicos {
+  /** GLPI: otherserial, tal cual. Puede repetirse entre equipos. */
+  numeroInventario: string;
+  /** Código institucional ORIGINAL anotado en el comentario, sin corregir. */
+  codigoInstitucional: string;
   /** GLPI: serial */
   numeroSerie: string;
   /** GLPI: status.name */
@@ -48,18 +60,26 @@ export interface CamposTecnicos {
   fechaAlta: Date;
 }
 
+/** Valor que puede servir de código operativo, por orden de preferencia. */
+export interface CandidatoCodigo {
+  origen: 'institucional' | 'inventario';
+  valor: string;
+}
+
 /** Un elemento de GLPI ya convertido a los campos de nuestro modelo Activo. */
 export interface ActivoGlpi {
   itemtype: Itemtype;
   glpiId: number;
-  /** Identidad del elemento en GLPI: "Computer #12". */
+  /** IDENTIDAD del elemento en GLPI: tipo + id, p. ej. "Computer #12". */
   referencia: string;
-  /** Código preferido: el n.º de inventario de GLPI (o el generado si no tiene). */
-  codigo: string;
-  /** Código alternativo, siempre único: se usa si el preferido ya está ocupado. */
-  codigoGenerado: string;
-  /** false = GLPI no tenía n.º de inventario y el código se generó. */
-  codigoDeInventario: boolean;
+  /**
+   * Códigos operativos posibles, del más al menos preferido: el institucional
+   * (solo si cumple el formato) y el n.º de inventario. Que se usen depende
+   * de que sean únicos: lo decide planificar().
+   */
+  candidatos: CandidatoCodigo[];
+  /** Código de respaldo, determinista y único: "GLPI-PC-12". */
+  codigoRespaldo: string;
   /** Motivo por el que no debe sincronizarse (papelera o plantilla de GLPI). */
   excluido?: string;
   /**
@@ -72,6 +92,8 @@ export interface ActivoGlpi {
     Partial<CamposTecnicos> & { cifrado: boolean; ultimaRevision: Date };
   /** Constancia de saneamientos: truncados, valores de relleno, fechas ausentes. */
   avisos: string[];
+  /** Casos que una persona debería revisar (códigos dudosos o ausentes). */
+  revision: string[];
 }
 
 const RELLENO = {
@@ -79,6 +101,35 @@ const RELLENO = {
   custodio: 'Sin asignar',
   ubicacion: 'Sin ubicación',
 } as const;
+
+const escaparRegExp = (texto: string): string =>
+  texto.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * SOLO "S/N" (o "sin número"), sin nada más = el equipo no tiene código.
+ * "S/N: 7-1-22-183" NO entra aquí: lleva un valor detrás y se conserva entero.
+ */
+const SIN_NUMERO = /^(s\s*\/?\s*n|sin\s+n[uú]mero)\s*[:.\-]*$/i;
+
+/**
+ * Lee del comentario lo que sigue a la etiqueta institucional, TAL CUAL está
+ * escrito: "QUITO TURISMO: 7-1-22-177" → "7-1-22-177". No corrige nada.
+ */
+export function extraerCodigoInstitucional(
+  comentario: unknown,
+  etiqueta: string,
+): string | null {
+  if (typeof comentario !== 'string' || !etiqueta.trim()) return null;
+  const patron = new RegExp(
+    `${escaparRegExp(etiqueta.trim()).replace(/\s+/g, '\\s+')}\\s*:?\\s*(.*)$`,
+    'i',
+  );
+  for (const linea of comentario.split(/\r\n|\r|\n/)) {
+    const m = patron.exec(linea);
+    if (m) return textoGlpi(m[1]);
+  }
+  return null;
+}
 
 /**
  * El listado no trae el sistema operativo como campo, pero en `comment` suele
@@ -113,9 +164,11 @@ export function mapearActivo(
   itemtype: Itemtype,
   item: GlpiItem,
   zonaHoraria: string,
+  regla: ReglaCodigoInstitucional,
   ahora: Date = new Date(),
 ): ActivoGlpi {
   const avisos: string[] = [];
+  const revision: string[] = [];
   const datos: Partial<CamposGlpi & CamposTecnicos> = {};
 
   /** Trunca (a 191 por defecto) dejando constancia. */
@@ -127,15 +180,6 @@ export function mapearActivo(
       );
     }
     return t.valor;
-  };
-
-  /** Dato técnico opcional: si GLPI no lo trae, ni se guarda ni se avisa. */
-  const tecnico = (
-    nombre: Exclude<keyof CamposTecnicos, 'fechaAlta'>,
-    valor: string | null,
-    max = MAX_TEXTO,
-  ): void => {
-    if (valor !== null) datos[nombre] = recortar(nombre, valor, max);
   };
 
   /** Texto que GLPI informa → entra en `datos`. Si viene vacío → relleno solo para altas. */
@@ -153,13 +197,49 @@ export function mapearActivo(
     return (datos[nombre] = recortar(nombre, valor));
   };
 
-  const inventario = textoGlpi(item.otherserial);
-  const codigoGenerado = `GLPI-${PREFIJO[itemtype]}-${item.id}`;
-  const codigo = inventario ? recortar('codigo', inventario) : codigoGenerado;
-  if (!inventario) {
-    avisos.push(`codigo: sin n.º de inventario en GLPI, se genera "${codigo}"`);
+  /** Dato opcional: si GLPI no lo trae, ni se guarda ni se inventa. */
+  const tecnico = (
+    nombre: Exclude<keyof CamposTecnicos, 'fechaAlta'>,
+    valor: string | null,
+    max = MAX_TEXTO,
+  ): void => {
+    if (valor !== null) datos[nombre] = recortar(nombre, valor, max);
+  };
+
+  // ── Códigos ──────────────────────────────────────────────────────────────
+  const candidatos: CandidatoCodigo[] = [];
+  const institucional = extraerCodigoInstitucional(item.comment, regla.etiqueta);
+  if (institucional === null) {
+    if (regla.etiqueta) {
+      revision.push(
+        `Sin código institucional: el comentario no contiene "${regla.etiqueta}: …".`,
+      );
+    }
+  } else if (SIN_NUMERO.test(institucional)) {
+    revision.push(
+      `Código institucional anotado como "${institucional}" (sin número asignado).`,
+    );
+  } else {
+    // Se conserva SIEMPRE el valor original, cumpla o no el formato.
+    tecnico('codigoInstitucional', institucional);
+    if (regla.formato.test(institucional)) {
+      candidatos.push({
+        origen: 'institucional',
+        valor: datos.codigoInstitucional!,
+      });
+    } else {
+      revision.push(
+        `Código institucional "${institucional}" con formato irregular: se conserva tal cual (sin corregir), pero no se usa como código operativo.`,
+      );
+    }
   }
 
+  tecnico('numeroInventario', textoGlpi(item.otherserial));
+  if (datos.numeroInventario) {
+    candidatos.push({ origen: 'inventario', valor: datos.numeroInventario });
+  }
+
+  // ── Datos ────────────────────────────────────────────────────────────────
   const nombre = campo('nombre', textoGlpi(item.name), `${itemtype} ${item.id}`);
   const sistemas = campo('sistemas', sistemasDe(itemtype, item), RELLENO.sistemas);
   const custodio = campo(
@@ -194,9 +274,8 @@ export function mapearActivo(
     itemtype,
     glpiId: item.id,
     referencia: `${itemtype} #${item.id}`,
-    codigo,
-    codigoGenerado,
-    codigoDeInventario: inventario !== null,
+    candidatos,
+    codigoRespaldo: `GLPI-${PREFIJO[itemtype]}-${item.id}`,
     excluido: item.is_template
       ? 'Es una plantilla de GLPI, no un activo real.'
       : item.is_deleted
@@ -215,5 +294,6 @@ export function mapearActivo(
       ultimaRevision,
     },
     avisos,
+    revision,
   };
 }

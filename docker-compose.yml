@@ -101,6 +101,9 @@ services:
       GLPI_USERNAME: "${GLPI_USERNAME:-}"
       GLPI_PASSWORD: "${GLPI_PASSWORD:-}"
       GLPI_TIMEZONE: "${GLPI_TIMEZONE:-}"
+      GLPI_ITEMTYPES: "${GLPI_ITEMTYPES:-Computer,NetworkEquipment}"
+      # Texto que precede al código institucional en el comentario de GLPI.
+      GLPI_CODIGO_INSTITUCIONAL_ETIQUETA: "${GLPI_CODIGO_INSTITUCIONAL_ETIQUETA:-}"
       # ⚠️ Solo desarrollo: true = no validar el certificado HTTPS de GLPI.
       GLPI_IGNORE_SSL: "${GLPI_IGNORE_SSL:-false}"
       # Seguro por defecto: simulación. Solo "false" escribe en la base.

@@ -73,6 +73,26 @@ describe('leerConfig', () => {
     ).toThrow('no está permitido con NODE_ENV=production');
   });
 
+  it('código institucional: desactivado sin etiqueta; formato por defecto de 4 grupos numéricos', () => {
+    const { codigoInstitucional } = leerConfig(BASE);
+    expect(codigoInstitucional.etiqueta).toBe('');
+    expect(codigoInstitucional.formato.test('7-1-22-177')).toBe(true);
+    expect(codigoInstitucional.formato.test('7-1722-47')).toBe(false);
+    expect(codigoInstitucional.formato.test('7-1-7-22--76')).toBe(false);
+
+    const propia = leerConfig({
+      ...BASE,
+      GLPI_CODIGO_INSTITUCIONAL_ETIQUETA: 'QUITO TURISMO',
+      GLPI_CODIGO_INSTITUCIONAL_FORMATO: '^QT-\\d+$',
+    }).codigoInstitucional;
+    expect(propia.etiqueta).toBe('QUITO TURISMO');
+    expect(propia.formato.test('QT-15')).toBe(true);
+
+    expect(() =>
+      leerConfig({ ...BASE, GLPI_CODIGO_INSTITUCIONAL_FORMATO: '(' }),
+    ).toThrow('no es una expresión regular válida');
+  });
+
   it('exige la zona horaria: no hay valor por defecto', () => {
     expect(() => leerConfig({ ...BASE, GLPI_TIMEZONE: '' })).toThrow('Falta GLPI_TIMEZONE');
   });

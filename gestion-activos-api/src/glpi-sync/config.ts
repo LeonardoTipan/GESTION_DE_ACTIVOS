@@ -1,4 +1,5 @@
 import type { CredencialesGlpi } from './glpi-client.js';
+import type { ReglaCodigoInstitucional } from './mapeo.js';
 
 /** Tipos de GLPI que sabe sincronizar el motor. */
 export const ITEMTYPES = ['Computer', 'NetworkEquipment', 'Software'] as const;
@@ -29,6 +30,8 @@ export interface GlpiSyncConfig {
   cron: string;
   /** Nivel de criticidad que reciben los activos creados desde GLPI. */
   criticidadPorDefecto: string;
+  /** Cómo reconocer el código institucional en el comentario de GLPI. */
+  codigoInstitucional: ReglaCodigoInstitucional;
   /** Categoría local (por nombre) de cada tipo de GLPI. */
   categoriaPorTipo: Record<Itemtype, string>;
   dirInformes: string;
@@ -137,6 +140,18 @@ export function leerConfig(env: Env): GlpiSyncConfig {
     );
   }
 
+  // Formato por defecto: cuatro grupos numéricos separados por guiones (7-1-22-177).
+  const formatoCrudo =
+    texto('GLPI_CODIGO_INSTITUCIONAL_FORMATO') || '^\\d+(-\\d+){3}$';
+  let formatoInstitucional = /^$/;
+  try {
+    formatoInstitucional = new RegExp(formatoCrudo);
+  } catch {
+    errores.push(
+      `GLPI_CODIGO_INSTITUCIONAL_FORMATO no es una expresión regular válida: "${formatoCrudo}"`,
+    );
+  }
+
   const maxCrudo = texto('GLPI_MAX_POR_TIPO');
   const config: GlpiSyncConfig = {
     apiUrl,
@@ -153,6 +168,11 @@ export function leerConfig(env: Env): GlpiSyncConfig {
     dryRun: texto('GLPI_DRY_RUN').toLowerCase() !== 'false',
     cron: texto('GLPI_SYNC_CRON') || '0 2 * * *',
     criticidadPorDefecto: texto('GLPI_CRITICIDAD_DEFECTO') || 'Media',
+    codigoInstitucional: {
+      // Vacío = no se busca código institucional en los comentarios.
+      etiqueta: texto('GLPI_CODIGO_INSTITUCIONAL_ETIQUETA'),
+      formato: formatoInstitucional,
+    },
     categoriaPorTipo: {
       Computer: texto('GLPI_CATEGORIA_COMPUTER') || 'Hardware',
       NetworkEquipment: texto('GLPI_CATEGORIA_NETWORKEQUIPMENT') || 'Red',

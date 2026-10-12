@@ -18,12 +18,14 @@ export interface Catalogos {
 export const claveCodigo = (codigo: string): string =>
   codigo.trim().toLowerCase();
 
-/** Activos locales relevantes para un bloque de elementos de GLPI. */
-export interface Encontrados {
-  /** Por referencia de GLPI ("Computer #12"): los ya enlazados. */
-  porReferencia: Map<string, ActivoLocal>;
-  /** Por código, indexados con claveCodigo() (incluye las bajas). */
-  porCodigo: Map<string, ActivoLocal>;
+/** Otro proceso creó a la vez el mismo activo: la base lo impidió. */
+export class ActivoDuplicadoError extends Error {
+  constructor(referencia: string) {
+    super(
+      `Otra sincronización registró ${referencia} al mismo tiempo: la base de datos impidió el duplicado. Se reconocerá en la próxima ejecución.`,
+    );
+    this.name = 'ActivoDuplicadoError';
+  }
 }
 
 /**
@@ -32,8 +34,13 @@ export interface Encontrados {
  */
 export interface InventarioLocal {
   catalogos(): Promise<Catalogos>;
-  buscar(referencias: string[], codigos: string[]): Promise<Encontrados>;
-  /** Alta enlazada a GLPI + entrada de historial firmada por GLPI. Devuelve el id nuevo. */
+  /**
+   * Activos (incluidas las bajas) vinculados a alguna de esas referencias de
+   * GLPI, o cuyo código operativo, n.º de inventario o código institucional
+   * coincida con alguno de esos valores.
+   */
+  buscar(referencias: string[], valores: string[]): Promise<ActivoLocal[]>;
+  /** Alta vinculada a GLPI + entrada de historial firmada por GLPI. Devuelve el id nuevo. */
   crear(
     glpi: ActivoGlpi,
     codigo: string,
@@ -42,6 +49,10 @@ export interface InventarioLocal {
   /** Aplica un plan ENLAZAR o ACTUALIZAR + entrada de historial firmada por GLPI. */
   aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void>;
 }
+
+/** Violación de una restricción UNIQUE de MySQL (código de Prisma). */
+const esDuplicado = (error: unknown): boolean =>
+  (error as { code?: string } | null)?.code === 'P2002';
 
 export class InventarioPrisma implements InventarioLocal {
   constructor(
@@ -60,19 +71,18 @@ export class InventarioPrisma implements InventarioLocal {
     };
   }
 
-  async buscar(referencias: string[], codigos: string[]): Promise<Encontrados> {
-    const activos = await this.prisma.activo.findMany({
+  buscar(referencias: string[], valores: string[]): Promise<ActivoLocal[]> {
+    return this.prisma.activo.findMany({
       where: {
-        OR: [{ origenGlpi: { in: referencias } }, { codigo: { in: codigos } }],
+        OR: [
+          { origenGlpi: { in: referencias } },
+          { codigo: { in: valores } },
+          { numeroInventario: { in: valores } },
+          { codigoInstitucional: { in: valores } },
+        ],
       },
+      orderBy: { id: 'asc' },
     });
-    const porReferencia = new Map<string, ActivoLocal>();
-    const porCodigo = new Map<string, ActivoLocal>();
-    for (const activo of activos) {
-      if (activo.origenGlpi) porReferencia.set(activo.origenGlpi, activo);
-      porCodigo.set(claveCodigo(activo.codigo), activo);
-    }
-    return { porReferencia, porCodigo };
   }
 
   async crear(
@@ -81,32 +91,59 @@ export class InventarioPrisma implements InventarioLocal {
     ids: { categoriaId: number; criticidadId: number },
   ): Promise<number> {
     const data = { codigo, origenGlpi: glpi.referencia, ...glpi.alCrear, ...ids };
-    return this.prisma.$transaction(async (tx) => {
-      const activo = await tx.activo.create({ data });
-      await this.bitacora.registrar(tx, {
-        activoId: activo.id,
-        accion: 'CREAR',
-        responsable: RESPONSABLE_GLPI,
-        cambios: cambiosDeCreacion(data),
+    try {
+      // Alta e historial en la misma transacción: o los dos, o ninguno.
+      return await this.prisma.$transaction(async (tx) => {
+        const activo = await tx.activo.create({ data });
+        await this.bitacora.registrar(tx, {
+          activoId: activo.id,
+          accion: 'CREAR',
+          responsable: RESPONSABLE_GLPI,
+          cambios: cambiosDeCreacion(data),
+        });
+        return activo.id;
       });
-      return activo.id;
-    });
+    } catch (error) {
+      // Las restricciones UNIQUE (origenGlpi y codigo) son la última barrera
+      // ante dos sincronizaciones simultáneas.
+      if (esDuplicado(error)) throw new ActivoDuplicadoError(glpi.referencia);
+      throw error;
+    }
   }
 
   async aplicar(local: ActivoLocal, glpi: ActivoGlpi, plan: Plan): Promise<void> {
-    // Al enlazar, el activo queda asociado a su elemento de GLPI.
+    // Al vincular, el activo queda asociado a su elemento de GLPI. El código
+    // operativo NUNCA se cambia aquí.
     const data =
       plan.accion === 'ENLAZAR'
         ? { ...glpi.datos, origenGlpi: glpi.referencia }
         : glpi.datos;
-    await this.prisma.$transaction(async (tx) => {
-      await tx.activo.update({ where: { id: local.id }, data });
-      await this.bitacora.registrar(tx, {
-        activoId: local.id,
-        accion: 'ACTUALIZAR',
-        responsable: RESPONSABLE_GLPI,
-        cambios: calcularCambios(local, data),
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Solo si sigue vigente y, al vincular, si nadie lo vinculó entretanto.
+        const { count } = await tx.activo.updateMany({
+          where: {
+            id: local.id,
+            deletedAt: null,
+            ...(plan.accion === 'ENLAZAR' ? { origenGlpi: null } : {}),
+          },
+          data,
+        });
+        if (count === 0) {
+          throw new Error(
+            `El activo ${local.codigo} cambió mientras se sincronizaba (dado de baja o ya vinculado); no se modificó.`,
+          );
+        }
+        await this.bitacora.registrar(tx, {
+          activoId: local.id,
+          accion: 'ACTUALIZAR',
+          responsable: RESPONSABLE_GLPI,
+          cambios: calcularCambios(local, data),
+        });
       });
-    });
+    } catch (error) {
+      if (esDuplicado(error)) throw new ActivoDuplicadoError(glpi.referencia);
+      throw error;
+    }
   }
 }
