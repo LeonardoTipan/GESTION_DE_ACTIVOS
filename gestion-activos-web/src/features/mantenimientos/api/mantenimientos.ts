@@ -100,3 +100,26 @@ export function useCancelarMantenimiento() {
     onSuccess: invalidar,
   })
 }
+
+/** Corrige o reprograma (solo en fase PROGRAMADO). */
+export function useEditarMantenimiento() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EditarMantenimientoDto'] }) =>
+      ejecutar(api.PATCH('/api/mantenimientos/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
+  })
+}
+
+/** Borrado definitivo (solo admin). Refresca los listados sin recargar la aplicación. */
+export function useEliminarMantenimiento() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      ejecutar(api.DELETE('/api/mantenimientos/{id}', { params: { path: { id } } })),
+    // Solo los listados: la ficha del registro borrado no debe volver a pedirse.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...claves.todo, 'lista'] })
+    },
+  })
+}

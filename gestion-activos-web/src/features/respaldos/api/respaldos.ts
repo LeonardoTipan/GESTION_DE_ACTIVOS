@@ -77,3 +77,26 @@ export function useRegistrarPrueba() {
     onSuccess: invalidar,
   })
 }
+
+/** Corrige el alcance (solo con la ejecución pendiente). */
+export function useEditarRespaldo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['UpdateRespaldoDto'] }) =>
+      ejecutar(api.PATCH('/api/respaldos/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
+  })
+}
+
+/** Borrado definitivo (solo admin). Refresca los listados sin recargar la aplicación. */
+export function useEliminarRespaldo() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      ejecutar(api.DELETE('/api/respaldos/{id}', { params: { path: { id } } })),
+    // Solo los listados: la ficha del registro borrado no debe volver a pedirse.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...claves.todo, 'lista'] })
+    },
+  })
+}

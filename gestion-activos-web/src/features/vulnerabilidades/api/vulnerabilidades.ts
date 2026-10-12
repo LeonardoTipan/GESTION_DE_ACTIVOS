@@ -103,3 +103,26 @@ export function useAceptarRiesgo() {
     onSuccess: invalidar,
   })
 }
+
+/** Corrige los datos (solo mientras está pendiente). */
+export function useEditarVulnerabilidad() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EditarVulnerabilidadDto'] }) =>
+      ejecutar(api.PATCH('/api/vulnerabilidades/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
+  })
+}
+
+/** Borrado definitivo (solo admin). Refresca los listados sin recargar la aplicación. */
+export function useEliminarVulnerabilidad() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      ejecutar(api.DELETE('/api/vulnerabilidades/{id}', { params: { path: { id } } })),
+    // Solo los listados: la ficha del registro borrado no debe volver a pedirse.
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: [...claves.todo, 'lista'] })
+    },
+  })
+}

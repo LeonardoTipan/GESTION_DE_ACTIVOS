@@ -14,12 +14,18 @@ import {
   Title,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCheck, IconPlayerPlay, IconX } from '@tabler/icons-react'
+import { IconCheck, IconPencil, IconPlayerPlay, IconX } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { BotonEliminar } from '../../shared/components/BotonEliminar.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
-import { usePuedeOperar } from '../auth/use-puede.ts'
-import { useMantenimiento, type Mantenimiento } from './api/mantenimientos.ts'
+import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
+import {
+  useEliminarMantenimiento,
+  useMantenimiento,
+  type Mantenimiento,
+} from './api/mantenimientos.ts'
+import { EditarMantenimientoModal } from './componentes/EditarMantenimientoModal.tsx'
 import { BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
 import { CancelarModal } from './componentes/CancelarModal.tsx'
 import { FinalizarModal } from './componentes/FinalizarModal.tsx'
@@ -108,6 +114,10 @@ export function MantenimientoPage() {
   const id = Number(useParams().id)
   const { data: m, isPending, error } = useMantenimiento(id)
   const puedeOperar = usePuedeOperar()
+  const puedeEliminar = usePuedeAdministrar()
+  const navigate = useNavigate()
+  const eliminar = useEliminarMantenimiento()
+  const [editando, edicion] = useDisclosure()
 
   const migas = (
     <Breadcrumbs>
@@ -158,8 +168,30 @@ export function MantenimientoPage() {
             </Anchor>
           </Text>
         </div>
-        {puedeOperar && <Acciones mantenimiento={m} />}
+        <Group gap="sm">
+          {puedeOperar && <Acciones mantenimiento={m} />}
+          {/* Lo planificado solo se corrige antes de iniciar. */}
+          {puedeOperar && m.fase === 'PROGRAMADO' && (
+            <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
+              Editar
+            </Button>
+          )}
+          {puedeEliminar && (
+            <BotonEliminar
+              titulo={`Eliminar el mantenimiento #${m.id}`}
+              eliminar={(opciones) => eliminar.mutate(m.id, opciones)}
+              eliminando={eliminar.isPending}
+              mensajeExito={`Mantenimiento #${m.id} de ${m.activo.codigo}`}
+              alEliminar={() => navigate('/mantenimientos')}
+            >
+              Se borrará definitivamente este mantenimiento y su resultado. El activo{' '}
+              <b>{m.activo.codigo}</b> no se ve afectado. Si solo quieres anularlo conservando el
+              registro, usa <b>Cancelar</b>. Esta acción no se puede deshacer.
+            </BotonEliminar>
+          )}
+        </Group>
       </Group>
+      <EditarMantenimientoModal opened={editando} onClose={edicion.close} mantenimiento={m} />
 
       {m.vencido && (
         <Alert color="red" title="Mantenimiento vencido" maw={720}>

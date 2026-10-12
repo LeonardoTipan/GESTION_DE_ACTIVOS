@@ -229,10 +229,18 @@ export interface paths {
         get: operations["RespaldosController_findOne"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Eliminar (solo admin)
+         * @description Borrado definitivo del respaldo, en cualquier estado. No afecta al activo ni a su historial.
+         */
+        delete: operations["RespaldosController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Editar (admin, analista)
+         * @description Corrige el alcance. Solo mientras la ejecución está PENDIENTE.
+         */
+        patch: operations["RespaldosController_update"];
         trace?: never;
     };
     "/api/respaldos/{id}/ejecucion": {
@@ -310,10 +318,18 @@ export interface paths {
         get: operations["MantenimientosController_findOne"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Eliminar (solo admin)
+         * @description Borrado definitivo del mantenimiento, en cualquier estado. No afecta al activo ni a su historial.
+         */
+        delete: operations["MantenimientosController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Editar (admin, analista)
+         * @description Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO.
+         */
+        patch: operations["MantenimientosController_update"];
         trace?: never;
     };
     "/api/mantenimientos/{id}/iniciar": {
@@ -411,10 +427,18 @@ export interface paths {
         get: operations["VulnerabilidadesController_findOne"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Eliminar (solo admin)
+         * @description Borrado definitivo de la vulnerabilidad, en cualquier estado. No afecta al activo ni a su historial.
+         */
+        delete: operations["VulnerabilidadesController_remove"];
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Editar (admin, analista)
+         * @description Corrige CVE, descripción, nivel de riesgo o fechas. Solo mientras está pendiente.
+         */
+        patch: operations["VulnerabilidadesController_update"];
         trace?: never;
     };
     "/api/vulnerabilidades/{id}/iniciar-mitigacion": {
@@ -961,6 +985,10 @@ export interface components {
              */
             fechaPrueba: string;
         };
+        UpdateRespaldoDto: {
+            /** @example Base de datos ERP completa + archivos de configuración */
+            alcanceDetalle: string;
+        };
         ActivoMantenidoDto: {
             /** @example 5 */
             id: number;
@@ -1060,6 +1088,21 @@ export interface components {
              */
             motivo: string;
         };
+        EditarMantenimientoDto: {
+            /**
+             * @example PREVENTIVO
+             * @enum {string}
+             */
+            tipo?: "PREVENTIVO" | "CORRECTIVO";
+            /** @example Limpieza interna y actualización de firmware */
+            actividad?: string;
+            /**
+             * Format: date-time
+             * @description Fecha programada (puede ser futura).
+             * @example 2026-10-15T08:00:00.000Z
+             */
+            fecha?: string;
+        };
         ActivoAfectadoDto: {
             /** @example 5 */
             id: number;
@@ -1150,6 +1193,32 @@ export interface components {
              * @example Sistema heredado sin parche del fabricante; aislado en VLAN sin acceso a Internet. Se reevalúa en 6 meses.
              */
             justificacion: string;
+        };
+        EditarVulnerabilidadDto: {
+            /**
+             * @description Identificador público (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
+            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
+            descripcion?: string;
+            /**
+             * @example ALTO
+             * @enum {string}
+             */
+            nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /**
+             * Format: date-time
+             * @description Fecha de detección (no puede ser futura).
+             * @example 2026-09-30T09:00:00.000Z
+             */
+            fecha?: string;
+            /**
+             * Format: date-time
+             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
+             * @example 2026-10-15T23:59:59.000Z
+             */
+            fechaLimite?: string;
         };
     };
     responses: never;
@@ -2108,6 +2177,119 @@ export interface operations {
             };
         };
     };
+    RespaldosController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RespaldosController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateRespaldoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RespaldoDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description La ejecución ya fue registrada. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     RespaldosController_registrarEjecucion: {
         parameters: {
             query?: never;
@@ -2395,6 +2577,119 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    MantenimientosController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    MantenimientosController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditarMantenimientoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ya no está en fase PROGRAMADO. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2749,6 +3044,119 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditarVulnerabilidadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ya está cerrada, o el activo ya tiene ese CVE pendiente. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -19,20 +19,24 @@ import { notifications } from '@mantine/notifications'
 import {
   IconCheck,
   IconExternalLink,
+  IconPencil,
   IconPlayerPlay,
   IconShieldExclamation,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { BotonEliminar } from '../../shared/components/BotonEliminar.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import {
+  useEliminarVulnerabilidad,
   useIniciarMitigacion,
   useVulnerabilidad,
   type Vulnerabilidad,
 } from './api/vulnerabilidades.ts'
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { CierreModal } from './componentes/CierreModal.tsx'
+import { EditarVulnerabilidadModal } from './componentes/EditarVulnerabilidadModal.tsx'
 import { accionesPermitidas, pasoActivo, pasosCiclo, type Paso } from './riesgo.ts'
 
 function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
@@ -153,6 +157,11 @@ function Acciones({ vulnerabilidad: v }: { vulnerabilidad: Vulnerabilidad }) {
 export function VulnerabilidadPage() {
   const id = Number(useParams().id)
   const { data: v, isPending, error } = useVulnerabilidad(id)
+  const puedeOperar = usePuedeOperar()
+  const puedeEliminar = usePuedeAdministrar()
+  const navigate = useNavigate()
+  const eliminar = useEliminarVulnerabilidad()
+  const [editando, edicion] = useDisclosure()
 
   const migas = (
     <Breadcrumbs>
@@ -200,8 +209,29 @@ export function VulnerabilidadPage() {
             </Anchor>
           </Text>
         </div>
-        <Acciones vulnerabilidad={v} />
+        <Group gap="sm">
+          <Acciones vulnerabilidad={v} />
+          {/* Una vulnerabilidad cerrada es evidencia: ya no se corrige. */}
+          {puedeOperar && accionesPermitidas(v.estado).length > 0 && (
+            <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
+              Editar
+            </Button>
+          )}
+          {puedeEliminar && (
+            <BotonEliminar
+              titulo={`Eliminar ${v.cve ?? `la vulnerabilidad #${v.id}`}`}
+              eliminar={(opciones) => eliminar.mutate(v.id, opciones)}
+              eliminando={eliminar.isPending}
+              mensajeExito={`${v.cve ?? `Vulnerabilidad #${v.id}`} de ${v.activo.codigo}`}
+              alEliminar={() => navigate('/vulnerabilidades')}
+            >
+              Se borrará definitivamente esta vulnerabilidad y su mitigación. El activo{' '}
+              <b>{v.activo.codigo}</b> no se ve afectado. Esta acción no se puede deshacer.
+            </BotonEliminar>
+          )}
+        </Group>
       </Group>
+      <EditarVulnerabilidadModal opened={editando} onClose={edicion.close} vulnerabilidad={v} />
 
       {v.vencida && (
         <Alert color="red" title="Plazo (SLA) vencido" maw={720}>

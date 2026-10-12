@@ -3,6 +3,7 @@ import {
   Anchor,
   Badge,
   Breadcrumbs,
+  Button,
   Card,
   Center,
   Code,
@@ -16,11 +17,14 @@ import {
   Tooltip,
   ActionIcon,
 } from '@mantine/core'
-import { IconCheck, IconCopy, IconLock, IconX } from '@tabler/icons-react'
-import { Link, useParams } from 'react-router'
+import { useDisclosure } from '@mantine/hooks'
+import { IconCheck, IconCopy, IconLock, IconPencil, IconX } from '@tabler/icons-react'
+import { Link, useNavigate, useParams } from 'react-router'
+import { BotonEliminar } from '../../shared/components/BotonEliminar.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
-import { usePuedeOperar } from '../auth/use-puede.ts'
-import { useRespaldo, type Respaldo } from './api/respaldos.ts'
+import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
+import { useEliminarRespaldo, useRespaldo, type Respaldo } from './api/respaldos.ts'
+import { EditarRespaldoModal } from './componentes/EditarRespaldoModal.tsx'
 import { BadgeEtapa } from './componentes/BadgeEtapa.tsx'
 import { FormEjecucion } from './componentes/FormEjecucion.tsx'
 import { FormPrueba } from './componentes/FormPrueba.tsx'
@@ -94,6 +98,10 @@ export function RespaldoPage() {
   const id = Number(useParams().id)
   const { data: respaldo, isPending, error } = useRespaldo(id)
   const puedeRegistrar = usePuedeOperar()
+  const puedeEliminar = usePuedeAdministrar()
+  const navigate = useNavigate()
+  const eliminar = useEliminarRespaldo()
+  const [editando, edicion] = useDisclosure()
 
   const migas = (
     <Breadcrumbs>
@@ -127,6 +135,7 @@ export function RespaldoPage() {
   return (
     <Stack gap="lg">
       {migas}
+      <Group justify="space-between" align="flex-start">
       <div>
         <Group gap="sm">
           <Title order={2}>Respaldo #{respaldo.id}</Title>
@@ -139,6 +148,28 @@ export function RespaldoPage() {
           </Anchor>
         </Text>
       </div>
+        <Group gap="sm">
+          {/* El alcance solo se corrige antes de registrar la ejecución. */}
+          {puedeRegistrar && ejecucion === 'pendiente' && (
+            <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
+              Editar
+            </Button>
+          )}
+          {puedeEliminar && (
+            <BotonEliminar
+              titulo={`Eliminar el respaldo #${respaldo.id}`}
+              eliminar={(opciones) => eliminar.mutate(respaldo.id, opciones)}
+              eliminando={eliminar.isPending}
+              mensajeExito={`Respaldo #${respaldo.id} de ${respaldo.activo.codigo}`}
+              alEliminar={() => navigate('/respaldos')}
+            >
+              Se borrará definitivamente este respaldo, con su ejecución y su prueba. El activo{' '}
+              <b>{respaldo.activo.codigo}</b> no se ve afectado. Esta acción no se puede deshacer.
+            </BotonEliminar>
+          )}
+        </Group>
+      </Group>
+      <EditarRespaldoModal opened={editando} onClose={edicion.close} respaldo={respaldo} />
 
       <Card withBorder padding="lg">
         <Stepper
