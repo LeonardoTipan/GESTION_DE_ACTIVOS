@@ -24,6 +24,7 @@ import { useAuth } from 'react-oidc-context'
 import { Link, Outlet, useLocation } from 'react-router'
 import { ETIQUETA_ROL } from '../../features/auth/roles.ts'
 import { useUsuarioActual } from '../../features/auth/use-usuario-actual.ts'
+import { CampanaNotificaciones } from '../../features/glpi/CampanaNotificaciones.tsx'
 import { menuPara } from '../navegacion.ts'
 
 /** Iniciales para el avatar: "Analista Prueba" → "AP". */
@@ -63,6 +64,8 @@ export function AppLayout() {
           </Group>
 
           {usuario && (
+            <Group gap="md">
+            <CampanaNotificaciones />
             <Menu position="bottom-end" width={240}>
               <Menu.Target>
                 <UnstyledButton>
@@ -96,6 +99,7 @@ export function AppLayout() {
                 </Menu.Item>
               </Menu.Dropdown>
             </Menu>
+            </Group>
           )}
         </Group>
       </AppShell.Header>

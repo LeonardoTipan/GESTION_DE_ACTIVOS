@@ -15,6 +15,7 @@ import { useDisclosure } from '@mantine/hooks'
 import { IconAlertTriangle, IconPlus } from '@tabler/icons-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
+import { SincronizarGlpi } from '../../glpi/SincronizarGlpi.tsx'
 import { useActivos } from '../api/activos.ts'
 import { ActivoFormModal } from './ActivoFormModal.tsx'
 import { FiltrosActivos } from './FiltrosActivos.tsx'
@@ -44,7 +45,8 @@ export function ActivosPage() {
     Boolean(filtros.q) ||
     filtros.categoriaId !== undefined ||
     filtros.criticidadId !== undefined ||
-    filtros.cifrado !== undefined
+    filtros.cifrado !== undefined ||
+    filtros.situacion !== 'todos'
 
   return (
     <Stack gap="md">
@@ -58,11 +60,14 @@ export function ActivosPage() {
             </Text>
           )}
         </div>
-        {puedeRegistrar && (
-          <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
-            Nuevo activo
-          </Button>
-        )}
+        <Group gap="md" align="flex-start">
+          <SincronizarGlpi />
+          {puedeRegistrar && (
+            <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
+              Nuevo activo
+            </Button>
+          )}
+        </Group>
       </Group>
 
       <FiltrosActivos filtros={filtros} onChange={actualizar} />

@@ -21,6 +21,8 @@ const ICONO_ACCION = {
   CREAR: { icono: IconPlus, color: 'green' },
   ACTUALIZAR: { icono: IconPencil, color: 'indigo' },
   DAR_DE_BAJA: { icono: IconArchive, color: 'red' },
+  INACTIVAR: { icono: IconArchive, color: 'gray' },
+  REACTIVAR: { icono: IconPlus, color: 'teal' },
 } as const
 
 /** Historial del activo: quién cambió qué y cuándo (escrito por la API). */

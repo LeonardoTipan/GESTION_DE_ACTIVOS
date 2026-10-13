@@ -3,7 +3,14 @@ import { useDebouncedValue } from '@mantine/hooks'
 import { IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { useCategorias, useCriticidades } from '../api/catalogos.ts'
+import type { FiltroSituacion } from '../componentes/situacion.ts'
 import type { FiltrosActivos as Filtros } from './filtros-url.ts'
+
+const OPCIONES_SITUACION: { value: FiltroSituacion; label: string }[] = [
+  { value: 'todos', label: 'Todos' },
+  { value: 'activos', label: 'Activos' },
+  { value: 'no_activos', label: 'No activos' },
+]
 
 const OPCIONES_CIFRADO = [
   { value: 'todos', label: 'Todos' },
@@ -64,6 +71,12 @@ export function FiltrosActivos({
         value={filtros.criticidadId ? String(filtros.criticidadId) : null}
         onChange={(v) => onChange({ criticidadId: v ? Number(v) : undefined, page: 1 })}
         w={{ base: '100%', sm: 160 }}
+      />
+      <SegmentedControl
+        aria-label="Situación"
+        data={OPCIONES_SITUACION}
+        value={filtros.situacion}
+        onChange={(v) => onChange({ situacion: v as FiltroSituacion, page: 1 })}
       />
       <SegmentedControl
         data={OPCIONES_CIFRADO}

@@ -27,12 +27,23 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   categoriaId: 'Categoría',
   criticidadId: 'Criticidad',
   deletedAt: 'Fecha de baja',
+  // Los anota la sincronización cuando el equipo deja de estar vigente en GLPI.
+  inactivoDesde: 'No activo desde',
+  motivoInactivo: 'Motivo',
+}
+
+/** Valores internos que se muestran con palabras. */
+const VALOR_LEGIBLE: Record<string, string> = {
+  PAPELERA_GLPI: 'En la papelera de GLPI',
+  AUSENTE_EN_GLPI: 'Ya no existe en GLPI',
 }
 
 export const ETIQUETA_ACCION: Record<string, string> = {
   CREAR: 'Alta del activo',
   ACTUALIZAR: 'Modificación',
   DAR_DE_BAJA: 'Baja del activo',
+  INACTIVAR: 'Pasó a No activo',
+  REACTIVAR: 'Volvió a estar activo',
 }
 
 /** Nombres de los catálogos para mostrar "Hardware" en vez de "1". */
@@ -59,9 +70,12 @@ export function formatearValor(
   }
   if (typeof valor === 'string' && ISO.test(valor)) {
     // La baja y el alta tienen hora real; la revisión es solo una fecha.
-    return campo === 'deletedAt' || campo === 'fechaAlta'
+    return campo === 'deletedAt' || campo === 'fechaAlta' || campo === 'inactivoDesde'
       ? formatearFechaHora(valor)
       : formatearFecha(valor)
+  }
+  if (campo === 'motivoInactivo' && typeof valor === 'string') {
+    return VALOR_LEGIBLE[valor] ?? valor
   }
   return String(valor)
 }

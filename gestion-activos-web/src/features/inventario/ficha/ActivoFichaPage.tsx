@@ -29,6 +29,8 @@ import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import { useActivo, useDarDeBajaActivo } from '../api/activos.ts'
 import { ActivoFormModal } from '../activos/ActivoFormModal.tsx'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
+import { BadgeSituacion } from '../componentes/BadgeSituacion.tsx'
+import { situacionDe } from '../componentes/situacion.ts'
 import { BitacoraTimeline } from './BitacoraTimeline.tsx'
 
 /** Un dato opcional vacío (null o "") se muestra, atenuado, como "No registrado". */
@@ -75,7 +77,7 @@ export function ActivoFichaPage() {
       <Stack gap="md">
         {volver}
         <Alert color="orange" title="Activo no disponible" maw={560}>
-          {error?.message ?? 'El activo no existe o fue dado de baja.'}
+          {error?.message ?? 'El activo no existe.'}
         </Alert>
       </Stack>
     )
@@ -86,7 +88,8 @@ export function ActivoFichaPage() {
       title: `Dar de baja ${activo.codigo}`,
       children: (
         <Text size="sm">
-          El activo dejará de aparecer en el inventario, pero su historial se conserva. Esta
+          El activo pasará a No activo: ya no admitirá respaldos, mantenimientos ni
+          vulnerabilidades nuevos, pero conserva su ficha, su historial y sus registros. Esta
           acción no se puede deshacer desde la aplicación.
         </Text>
       ),
@@ -107,9 +110,19 @@ export function ActivoFichaPage() {
         }),
     })
 
+  const situacion = situacionDe(activo)
+  const deBaja = activo.deletedAt !== null
+
   return (
     <Stack gap="lg">
       {volver}
+
+      {!situacion.activo && (
+        <Alert color="gray" icon={<IconArchive />} title={`No activo · ${situacion.motivo}`}>
+          Desde {formatearFechaHora(situacion.desde)}. No admite respaldos, mantenimientos ni
+          vulnerabilidades nuevos. Su ficha, su historial y sus registros anteriores se conservan.
+        </Alert>
+      )}
 
       <Group justify="space-between" align="flex-start">
         <div>
@@ -117,6 +130,7 @@ export function ActivoFichaPage() {
             {activo.codigo} · {activo.nombre}
           </Title>
           <Group gap="xs" mt={6}>
+            <BadgeSituacion activo={activo} />
             <Badge variant="outline">{activo.categoria.nombre}</Badge>
             <BadgeCriticidad nivel={activo.criticidad.nivel} />
             {activo.cifrado ? (
@@ -136,12 +150,12 @@ export function ActivoFichaPage() {
           </Group>
         </div>
         <Group gap="sm">
-          {puedeEditar && (
+          {puedeEditar && !deBaja && (
             <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
               Editar
             </Button>
           )}
-          {puedeDarDeBaja && (
+          {puedeDarDeBaja && !deBaja && (
             <Button
               variant="light"
               color="red"

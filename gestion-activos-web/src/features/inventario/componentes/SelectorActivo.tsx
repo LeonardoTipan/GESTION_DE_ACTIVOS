@@ -7,9 +7,10 @@ import { useActivo, useActivos } from '../api/activos.ts'
 const etiqueta = (a: { codigo: string; nombre: string }) => `${a.codigo} · ${a.nombre}`
 
 /**
- * Buscador de activos VIGENTES con autocompletado contra la API
- * (GET /api/activos?q=). Lo usan los módulos satélite para elegir el activo
- * de un respaldo, mantenimiento o vulnerabilidad.
+ * Buscador de equipos ACTIVOS con autocompletado contra la API
+ * (GET /api/activos?q=&situacion=activos). Lo usan los módulos satélite para
+ * elegir el activo de un respaldo, mantenimiento o vulnerabilidad: un equipo
+ * No activo no se ofrece (y la API lo rechazaría).
  */
 export function SelectorActivo({
   value,
@@ -21,7 +22,12 @@ export function SelectorActivo({
 } & Omit<SelectProps, 'value' | 'onChange' | 'data'>) {
   const [busqueda, setBusqueda] = useState('')
   const [busquedaEstable] = useDebouncedValue(busqueda, 300)
-  const resultados = useActivos({ q: busquedaEstable || undefined, limit: 20, page: 1 })
+  const resultados = useActivos({
+    q: busquedaEstable || undefined,
+    limit: 20,
+    page: 1,
+    situacion: 'activos',
+  })
 
   // Si el valor llega desde fuera (p. ej. ?activoId= en la URL), se recupera su nombre.
   const seleccionado = useActivo(value ?? 0, { enabled: value !== null })

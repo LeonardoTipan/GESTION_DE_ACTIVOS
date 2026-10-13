@@ -501,6 +501,98 @@ export interface paths {
         patch: operations["VulnerabilidadesController_aceptarRiesgo"];
         trace?: never;
     };
+    "/api/glpi/sincronizacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de la sincronización con GLPI
+         * @description Si hay una en curso y cuándo fue la última sin errores.
+         */
+        get: operations["GlpiSyncController_estado"];
+        put?: never;
+        /**
+         * Sincronizar ahora con GLPI (admin, analista)
+         * @description Trae de GLPI lo modificado desde la última sincronización y lo aplica. Se ejecuta en el servidor: las credenciales de GLPI no salen de él. Responde cuando termina, con el resumen de lo ocurrido.
+         */
+        post: operations["GlpiSyncController_sincronizar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notificaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Avisos de la sincronización, del más reciente al más antiguo */
+        get: operations["NotificacionesController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notificaciones/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuántos avisos quedan sin leer */
+        get: operations["NotificacionesController_resumen"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notificaciones/marcar-leidas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Marcar todos los avisos como leídos (admin, analista) */
+        post: operations["NotificacionesController_marcarTodas"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/notificaciones/{id}/leida": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Marcar un aviso como leído (admin, analista) */
+        patch: operations["NotificacionesController_marcarLeida"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -631,6 +723,16 @@ export interface components {
              * @description Fecha de baja; null si el activo está vigente.
              */
             deletedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Desde cuándo la sincronización lo considera No activo; null si sigue vigente en GLPI.
+             */
+            inactivoDesde: string | null;
+            /**
+             * @description Por qué pasó a No activo: está en la papelera de GLPI o ya no existe allí.
+             * @enum {string|null}
+             */
+            motivoInactivo: "PAPELERA_GLPI" | "AUSENTE_EN_GLPI" | null;
         };
         PaginationMetaDto: {
             /** @example 57 */
@@ -655,7 +757,7 @@ export interface components {
              * @example ACTUALIZAR
              * @enum {string}
              */
-            accion: "CREAR" | "ACTUALIZAR" | "DAR_DE_BAJA";
+            accion: "CREAR" | "ACTUALIZAR" | "DAR_DE_BAJA" | "INACTIVAR" | "REACTIVAR";
             /**
              * @description Usuario de Keycloak que hizo el cambio (tomado del token).
              * @example analista.test
@@ -1220,6 +1322,165 @@ export interface components {
              */
             fechaLimite?: string;
         };
+        ContadoresSincronizacionDto: {
+            /**
+             * @description Elementos leídos de GLPI.
+             * @example 3
+             */
+            leidos: number;
+            /** @example 1 */
+            creados: number;
+            /** @example 2 */
+            actualizados: number;
+            /** @example 0 */
+            sinCambios: number;
+            /**
+             * @description Pasaron a No activo.
+             * @example 0
+             */
+            inactivados: number;
+            /** @example 0 */
+            reactivados: number;
+            /** @example 0 */
+            omitidos: number;
+            /** @example 0 */
+            errores: number;
+            /**
+             * @description Elementos que requieren revisión manual.
+             * @example 0
+             */
+            porRevisar: number;
+            /**
+             * @description Cambios que GLPI traía.
+             * @example 3
+             */
+            detectados: number;
+            /**
+             * @description Cambios realmente escritos en la base.
+             * @example 3
+             */
+            aplicados: number;
+        };
+        EjecucionDto: {
+            /** @example 14 */
+            id: number;
+            /** @enum {string} */
+            origen: "MANUAL" | "AUTOMATICA" | "CONSOLA";
+            /** @enum {string} */
+            modo: "COMPLETA" | "INCREMENTAL";
+            /** @enum {string} */
+            estado: "EN_CURSO" | "EXITOSA" | "CON_ERRORES" | "FALLIDA";
+            /** @example admin.test */
+            solicitadaPor: string | null;
+            /** Format: date-time */
+            inicio: string;
+            /** Format: date-time */
+            fin: string | null;
+            contadores: components["schemas"]["ContadoresSincronizacionDto"];
+        };
+        EstadoSincronizacionDto: {
+            /** @description false = faltan las variables de GLPI en el servidor. */
+            configurado: boolean;
+            /** @description true = hay una sincronización escribiendo ahora mismo. */
+            enCurso: boolean;
+            /**
+             * Format: date-time
+             * @description Cuándo terminó la última sincronización sin errores.
+             */
+            ultimaExitosa: string | null;
+            /** @description La ejecución más reciente. */
+            ultima: components["schemas"]["EjecucionDto"] | null;
+        };
+        SincronizarDto: {
+            /**
+             * @description true = lectura COMPLETA con reconciliación de bajas (más lenta). Por defecto el botón solo trae lo modificado en GLPI desde la última sincronización.
+             * @default false
+             */
+            completa: boolean;
+        };
+        CambioSincronizacionDto: {
+            /** @example Computer #12 */
+            referencia: string;
+            /** @example 5 */
+            activoId: number | null;
+            /** @example 7-1-22-69 */
+            codigo: string;
+            /** @example LP-CONTABILIDAD */
+            nombre: string;
+            /** @enum {string} */
+            resultado: "CREAR" | "ENLAZAR" | "ACTUALIZAR" | "INACTIVAR" | "REACTIVAR" | "OMITIR" | "ERROR";
+            /** @description true = el cambio quedó escrito. */
+            aplicado: boolean;
+            /**
+             * @example [
+             *       "estado",
+             *       "ubicacion"
+             *     ]
+             */
+            campos: string[];
+            error: string | null;
+        };
+        ResultadoSincronizacionDto: {
+            /** @example 14 */
+            id: number;
+            /** @enum {string} */
+            origen: "MANUAL" | "AUTOMATICA" | "CONSOLA";
+            /** @enum {string} */
+            modo: "COMPLETA" | "INCREMENTAL";
+            /** @enum {string} */
+            estado: "EN_CURSO" | "EXITOSA" | "CON_ERRORES" | "FALLIDA";
+            /** @example admin.test */
+            solicitadaPor: string | null;
+            /** Format: date-time */
+            inicio: string;
+            /** Format: date-time */
+            fin: string | null;
+            contadores: components["schemas"]["ContadoresSincronizacionDto"];
+            /**
+             * Format: date-time
+             * @description Incremental: desde cuándo se pidieron los cambios a GLPI.
+             */
+            desde: string | null;
+            /** @description true = el punto de control avanzó. false = hubo errores y la próxima ejecución volverá a leer desde el anterior. */
+            puntoControlAvanzado: boolean;
+            /** @description Problemas generales (conexión, lectura…). */
+            errores: string[];
+            cambios: components["schemas"]["CambioSincronizacionDto"][];
+        };
+        NotificacionDto: {
+            /** @example 31 */
+            id: number;
+            /** @enum {string} */
+            tipo: "ALTA" | "MODIFICACION" | "CAMBIO_ESTADO" | "BAJA_DETECTADA" | "REACTIVACION" | "ERROR_SINCRONIZACION";
+            /** @example GLPI-PC-5 · LP-CONTABILIDAD: estado Bueno → Malo */
+            titulo: string;
+            /**
+             * @description Cambios { campo: { antes, despues } }; en los errores de sincronización, { mensaje }.
+             * @example {
+             *       "estado": {
+             *         "antes": "Bueno",
+             *         "despues": "Malo"
+             *       }
+             *     }
+             */
+            detalle: {
+                [key: string]: unknown;
+            };
+            /** Format: date-time */
+            fecha: string;
+            leida: boolean;
+            /** @description Activo afectado, si lo hay. */
+            activoId: number | null;
+            sincronizacionId: number | null;
+        };
+        PaginatedNotificacionDto: {
+            data: components["schemas"]["NotificacionDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        ResumenNotificacionesDto: {
+            /** @example 4 */
+            noLeidas: number;
+        };
     };
     responses: never;
     parameters: never;
@@ -1291,7 +1552,9 @@ export interface operations {
                 order?: "asc" | "desc";
                 /** @description Sincronización incremental: solo activos modificados DESPUÉS de esta fecha. Incluye los dados de baja (deletedAt ≠ null) para que el frontend los retire. */
                 actualizadoDesde?: string;
-                /** @description Incluir activos dados de baja. */
+                /** @description "activos": equipos vigentes (los únicos que admiten operaciones nuevas). "no_activos": dados de baja, en la papelera de GLPI o ya inexistentes allí. "todos": ambos. */
+                situacion?: "activos" | "no_activos" | "todos";
+                /** @description Obsoleto: equivale a situacion=todos. */
                 incluirBajas?: boolean;
             };
             header?: never;
@@ -3349,6 +3612,263 @@ export interface operations {
             };
             /** @description Estado no permitido. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    GlpiSyncController_estado: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoSincronizacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    GlpiSyncController_sincronizar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SincronizarDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResultadoSincronizacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ya hay una sincronización en curso, o la base no admite escribir. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description GLPI no está configurado en el servidor. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    NotificacionesController_findAll: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description Solo las que aún no se han leído. */
+                soloNoLeidas?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedNotificacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    NotificacionesController_resumen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumenNotificacionesDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    NotificacionesController_marcarTodas: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    NotificacionesController_marcarLeida: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotificacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -1,4 +1,5 @@
 import type { FiltrosApiActivos } from '../api/activos.ts'
+import { SITUACIONES, type FiltroSituacion } from '../componentes/situacion.ts'
 
 /** Activos por página en el listado. */
 export const TAMANO_PAGINA = 20
@@ -10,6 +11,8 @@ export interface FiltrosActivos {
   categoriaId?: number
   criticidadId?: number
   cifrado?: boolean
+  /** El inventario muestra TODOS por defecto; activos y no activos son filtros. */
+  situacion: FiltroSituacion
 }
 
 function enteroPositivo(valor: string | null): number | undefined {
@@ -20,7 +23,9 @@ function enteroPositivo(valor: string | null): number | undefined {
 /** Lee los filtros de la URL; los valores inválidos se ignoran. */
 export function leerFiltros(params: URLSearchParams): FiltrosActivos {
   const cifrado = params.get('cifrado')
+  const situacion = params.get('situacion') as FiltroSituacion
   return {
+    situacion: SITUACIONES.includes(situacion) ? situacion : 'todos',
     page: enteroPositivo(params.get('page')) ?? 1,
     q: params.get('q')?.trim() ?? '',
     categoriaId: enteroPositivo(params.get('categoriaId')),
@@ -36,6 +41,7 @@ export function escribirFiltros(filtros: FiltrosActivos): URLSearchParams {
   if (filtros.categoriaId) params.set('categoriaId', String(filtros.categoriaId))
   if (filtros.criticidadId) params.set('criticidadId', String(filtros.criticidadId))
   if (filtros.cifrado !== undefined) params.set('cifrado', String(filtros.cifrado))
+  if (filtros.situacion !== 'todos') params.set('situacion', filtros.situacion)
   if (filtros.page > 1) params.set('page', String(filtros.page))
   return params
 }
@@ -49,5 +55,7 @@ export function aConsultaApi(filtros: FiltrosActivos): FiltrosApiActivos {
     categoriaId: filtros.categoriaId,
     criticidadId: filtros.criticidadId,
     cifrado: filtros.cifrado,
+    // Siempre explícito: el valor por defecto de la API es "activos".
+    situacion: filtros.situacion,
   }
 }

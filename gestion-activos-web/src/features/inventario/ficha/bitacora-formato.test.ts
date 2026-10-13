@@ -40,4 +40,20 @@ describe('formato de la bitácora', () => {
       { campo: 'Categoría', antes: 'Hardware', despues: 'Software' },
     ])
   })
+
+  it('el paso a No activo que anota la sincronización se lee con palabras', () => {
+    const filas = cambiosLegibles(
+      {
+        inactivoDesde: { antes: null, despues: '2026-10-13T15:00:00.000Z' },
+        motivoInactivo: { antes: null, despues: 'AUSENTE_EN_GLPI' },
+      },
+      nombres,
+    )
+    expect(filas[0]).toMatchObject({ campo: 'No activo desde', antes: '—' })
+    expect(filas[0].despues).toMatch(/2026/)
+    expect(filas[1]).toEqual({ campo: 'Motivo', antes: '—', despues: 'Ya no existe en GLPI' })
+    expect(formatearValor('motivoInactivo', 'PAPELERA_GLPI', nombres)).toBe(
+      'En la papelera de GLPI',
+    )
+  })
 })
