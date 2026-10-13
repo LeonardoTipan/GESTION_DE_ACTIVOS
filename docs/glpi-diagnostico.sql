@@ -103,3 +103,33 @@ FROM vulnerabilidad v LEFT JOIN activo a ON a.id = v.activoId WHERE a.id IS NULL
 UNION ALL
 SELECT 'bitacora_historial', b.id, b.activoId
 FROM bitacora_historial b LEFT JOIN activo a ON a.id = b.activoId WHERE a.id IS NULL;
+
+-- 9. Últimas ejecuciones de la sincronización: modo, resultado y punto de control.
+--    puntoControl solo se rellena si la ejecución terminó sin errores.
+--    enCurso = 1 indica una ejecución escribiendo ahora (o un bloqueo abandonado).
+SELECT id, origen, modo, estado, solicitadaPor, inicio, fin,
+       TIMESTAMPDIFF(MICROSECOND, inicio, fin) / 1000 AS ms,
+       puntoControl, leidos, creados, actualizados, inactivados, reactivados,
+       detectados, aplicados, errores, enCurso
+FROM sincronizacion
+ORDER BY id DESC
+LIMIT 20;
+
+-- 10. Equipos No activos y por qué (baja manual, papelera de GLPI o ya inexistentes allí),
+--     con los registros que conservan.
+SELECT a.id, a.codigo, a.nombre, a.origenGlpi,
+       CASE WHEN a.deletedAt IS NOT NULL THEN 'BAJA_MANUAL' ELSE a.motivoInactivo END AS motivo,
+       COALESCE(a.deletedAt, a.inactivoDesde) AS desde,
+       (SELECT COUNT(*) FROM respaldo r WHERE r.activoId = a.id) AS respaldos,
+       (SELECT COUNT(*) FROM mantenimiento m WHERE m.activoId = a.id) AS mantenimientos,
+       (SELECT COUNT(*) FROM vulnerabilidad v WHERE v.activoId = a.id) AS vulnerabilidades,
+       (SELECT COUNT(*) FROM bitacora_historial b WHERE b.activoId = a.id) AS historial
+FROM activo a
+WHERE a.deletedAt IS NOT NULL OR a.inactivoDesde IS NOT NULL
+ORDER BY desde DESC;
+
+-- 11. Avisos generados por la sincronización, por tipo y estado de lectura.
+SELECT tipo, leida, COUNT(*) AS avisos, MAX(fecha) AS ultimo
+FROM notificacion
+GROUP BY tipo, leida
+ORDER BY tipo, leida;

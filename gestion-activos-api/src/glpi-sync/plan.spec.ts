@@ -22,6 +22,8 @@ const local = (extra: Partial<ActivoLocal> = {}): ActivoLocal => ({
   origenGlpi: null,
   cifrado: false,
   deletedAt: null,
+  inactivoDesde: null,
+  motivoInactivo: null,
   numeroInventario: null,
   codigoInstitucional: null,
   numeroSerie: null,

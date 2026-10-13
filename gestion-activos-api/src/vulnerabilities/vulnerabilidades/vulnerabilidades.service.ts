@@ -111,17 +111,9 @@ export class VulnerabilidadesService {
 
   /** Registra la vulnerabilidad en estado ABIERTA. El activo debe estar vigente. */
   async registrar(dto: RegistrarVulnerabilidadDto): Promise<VulnerabilidadDto> {
-    try {
-      await this.activos.findOne(dto.activoId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        // Es un dato del body, no la ruta: 400 en vez de 404.
-        throw new BadRequestException(
-          `El activo ${dto.activoId} no existe o fue dado de baja.`,
-        );
-      }
-      throw error;
-    }
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos activos,
+    // pero la regla no depende de ella.
+    await this.activos.exigirActivo(dto.activoId);
     if (dto.fechaLimite && dto.fechaLimite < dto.fecha) {
       throw new BadRequestException(
         'La fecha límite no puede ser anterior a la fecha de detección.',

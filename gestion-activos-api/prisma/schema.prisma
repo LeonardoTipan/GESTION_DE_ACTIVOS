@@ -80,8 +80,12 @@ model Activo {
   // Sincronización con el frontend: permite pedir "lo que cambió desde X".
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
-  // Baja lógica: el activo deja de listarse pero conserva su historial.
+  // Baja manual desde la aplicación: el activo pasa a "No activo" y conserva su historial.
   deletedAt DateTime?
+  // "No activo" detectado por la sincronización: desde cuándo y por qué
+  // (PAPELERA_GLPI | AUSENTE_EN_GLPI). null = sigue vigente en GLPI.
+  inactivoDesde  DateTime?
+  motivoInactivo String?
 
   categoria  Categoria  @relation(fields: [categoriaId], references: [id])
   criticidad Criticidad @relation(fields: [criticidadId], references: [id])
@@ -90,8 +94,11 @@ model Activo {
   respaldos        Respaldo[] // "tiene capas de"
   mantenimientos   Mantenimiento[] // "sigue ciclo de"
   vulnerabilidades Vulnerabilidad[] // "presenta ciclo de"
+  notificaciones   Notificacion[]
 
   @@index([updatedAt])
+  // Filtro "activos / no activos" del inventario
+  @@index([deletedAt, inactivoDesde])
   @@index([numeroInventario])
   @@index([codigoInstitucional])
   @@map("activo")
@@ -230,4 +237,95 @@ enum EstadoVulnerabilidad {
   EN_MITIGACION
   MITIGADA
   ACEPTADA
+}
+
+// ---------------------------------------------------------------------------
+// Sincronización con GLPI
+// ---------------------------------------------------------------------------
+
+// Una fila por ejecución REAL (las simulaciones no escriben nada).
+model Sincronizacion {
+  id            Int                  @id @default(autoincrement())
+  origen        OrigenSincronizacion
+  modo          ModoSincronizacion
+  estado        EstadoSincronizacion @default(EN_CURSO)
+  // Usuario que pulsó el botón; null en las ejecuciones automáticas.
+  solicitadaPor String?
+  // Tipos de GLPI que cubrió ("Computer,NetworkEquipment")
+  tipos         String
+  inicio        DateTime
+  fin           DateTime?
+  // PUNTO DE CONTROL: instante hasta el que GLPI quedó procesado. Solo se
+  // rellena si la ejecución terminó sin errores; la siguiente incremental
+  // parte de aquí (menos la ventana de seguridad).
+  puntoControl  DateTime?
+  leidos        Int                  @default(0)
+  creados       Int                  @default(0)
+  actualizados  Int                  @default(0)
+  sinCambios    Int                  @default(0)
+  inactivados   Int                  @default(0)
+  reactivados   Int                  @default(0)
+  omitidos      Int                  @default(0)
+  errores       Int                  @default(0)
+  porRevisar    Int                  @default(0)
+  // Cambios que GLPI traía frente a los que realmente se escribieron
+  detectados    Int                  @default(0)
+  aplicados     Int                  @default(0)
+  // JSON: errores generales y cambios por elemento
+  resumen       String?              @db.Text
+  // BLOQUEO: true mientras se ejecuta, null al terminar. Al ser única, la base
+  // impide dos ejecuciones a la vez (MySQL admite varios null).
+  enCurso       Boolean?             @unique
+
+  notificaciones Notificacion[]
+
+  @@index([estado, fin])
+  @@map("sincronizacion")
+}
+
+enum OrigenSincronizacion {
+  MANUAL
+  AUTOMATICA
+  CONSOLA
+}
+
+enum ModoSincronizacion {
+  COMPLETA
+  INCREMENTAL
+}
+
+enum EstadoSincronizacion {
+  EN_CURSO
+  EXITOSA
+  CON_ERRORES
+  FALLIDA
+}
+
+// Avisos visibles en la aplicación sobre lo que cambió al sincronizar.
+model Notificacion {
+  id               Int              @id @default(autoincrement())
+  tipo             TipoNotificacion
+  titulo           String
+  // JSON con los cambios { campo: { antes, despues } } o { mensaje }
+  detalle          String           @db.Text
+  fecha            DateTime         @default(now())
+  leida            Boolean          @default(false)
+  activoId         Int?
+  sincronizacionId Int?
+
+  activo         Activo?         @relation(fields: [activoId], references: [id])
+  sincronizacion Sincronizacion? @relation(fields: [sincronizacionId], references: [id])
+
+  @@index([leida, fecha])
+  @@index([activoId])
+  @@map("notificacion")
+}
+
+enum TipoNotificacion {
+  ALTA
+  MODIFICACION
+  CAMBIO_ESTADO
+  BAJA_DETECTADA
+  REACTIVACION
+  ERROR_SINCRONIZACION
 }

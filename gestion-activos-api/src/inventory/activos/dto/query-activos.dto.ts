@@ -24,6 +24,9 @@ export const CAMPOS_ORDEN_ACTIVOS = [
 ] as const;
 export type CampoOrdenActivos = (typeof CAMPOS_ORDEN_ACTIVOS)[number];
 
+export const SITUACIONES_ACTIVO = ['activos', 'no_activos', 'todos'] as const;
+export type SituacionActivo = (typeof SITUACIONES_ACTIVO)[number];
+
 /** En la query string todo llega como texto: "true"/"false" → boolean. */
 const toBoolean = () =>
   Transform(({ value }: { value: unknown }) =>
@@ -86,7 +89,18 @@ export class QueryActivosDto extends PaginationQueryDto {
   actualizadoDesde?: Date;
 
   @ApiPropertyOptional({
-    description: 'Incluir activos dados de baja.',
+    enum: SITUACIONES_ACTIVO,
+    default: 'activos',
+    description:
+      '"activos": equipos vigentes (los únicos que admiten operaciones nuevas). ' +
+      '"no_activos": dados de baja, en la papelera de GLPI o ya inexistentes allí. "todos": ambos.',
+  })
+  @IsOptional()
+  @IsIn(SITUACIONES_ACTIVO)
+  situacion: SituacionActivo = 'activos';
+
+  @ApiPropertyOptional({
+    description: 'Obsoleto: equivale a situacion=todos.',
     default: false,
   })
   @IsOptional()

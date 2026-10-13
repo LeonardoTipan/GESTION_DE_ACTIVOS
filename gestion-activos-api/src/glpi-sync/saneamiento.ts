@@ -129,3 +129,29 @@ export function textoLargoGlpi(valor: unknown): string | null {
     .trim();
   return limpio === '' ? null : limpio;
 }
+
+/**
+ * Instante → "2026-10-12T14:04:31" en la hora LOCAL de la zona. Es el formato
+ * que entiende el filtro de fechas de GLPI: comprobado contra el servidor real,
+ * interpreta el valor en su hora local e IGNORA cualquier desfase que se le envíe.
+ */
+export function fechaLocalDeZona(fecha: Date, zona: string): string {
+  const local = new Date(fecha.getTime() + desfaseMs(fecha.getTime(), zona));
+  return local.toISOString().slice(0, 19);
+}
+
+/**
+ * ¿La fecha que envía GLPI ("…-05:00") lleva el mismo desfase que la zona
+ * configurada? null si la fecha no trae desfase (no se puede comprobar).
+ */
+export function desfaseCoincide(valor: unknown, zona: string): boolean | null {
+  if (typeof valor !== 'string') return null;
+  const m = /T.*(Z|([+-])(\d{2}):?(\d{2}))$/i.exec(valor.trim());
+  const instante = new Date(valor.trim()).getTime();
+  if (!m || Number.isNaN(instante)) return null;
+  const minutos =
+    m[1].toUpperCase() === 'Z'
+      ? 0
+      : (m[2] === '-' ? -1 : 1) * (Number(m[3]) * 60 + Number(m[4]));
+  return desfaseMs(instante, zona) === minutos * 60_000;
+}

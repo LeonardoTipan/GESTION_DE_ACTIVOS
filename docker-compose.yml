@@ -82,8 +82,12 @@ services:
         condition: service_healthy
 
   # Worker de sincronización con GLPI (node-cron). Proceso aparte de la API:
-  # misma imagen, otro comando. Apunta a GLPI_API_URL: el GLPI local de arriba
-  # (http://glpi/api.php) o el de la empresa (https://…/api.php).
+  # misma imagen, otro comando.
+  #
+  # La conexión con GLPI (URL, cliente OAuth, usuario, zona horaria, tipos…) se
+  # define en UN solo sitio: gestion-activos-api/.env. Lo leen igual este worker,
+  # la API (botón "Sincronizar con GLPI") y los comandos de consola. Aquí solo
+  # se decide cómo trabaja el worker.
   glpi-sync:
     profiles: ["glpi"]
     build:
@@ -94,23 +98,17 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: "mysql://${DB_USER:?Falta DB_USER en .env}:${DB_PASSWORD:?Falta DB_PASSWORD en .env}@${DB_HOST:?Falta DB_HOST en .env}:${DB_PORT:-3306}/${DB_NAME:?Falta DB_NAME en .env}"
-      GLPI_API_URL: "${GLPI_API_URL:-}"
-      # OAuth2: el worker pide un token fresco en cada sincronización (no se guarda ninguno).
-      GLPI_CLIENT_ID: "${GLPI_CLIENT_ID:-}"
-      GLPI_CLIENT_SECRET: "${GLPI_CLIENT_SECRET:-}"
-      GLPI_USERNAME: "${GLPI_USERNAME:-}"
-      GLPI_PASSWORD: "${GLPI_PASSWORD:-}"
-      GLPI_TIMEZONE: "${GLPI_TIMEZONE:-}"
-      GLPI_ITEMTYPES: "${GLPI_ITEMTYPES:-Computer,NetworkEquipment}"
-      # Texto que precede al código institucional en el comentario de GLPI.
-      GLPI_CODIGO_INSTITUCIONAL_ETIQUETA: "${GLPI_CODIGO_INSTITUCIONAL_ETIQUETA:-}"
-      # ⚠️ Solo desarrollo: true = no validar el certificado HTTPS de GLPI.
-      GLPI_IGNORE_SSL: "${GLPI_IGNORE_SSL:-false}"
-      # Seguro por defecto: simulación. Solo "false" escribe en la base.
+      # Seguro por defecto: simulación. Solo "false" escribe en la base
+      # (antes: respaldo verificado y simulación revisada; ver docs/glpi-sync.md).
       GLPI_DRY_RUN: "${GLPI_DRY_RUN:-true}"
-      GLPI_SYNC_CRON: "${GLPI_SYNC_CRON:-0 2 * * *}"
-      # El cron se evalúa en la hora del contenedor: la misma zona que GLPI.
-      TZ: "${GLPI_TIMEZONE:-UTC}"
+      # Cada ejecución es incremental (solo lo modificado en GLPI): puede ser frecuente.
+      GLPI_SYNC_CRON: "${GLPI_SYNC_CRON:-*/15 * * * *}"
+      # Cada cuántas horas se hace la lectura completa que detecta bajas.
+      GLPI_RECONCILIACION_HORAS: "${GLPI_RECONCILIACION_HORAS:-24}"
+      # Minutos que se retrocede desde el punto de control en cada consulta incremental.
+      GLPI_VENTANA_SEGURIDAD_MIN: "${GLPI_VENTANA_SEGURIDAD_MIN:-15}"
+      # El cron se evalúa en la hora del contenedor.
+      TZ: "${GLPI_WORKER_TZ:-America/Guayaquil}"
     volumes:
       - ./gestion-activos-api:/app
       - /app/node_modules

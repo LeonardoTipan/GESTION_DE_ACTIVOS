@@ -21,27 +21,17 @@ import {
   ordenadores,
   REGLA,
 } from './../src/glpi-sync/testing/inventario-ejemplo.js';
+import { CONFIG_PRUEBA } from './../src/glpi-sync/testing/inventario-en-memoria.js';
 import { BitacoraService } from './../src/inventory/bitacora/bitacora.service.js';
 import type { PrismaService } from './../src/prisma/prisma.service.js';
 import { limpiarBaseDeDatos } from './utils/database.js';
 
 const LENTO = 120_000; // la conexión a MySQL desde Windows puede tardar varios segundos
 
+// Estas pruebas tratan la lectura COMPLETA; la incremental está en sincronizacion.e2e-spec.ts.
 const CONFIG: GlpiSyncConfig = {
-  apiUrl: 'https://glpi.test/api.php',
-  apiVersion: 'v2',
-  ignorarSsl: false,
-  credenciales: CREDENCIALES_PRUEBA,
-  zonaHoraria: 'America/Guayaquil',
-  itemtypes: ['Computer', 'NetworkEquipment'],
-  tamanoBloque: 50,
-  dryRun: false,
-  mejorarCodigos: false,
-  cron: '0 2 * * *',
-  criticidadPorDefecto: 'Media',
-  codigoInstitucional: REGLA,
-  categoriaPorTipo: { Computer: 'Hardware', NetworkEquipment: 'Red', Software: 'Software' },
-  dirInformes: 'glpi-informes',
+  ...CONFIG_PRUEBA,
+  modo: 'completa',
   timeoutMs: 5000,
   databaseUrl: process.env.DATABASE_URL!,
 };
@@ -71,6 +61,8 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
   };
 
   const vaciarActivos = async () => {
+    await prisma.notificacion.deleteMany();
+    await prisma.sincronizacion.deleteMany();
     await prisma.bitacoraHistorial.deleteMany();
     await prisma.activo.deleteMany();
   };
@@ -245,7 +237,7 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
     beforeAll(vaciarActivos, LENTO);
 
     it(
-      'dos sincronizaciones simultáneas (conexiones distintas) no duplican referencias ni códigos',
+      'dos sincronizaciones simultáneas (conexiones distintas): la base solo deja pasar una',
       async () => {
         const otra = new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL!) });
         try {
@@ -259,10 +251,14 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
           // Un historial por activo: la transacción deshace el alta que pierde la carrera.
           expect(await prisma.bitacoraHistorial.count()).toBe(26);
 
+          // El bloqueo (columna única en MySQL) rechaza a la segunda antes de leer GLPI.
+          const rechazadas = [a, b].filter((i) => i.enCurso);
+          expect(rechazadas).toHaveLength(1);
+          expect(rechazadas[0].elementos).toEqual([]);
           const elementos = [...a.elementos, ...b.elementos];
-          const errores = elementos.filter((e) => e.resultado === 'ERROR');
-          expect(errores.every((e) => e.error!.includes('impidió el duplicado'))).toBe(true);
+          expect(elementos.filter((e) => e.resultado === 'ERROR')).toEqual([]);
           expect(elementos.filter((e) => e.resultado === 'CREAR')).toHaveLength(26);
+          expect(await prisma.sincronizacion.count({ where: { enCurso: true } })).toBe(0);
 
           const despues = await motor(INVENTARIO()).ejecutar();
           expect(despues.totales.Computer).toMatchObject({ CREAR: 0, SIN_CAMBIOS: 25, ERROR: 0 });

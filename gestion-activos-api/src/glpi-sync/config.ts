@@ -1,4 +1,5 @@
 import type { CredencialesGlpi } from './glpi-client.js';
+import type { OrigenEjecucion } from './inventario-local.js';
 import type { ReglaCodigoInstitucional } from './mapeo.js';
 
 /** Tipos de GLPI que sabe sincronizar el motor. */
@@ -32,6 +33,34 @@ export interface GlpiSyncConfig {
    * cuando es válido y único. Nunca toca un código puesto a mano.
    */
   mejorarCodigos: boolean;
+  /**
+   * Qué leer de GLPI:
+   *  - "auto": incremental (solo lo modificado desde el último punto de control)
+   *    y, cada `reconciliacionHoras`, una lectura completa que detecta bajas.
+   *    El botón manual NO dispara esa reconciliación periódica: es siempre rápido.
+   *  - "completa" / "incremental": se fuerza. Sin punto de control siempre es completa.
+   */
+  modo: 'auto' | 'completa' | 'incremental';
+  /** Quién lanza la ejecución (queda en el registro). */
+  origen: OrigenEjecucion;
+  /** Usuario que pulsó el botón (solo origen MANUAL). */
+  solicitadaPor?: string;
+  /**
+   * Minutos que se retrocede desde el punto de control al pedir "lo modificado
+   * desde…": absorbe diferencias de reloj con GLPI y cambios hechos mientras
+   * corría la ejecución anterior. Releer de más es inocuo (idempotente).
+   */
+  ventanaSeguridadMin: number;
+  /** Cada cuántas horas la ejecución automática hace la reconciliación completa. */
+  reconciliacionHoras: number;
+  /** Minutos tras los que el bloqueo de una ejecución caída se da por abandonado. */
+  bloqueoCaducaMin: number;
+  /**
+   * Una lectura completa en la que desaparece buena parte del inventario suele
+   * ser un problema de permisos en GLPI, no una baja real: no se aplica salvo
+   * que se confirme expresamente (--confirmar-bajas).
+   */
+  confirmarBajasMasivas: boolean;
   /** Expresión de node-cron para el worker. */
   cron: string;
   /** Nivel de criticidad que reciben los activos creados desde GLPI. */
@@ -158,6 +187,13 @@ export function leerConfig(env: Env): GlpiSyncConfig {
     );
   }
 
+  const modo = texto('GLPI_SYNC_MODO').toLowerCase() || 'auto';
+  if (!['auto', 'completa', 'incremental'].includes(modo)) {
+    errores.push(
+      `GLPI_SYNC_MODO debe ser auto, completa o incremental (recibido "${modo}")`,
+    );
+  }
+
   const maxCrudo = texto('GLPI_MAX_POR_TIPO');
   const config: GlpiSyncConfig = {
     apiUrl,
@@ -173,7 +209,14 @@ export function leerConfig(env: Env): GlpiSyncConfig {
     // Seguro por defecto: solo se escribe si se pide explícitamente con "false".
     dryRun: texto('GLPI_DRY_RUN').toLowerCase() !== 'false',
     mejorarCodigos: texto('GLPI_MEJORAR_CODIGOS').toLowerCase() === 'true',
-    cron: texto('GLPI_SYNC_CRON') || '0 2 * * *',
+    modo: modo as GlpiSyncConfig['modo'],
+    origen: 'CONSOLA',
+    ventanaSeguridadMin: entero(env, 'GLPI_VENTANA_SEGURIDAD_MIN', 15, errores),
+    reconciliacionHoras: entero(env, 'GLPI_RECONCILIACION_HORAS', 24, errores),
+    bloqueoCaducaMin: entero(env, 'GLPI_BLOQUEO_CADUCA_MIN', 30, errores),
+    confirmarBajasMasivas: false,
+    // Con la lectura incremental cada ejecución es ligera: por defecto, cada 15 minutos.
+    cron: texto('GLPI_SYNC_CRON') || '*/15 * * * *',
     criticidadPorDefecto: texto('GLPI_CRITICIDAD_DEFECTO') || 'Media',
     codigoInstitucional: {
       // Vacío = no se busca código institucional en los comentarios.

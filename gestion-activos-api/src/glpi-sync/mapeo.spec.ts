@@ -150,9 +150,13 @@ describe('mapearActivo · respuesta real de la API v2.2', () => {
     expect(activo.avisos).toContain('comentario: truncado de 6000 a 5000 caracteres');
   });
 
-  it('marca como excluidos la papelera y las plantillas de GLPI', () => {
-    expect(mapear({ ...real, is_deleted: true }).excluido).toContain('papelera');
+  it('las plantillas se excluyen; la papelera se conserva, marcada y sin disputar códigos', () => {
     expect(mapear({ ...real, is_template: true }).excluido).toContain('plantilla');
+    const enPapelera = mapear({ ...real, is_deleted: true });
+    expect(enPapelera.excluido).toBeUndefined();
+    expect(enPapelera.enPapelera).toBe(true);
+    expect(enPapelera.candidatos).toEqual([]);
+    expect(mapear(real).enPapelera).toBe(false);
   });
 
   it('custodio: usuario → contacto → técnico', () => {

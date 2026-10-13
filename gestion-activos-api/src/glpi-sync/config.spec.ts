@@ -27,8 +27,19 @@ describe('leerConfig', () => {
       maxPorTipo: undefined,
       itemtypes: ['Computer', 'NetworkEquipment', 'Software'],
       criticidadPorDefecto: 'Media',
-      cron: '0 2 * * *',
+      cron: '*/15 * * * *',
+      modo: 'auto',
+      origen: 'CONSOLA',
+      ventanaSeguridadMin: 15,
+      reconciliacionHoras: 24,
+      bloqueoCaducaMin: 30,
+      confirmarBajasMasivas: false,
     });
+  });
+
+  it('GLPI_SYNC_MODO solo admite auto, completa o incremental', () => {
+    expect(leerConfig({ ...BASE, GLPI_SYNC_MODO: 'Completa' }).modo).toBe('completa');
+    expect(() => leerConfig({ ...BASE, GLPI_SYNC_MODO: 'rapido' })).toThrow('GLPI_SYNC_MODO');
   });
 
   it('solo escribe si GLPI_DRY_RUN es exactamente "false"', () => {

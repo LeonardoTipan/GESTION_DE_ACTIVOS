@@ -14,13 +14,14 @@ import { InventarioPrisma } from './inventario-local.js';
 import { Sincronizador } from './sincronizador.js';
 
 /**
- * Monta el motor con sus dependencias reales (GLPI + MySQL). Es un proceso
- * aparte de la API: no importa AppModule ni levanta el servidor HTTP.
+ * El motor con sus dependencias reales sobre un cliente de Prisma ya abierto.
+ * Lo usan tanto los procesos de consola como la API (botón manual).
  */
-export function componer(config: GlpiSyncConfig) {
-  const prisma = new PrismaClient({
-    adapter: new PrismaMariaDb(config.databaseUrl),
-  });
+export function componerMotor(
+  config: GlpiSyncConfig,
+  prisma: PrismaClient,
+  log?: (linea: string) => void,
+): Sincronizador {
   // Se reutiliza el servicio de bitácora de la API: mismo formato de historial.
   // registrar() solo usa el cliente de la transacción que recibe.
   const bitacora = new BitacoraService(prisma as PrismaService);
@@ -32,11 +33,23 @@ export function componer(config: GlpiSyncConfig) {
     // ⚠️ Solo desarrollo: ver fetch-sin-verificar.ts.
     fetch: config.ignorarSsl ? fetchSinVerificarTls : undefined,
   });
-  const sincronizador = new Sincronizador(
+  return new Sincronizador(
     config,
     glpi,
     new InventarioPrisma(prisma, bitacora),
+    log,
   );
+}
+
+/**
+ * Monta el motor con sus dependencias reales (GLPI + MySQL). Es un proceso
+ * aparte de la API: no importa AppModule ni levanta el servidor HTTP.
+ */
+export function componer(config: GlpiSyncConfig) {
+  const prisma = new PrismaClient({
+    adapter: new PrismaMariaDb(config.databaseUrl),
+  });
+  const motor = componerMotor(config, prisma);
 
   return {
     /** Ejecuta una sincronización, la muestra en consola y guarda el informe JSON. */
@@ -52,7 +65,7 @@ export function componer(config: GlpiSyncConfig) {
           ].join('\n'),
         );
       }
-      const informe = await sincronizador.ejecutar();
+      const informe = await motor.ejecutar();
       console.log(formatearInforme(informe));
       try {
         const ruta = await guardarInforme(informe, config.dirInformes);

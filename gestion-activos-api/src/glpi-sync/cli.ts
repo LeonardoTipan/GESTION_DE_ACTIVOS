@@ -6,6 +6,9 @@
  *   npm run glpi:sync -- --aplicar escribe en la base
  *
  * Opciones: --simular | --aplicar · --max=N (tope por tipo) · --bloque=N
+ *           --completa | --incremental (por defecto se decide solo: incremental
+ *             y, cada GLPI_RECONCILIACION_HORAS, completa con detección de bajas)
+ *           --confirmar-bajas (acepta que desaparezca gran parte del inventario)
  *           --mejorar-codigos (cambia códigos de respaldo por el institucional)
  * Sin --simular ni --aplicar manda GLPI_DRY_RUN (por defecto, simulación).
  */
@@ -31,6 +34,12 @@ async function main(): Promise<number> {
   const config = leerConfig(process.env);
   if (args.includes('--simular')) config.dryRun = true;
   if (args.includes('--aplicar')) config.dryRun = false;
+  if (args.includes('--completa') && args.includes('--incremental')) {
+    throw new Error('Elige --completa o --incremental, no los dos.');
+  }
+  if (args.includes('--completa')) config.modo = 'completa';
+  if (args.includes('--incremental')) config.modo = 'incremental';
+  if (args.includes('--confirmar-bajas')) config.confirmarBajasMasivas = true;
   if (args.includes('--mejorar-codigos')) config.mejorarCodigos = true;
   config.maxPorTipo = entero(args, 'max') ?? config.maxPorTipo;
   config.tamanoBloque = entero(args, 'bloque') ?? config.tamanoBloque;

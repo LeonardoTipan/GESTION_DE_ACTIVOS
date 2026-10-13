@@ -22,20 +22,117 @@ Recomendaciones:
 
 ## Cómo funciona
 
-Trabaja en dos fases:
+Cada ejecución sigue cuatro pasos:
 
-1. **Leer.** Pide el token y, por cada tipo, lee **todos** sus elementos por bloques (`GET /api.php/v2/Assets/Computer?start=0&limit=50`), ordenados por id, hasta el total que GLPI informa en `Content-Range`. Convierte cada elemento a nuestro modelo, saneando textos y fechas. Con todo leído sabe qué códigos se repiten.
-2. **Decidir y aplicar.** En bloques, compara con la base y, si no es una simulación, escribe cada activo en su propia transacción, con el historial firmado por **`GLPI`**.
+1. **Decidir el modo.** *Completa* (todo el inventario) o *incremental* (solo lo modificado en GLPI desde la última ejecución sin errores).
+2. **Leer.** Pide el token y, por cada tipo, lee sus elementos por bloques (`GET /api.php/v2/Assets/Computer?start=0&limit=50`), ordenados por id, hasta el total que GLPI informa en `Content-Range`. Convierte cada elemento a nuestro modelo, saneando textos y fechas.
+3. **Decidir y aplicar.** En bloques, compara con la base (una consulta por bloque) y, si no es una simulación, escribe cada activo en su propia transacción: el cambio, su entrada de historial firmada por **`GLPI`** y su aviso, o nada.
+4. **Reconciliar** (solo tras una lectura completa y correcta): lo que ya no existe en GLPI pasa a *No activo*.
 
-Al terminar muestra el informe en consola y lo guarda en JSON (`glpi-informes/`).
+Al terminar muestra el informe en consola, lo guarda en JSON (`glpi-informes/`) y registra la ejecución en la tabla `sincronizacion`.
 
 **Antes de escribir comprueba la integridad:** si hay registros (respaldos, mantenimientos, vulnerabilidades o historial) que apuntan a un activo que no existe, la sincronización real se niega a escribir. Un alta reutilizaría ese id y heredaría registros ajenos. Esos huérfanos solo aparecen si alguien vacía la tabla de activos saltándose las claves foráneas.
 
-**Nunca borra ni da de baja activos.** Que un elemento falte en una respuesta, o que GLPI falle, no es una orden de borrado:
+**Nunca borra activos.** Que un elemento falte en una respuesta, o que GLPI falle, no es una orden de borrado ni de baja:
 
-- Si la lectura de un tipo falla (red, error de GLPI, respuesta que no es una lista), ese tipo **no se procesa** y queda como error. Los demás tipos continúan.
-- Una respuesta válida con cero elementos no es un error: simplemente no hay nada que sincronizar.
+- Si la lectura de un tipo falla (red, error de GLPI, respuesta que no es una lista, o menos elementos de los anunciados), ese tipo **no se procesa** y queda como error. Los demás tipos continúan.
 - Un elemento sin `id` válido se rechaza con error, sin crear ningún registro.
+
+## Sincronización incremental
+
+Comprobado contra el GLPI de la institución (API v2.2): el listado admite un filtro RSQL por fecha de modificación.
+
+```
+GET /api.php/v2/Assets/Computer?filter=date_mod=ge=2026-10-13T09:45:00&start=0&limit=50&sort=id:asc
+```
+
+- **La fecha se envía en la hora local del servidor GLPI, sin desfase.** GLPI interpreta el valor en su zona e **ignora** cualquier desfase que se le añada (con `…T19:04:31Z` no devuelve lo que sí devuelve con `…T14:04:31`). El motor convierte el punto de control a la hora de `GLPI_TIMEZONE` (`America/Guayaquil`).
+- **Comprobación de la zona:** en cada lectura compara el desfase de las fechas que envía GLPI (`-05:00`) con el de `GLPI_TIMEZONE`. Si no coinciden, lo informa como error y el punto de control no avanza.
+- Un filtro que GLPI no entiende responde **400**; una consulta sin resultados responde **200 con lista vacía**. No se confunden: lo primero es un fallo, lo segundo significa "nada cambió".
+
+### Punto de control y ventana de seguridad
+
+- El **punto de control** es el instante anterior a empezar a leer GLPI en la última ejecución **sin ningún error**. Se guarda en `sincronizacion.puntoControl`.
+- La siguiente incremental pide lo modificado desde *punto de control − ventana de seguridad* (`GLPI_VENTANA_SEGURIDAD_MIN`, 15 minutos por defecto). La ventana absorbe diferencias de reloj entre los dos servidores y cambios guardados mientras corría la ejecución anterior. Releer de más es inocuo: lo que no cambió no se escribe.
+- **Si algo falla, el punto de control no avanza**: ni con un error de lectura, ni si un solo elemento no pudo escribirse, ni con una lectura parcial (`--max`). La siguiente ejecución vuelve a leer desde el punto anterior, así que no se pierde ningún cambio. Lo que sí se aplicó no se repite (no hay diferencias que escribir).
+- Una simulación nunca mueve el punto de control ni escribe nada en la base.
+
+### Cuándo es completa y cuándo incremental
+
+| Situación | Modo |
+|---|---|
+| Nunca ha habido una ejecución sin errores | Completa |
+| Se añadió un tipo a `GLPI_ITEMTYPES` | Completa |
+| `--completa`, `--max` o `--mejorar-codigos` | Completa |
+| Ejecución automática o de consola, y han pasado `GLPI_RECONCILIACION_HORAS` (24) desde la última completa | Completa |
+| Botón **Sincronizar con GLPI** | Incremental, siempre (salvo que un administrador marque *Comprobación completa*) |
+| El resto | Incremental |
+
+Así el día a día es rápido y la comprobación integral se hace sola una vez al día, sin cargar a GLPI en cada pulsación.
+
+En una incremental no se ve el resto del inventario de GLPI: para saber si un código candidato ya lo usa otro equipo se consultan los activos ya sincronizados.
+
+### Rendimiento medido
+
+Contra el GLPI de la institución, en simulación, mediana de 5 ejecuciones (13-oct-2026), sin contar el arranque del proceso:
+
+| Tipos | Modo | Tiempo | Peticiones de listado | Datos recibidos | Elementos |
+|---|---|---|---|---|---|
+| Computer + NetworkEquipment | Completa | 1,08 s | 4 | 19,4 KB | 26 |
+| Computer + NetworkEquipment | Incremental | 0,96 s | 4 | 0 KB | 0 |
+| + Software | Completa | 2,09 s | 12 | 169,5 KB | 367 |
+
+Con 26 equipos el tiempo lo domina el coste fijo (pedir el token y abrir conexiones, casi 1 s), así que la diferencia es pequeña. La ventaja de la incremental crece con el inventario: no descarga ni compara lo que no cambió y su coste no depende del tamaño. La incremental con Software no se midió (ese tipo no está activado).
+
+Cada tipo cuesta dos consultas: el listado y la papelera (ver abajo).
+
+## Activo y No activo
+
+Un equipo es **No activo** en tres casos, y solo en estos:
+
+| Caso | Cómo se detecta | Se guarda en |
+|---|---|---|
+| Está en la **papelera de GLPI** | GLPI lo informa (`is_deleted`) | `inactivoDesde`, `motivoInactivo = PAPELERA_GLPI` |
+| **Ya no existe en GLPI** (eliminado definitivamente) | Una lectura completa y correcta no lo devuelve | `inactivoDesde`, `motivoInactivo = AUSENTE_EN_GLPI` |
+| **Baja manual** en la aplicación (solo admin) | Botón *Dar de baja* | `deletedAt` |
+
+Los estados de GLPI (`Malo`, `Regular`, `Bueno`) describen la condición del equipo y **no** intervienen: se muestran tal cual en la columna *Estado*.
+
+- **Papelera.** Se pide expresamente (`filter=is_deleted==1`) además del listado normal, así se detecta tanto si el listado la incluye como si la oculta. Un elemento restaurado vuelve a *Activo* solo. Un elemento que se ve por primera vez estando ya en la papelera se registra como No activo, con su código de respaldo.
+- **Eliminación definitiva.** GLPI no avisa: el elemento simplemente deja de aparecer. Solo la **reconciliación completa** puede confirmarlo. Una incremental **nunca** marca a nadie por no aparecer.
+- **Salvaguarda.** Si en una lectura completa desaparece todo un tipo, o 5 o más equipos que supongan más de la mitad, lo más probable es un problema en GLPI (permisos, entidad) y no una baja real: no se marca a nadie y queda como error. Si es correcto, se confirma desde consola con `--completa --confirmar-bajas`.
+- **Nada se borra.** El activo conserva su ficha, su historial, sus respaldos, mantenimientos y vulnerabilidades, y la entrada *Pasó a No activo* queda en el historial firmada por GLPI.
+- Un activo dado de baja a mano no lo toca la sincronización: ni lo actualiza ni lo reactiva.
+
+**Límite:** hoy la papelera del GLPI de la institución está vacía, así que su detección está probada con un GLPI simulado, no contra el servidor real. Sí está comprobado que el servidor acepta el filtro.
+
+En el inventario hay un filtro *Todos / Activos / No activos*. Solo los equipos activos se ofrecen al crear un respaldo, un mantenimiento o una vulnerabilidad, y la API lo valida por su cuenta (400). Los registros anteriores de un equipo No activo se siguen consultando y gestionando.
+
+## Historial y avisos
+
+Cada cambio real se escribe en una transacción con tres partes: el cambio en el activo, la entrada de historial (campo, valor anterior, valor nuevo, fecha, autor `GLPI`) y un **aviso** visible en la campana de la aplicación.
+
+| Aviso | Cuándo |
+|---|---|
+| Alta | Un equipo nuevo en GLPI |
+| Modificación | Cambió algún dato gestionado por GLPI |
+| Cambio de estado | Cambió el estado (Bueno → Malo…) |
+| Baja detectada | Pasó a No activo (papelera o ya inexistente) |
+| Reactivación | Volvió a estar vigente en GLPI |
+| Error | Una ejecución no terminó limpia |
+
+- **Sin repeticiones:** el aviso nace de la escritura. Si GLPI no trae diferencias no se escribe nada y no hay aviso, por muchas veces que se relea el elemento.
+- Un mismo error que se repite en cada ejecución (GLPI caído) no llena la bandeja: mientras el aviso anterior siga sin leer y diga lo mismo, no se crea otro.
+- **Detectado frente a aplicado:** el informe y el registro guardan cuántos cambios traía GLPI (`detectados`) y cuántos se escribieron (`aplicados`). En una simulación, aplicados es siempre 0.
+- Los avisos los ven todos los roles; marcarlos como leídos, admin y analista. El estado *leído* es común a todos los usuarios.
+
+## Ejecución manual y automática
+
+**Botón "Sincronizar con GLPI"** (Inventario; admin y analista). Llama a `POST /api/glpi/sincronizacion`: la sincronización corre en el servidor y las credenciales de GLPI nunca llegan al navegador. Muestra un indicador mientras dura, el resumen al terminar y refresca la tabla. Bajo el botón se ve la fecha de la última sincronización sin errores (`GET /api/glpi/sincronizacion`).
+
+**Automática.** El contenedor `glpi-sync` ejecuta el mismo motor según `GLPI_SYNC_CRON` (cada 15 minutos por defecto).
+
+**Una sola a la vez.** Al empezar, cada ejecución real inserta su fila en `sincronizacion` con `enCurso = true`; la columna es única, así que la base rechaza una segunda. El botón responde 409 y el trabajador se salta esa vuelta. El bloqueo se libera al terminar, también si falla. Si el proceso muere sin liberarlo, caduca a los `GLPI_BLOQUEO_CADUCA_MIN` (30) minutos.
 
 ## Identidad: quién es quién
 
@@ -50,7 +147,7 @@ El n.º de inventario **no** es la identidad: en el GLPI de la institución, 22 
 
 ### Concurrencia
 
-Dos sincronizaciones simultáneas no pueden crear el mismo activo: los índices únicos de `origenGlpi` y `codigo` lo impiden en la propia base. La que llega tarde recibe un error explicado en el informe, su transacción se deshace entera (activo e historial) y la siguiente ejecución lo encuentra todo en orden.
+Dos sincronizaciones no escriben a la vez (ver *Una sola a la vez*). Como última barrera, los índices únicos de `origenGlpi` y `codigo` impiden en la propia base que un mismo elemento se registre dos veces.
 
 ## Qué decide para cada elemento
 
@@ -147,9 +244,47 @@ npm run glpi:sync -- --aplicar  # escribe en la base
 npm run glpi:worker             # worker con node-cron (GLPI_SYNC_CRON)
 ```
 
-Opciones de `glpi:sync`: `--simular` o `--aplicar`, `--max=N` (tope por tipo), `--bloque=N` y `--mejorar-codigos`.
+Opciones de `glpi:sync`: `--simular` o `--aplicar`, `--completa` o `--incremental`, `--confirmar-bajas`, `--max=N` (tope por tipo), `--bloque=N` y `--mejorar-codigos`.
 
-**La simulación es el modo por defecto.** Solo se escribe con `--aplicar` o con `GLPI_DRY_RUN=false`.
+**La simulación es el modo por defecto.** Solo se escribe con `--aplicar`, con `GLPI_DRY_RUN=false` o desde el botón de la aplicación.
+
+La conexión con GLPI se configura **solo** en `gestion-activos-api/.env`: lo leen la consola, la API y el contenedor `glpi-sync`. En el `.env` de la raíz (el de Docker Compose) solo va cómo trabaja el trabajador: `GLPI_DRY_RUN`, `GLPI_SYNC_CRON`, `GLPI_RECONCILIACION_HORAS` y `GLPI_VENTANA_SEGURIDAD_MIN`.
+
+## Activar la escritura automática
+
+El trabajador simula por defecto. Para que escriba:
+
+1. **Respaldo verificado** (PowerShell, desde la raíz del repositorio):
+
+   ```powershell
+   docker exec servidor-mysql sh -c 'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --set-gtid-purged=OFF --databases gestion_activos_db' > C:\Users\adminqt\gestion-activos-respaldos\respaldo.sql
+   ```
+
+   `--set-gtid-purged=OFF` es necesario: sin él, el respaldo no se puede restaurar en el mismo servidor. Un respaldo solo cuenta si se ha probado a restaurarlo (paso de abajo, sobre una base temporal).
+2. **Simulación** y revisión del informe: `npm run glpi:sync -- --simular`. No debe haber errores y los cambios deben ser los esperados.
+3. En el `.env` de la raíz: `GLPI_DRY_RUN=false`.
+4. `docker compose --profile glpi up -d --force-recreate glpi-sync` y comprobar el arranque con `docker compose logs glpi-sync` (debe decir *APLICA cambios*).
+
+Para volver a simulación: `GLPI_DRY_RUN=true` y recrear el contenedor.
+
+### Restaurar un respaldo
+
+La restauración **reemplaza** la base actual: se pierde todo lo posterior al respaldo. Detén antes lo que escribe.
+
+```powershell
+docker compose stop backend glpi-sync
+Get-Content C:\Users\adminqt\gestion-activos-respaldos\respaldo.sql | docker exec -i servidor-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
+docker compose --profile glpi start backend glpi-sync
+```
+
+Para **comprobar un respaldo sin tocar la base real**, restáuralo en una base temporal y compara recuentos:
+
+```bash
+sed -E 's/`gestion_activos_db`/`verif_respaldo_tmp`/' respaldo.sql | docker exec -i servidor-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"'
+docker exec servidor-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT COUNT(*) FROM verif_respaldo_tmp.activo; DROP DATABASE verif_respaldo_tmp;"'
+```
+
+Deshacer **solo** lo que hizo la sincronización, sin restaurar: cada cambio está en el historial del activo con su valor anterior, y los equipos marcados como No activo vuelven solos a Activo si reaparecen en GLPI.
 
 ## GLPI local de pruebas (Docker)
 
@@ -181,5 +316,7 @@ Sin `--profile glpi`, `docker compose up` sigue arrancando solo `backend` y `fro
 - No se lee el cifrado de discos de los equipos.
 - **Fecha de compra y dirección IP:** no se sincronizan. En el GLPI de la empresa ningún equipo tiene datos financieros (`Infocom`) ni tarjetas de red registradas, y la API v2 no expone las IP. Existen como campos locales, editables a mano y vacíos por defecto.
 - Con `--max` la lectura es parcial: la unicidad de los códigos solo se comprueba entre lo leído, y el informe lo advierte.
-- Lo que desaparece de GLPI no se da de baja en local: hay que hacerlo a mano.
-- La sincronización es completa en cada ejecución; todavía no es incremental.
+- **Papelera de GLPI:** su detección no se ha podido probar contra el servidor real (hoy está vacía).
+- **Reloj del servidor GLPI:** la consulta incremental depende de que su hora sea razonablemente correcta. La ventana de seguridad cubre desfases de hasta 15 minutos (configurable) y la reconciliación diaria recoge lo que se hubiera escapado.
+- **Avisos leídos:** el estado es común a todos los usuarios, no individual.
+- **Pruebas del botón:** el endpoint y su lógica están probados de punta a punta; el componente visual no tiene pruebas de renderizado.

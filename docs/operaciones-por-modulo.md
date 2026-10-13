@@ -12,7 +12,7 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 
 | Módulo | Crear | Consultar | Editar | Eliminar |
 |---|---|---|---|---|
-| **Activos** | admin, analista | todos | admin, analista | admin: **baja lógica** (conserva historial y registros asociados) |
+| **Activos** | admin, analista | todos (activos y no activos) | admin, analista | admin: **baja lógica**: pasa a *No activo* y conserva ficha, historial y registros |
 | **Categorías** y **criticidades** | admin | todos | admin | admin; **bloqueado** si algún activo las usa |
 | **Respaldos** | admin, analista | todos | admin, analista: el alcance, solo con la ejecución pendiente | admin: borrado definitivo |
 | **Mantenimientos** | admin, analista | todos | admin, analista: tipo, actividad y fecha, solo en fase Programado | admin: borrado definitivo |
@@ -20,9 +20,21 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 
 Además, respaldos, mantenimientos y vulnerabilidades avanzan por sus propias acciones (registrar ejecución y prueba; iniciar, finalizar y cancelar; iniciar mitigación, mitigar y aceptar riesgo).
 
+## Equipos activos y no activos
+
+Un equipo es **No activo** si se dio de baja en la aplicación, si está en la papelera de GLPI o si ya no existe en GLPI (ver `docs/glpi-sync.md`). El estado de GLPI (Malo, Regular, Bueno) no interviene.
+
+- **Crear** un respaldo, un mantenimiento o una vulnerabilidad solo es posible sobre un equipo **activo**. La interfaz solo ofrece equipos activos y la API lo valida por su cuenta (400 con el motivo).
+- Los registros que ya tenía un equipo No activo **se conservan**: se consultan, y los que estaban abiertos se pueden cerrar (registrar la ejecución, finalizar, cancelar, mitigar).
+- La ficha y el historial de un equipo No activo siguen disponibles; el inventario lo muestra con el filtro *No activos* o *Todos*.
+
+| Módulo | Sincronizar con GLPI | Avisos |
+|---|---|---|
+| **GLPI** | admin, analista (botón del inventario) | todos los consultan; admin y analista los marcan como leídos |
+
 ## Política de eliminación
 
-- **Activos: nunca se borran físicamente.** "Dar de baja" los oculta del inventario pero conserva su historial, sus respaldos, sus mantenimientos y sus vulnerabilidades, que siguen consultables. La base de datos impide además el borrado físico de un activo con registros (clave foránea).
+- **Activos: nunca se borran físicamente.** "Dar de baja" los pasa a *No activo* y conserva su historial, sus respaldos, sus mantenimientos y sus vulnerabilidades, que siguen consultables. La base de datos impide además el borrado físico de un activo con registros (clave foránea).
 - **Respaldos, mantenimientos y vulnerabilidades:** el administrador puede borrarlos definitivamente, en cualquier estado, tras una confirmación. No afecta al activo. Para anular un mantenimiento conservando el registro existe **Cancelar**.
 - **Catálogos:** una categoría o criticidad asignada a algún activo (incluidos los dados de baja) no se puede eliminar; la API responde con un error claro.
 - **Edición limitada al estado abierto:** un respaldo ejecutado, un mantenimiento iniciado o una vulnerabilidad cerrada son evidencia y ya no se editan.

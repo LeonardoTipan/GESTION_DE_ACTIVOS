@@ -134,6 +134,23 @@ export class ActivoDto {
     description: 'Fecha de baja; null si el activo está vigente.',
   })
   deletedAt: Date | null;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Desde cuándo la sincronización lo considera No activo; null si sigue vigente en GLPI.',
+  })
+  inactivoDesde: Date | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    enum: ['PAPELERA_GLPI', 'AUSENTE_EN_GLPI'],
+    description: 'Por qué pasó a No activo: está en la papelera de GLPI o ya no existe allí.',
+  })
+  motivoInactivo: string | null;
 }
 
 export class PaginatedActivoDto extends PaginatedResponseDto(ActivoDto) {}

@@ -80,8 +80,13 @@ export interface ActivoGlpi {
   candidatos: CandidatoCodigo[];
   /** Código de respaldo, determinista y único: "GLPI-PC-12". */
   codigoRespaldo: string;
-  /** Motivo por el que no debe sincronizarse (papelera o plantilla de GLPI). */
+  /** Motivo por el que no debe sincronizarse (plantilla de GLPI). */
   excluido?: string;
+  /**
+   * Está en la papelera de GLPI: se conserva en el inventario como "No activo".
+   * No compite por los códigos operativos (candidatos vacío).
+   */
+  enPapelera: boolean;
   /**
    * SOLO lo que GLPI realmente informa. Es lo que se compara y actualiza: un
    * campo vacío en GLPI nunca pisa un dato bueno registrado en local.
@@ -234,8 +239,11 @@ export function mapearActivo(
     }
   }
 
+  const enPapelera = item.is_deleted === true || item.is_deleted === 1;
   tecnico('numeroInventario', textoGlpi(item.otherserial));
-  if (datos.numeroInventario) {
+  // Un elemento en la papelera no disputa códigos a los equipos vigentes.
+  if (enPapelera) candidatos.length = 0;
+  else if (datos.numeroInventario) {
     candidatos.push({ origen: 'inventario', valor: datos.numeroInventario });
   }
 
@@ -278,9 +286,8 @@ export function mapearActivo(
     codigoRespaldo: `GLPI-${PREFIJO[itemtype]}-${item.id}`,
     excluido: item.is_template
       ? 'Es una plantilla de GLPI, no un activo real.'
-      : item.is_deleted
-        ? 'Está en la papelera de GLPI (candidato a baja: revísalo en el inventario).'
-        : undefined,
+      : undefined,
+    enPapelera,
     datos,
     alCrear: {
       ...datos,

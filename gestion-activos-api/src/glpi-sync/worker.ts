@@ -6,6 +6,11 @@
  *
  * Con GLPI_DRY_RUN sin definir o distinto de "false", cada ejecución es una
  * simulación: informa pero no escribe.
+ *
+ * Cada ejecución es incremental (solo lo modificado en GLPI) y, cada
+ * GLPI_RECONCILIACION_HORAS, completa. Si el botón manual de la aplicación
+ * está sincronizando en ese momento, el bloqueo de la base hace que esta
+ * ejecución se salte.
  */
 import 'dotenv/config';
 import cron from 'node-cron';
@@ -13,6 +18,7 @@ import { componer } from './componer.js';
 import { leerConfig } from './config.js';
 
 const config = leerConfig(process.env);
+config.origen = 'AUTOMATICA';
 if (!cron.validate(config.cron)) {
   console.error(`GLPI_SYNC_CRON no es una expresión cron válida: "${config.cron}"`);
   process.exit(1);

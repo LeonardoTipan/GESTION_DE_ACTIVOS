@@ -110,10 +110,13 @@ export class GlpiClient {
    * Recorre un tipo de activo por bloques (`start` + `limit`), en orden
    * estable por id. Se detiene al llegar al total que GLPI informa en
    * Content-Range o a `max`.
+   *
+   * `filtro` es una expresión RSQL de GLPI ("date_mod=ge=2026-10-12T14:00:00",
+   * "is_deleted==1"). Un filtro que GLPI no entiende responde 400, no una lista vacía.
    */
   async *listarPorBloques(
     itemtype: string,
-    { tamano, max }: { tamano: number; max?: number },
+    { tamano, max, filtro }: { tamano: number; max?: number; filtro?: string },
   ): AsyncGenerator<GlpiItem[]> {
     let inicio = 0;
     let total = Number.POSITIVE_INFINITY;
@@ -126,6 +129,7 @@ export class GlpiClient {
         limit: String(limite),
         sort: 'id:asc',
       });
+      if (filtro) consulta.set('filter', filtro);
       const respuesta = await this.get(
         `/${this.opciones.apiVersion}/Assets/${itemtype}?${consulta}`,
       );
@@ -139,7 +143,18 @@ export class GlpiClient {
           'RESPUESTA_INESPERADA',
         );
       }
-      if (bloque.length === 0) return;
+      if (bloque.length === 0) {
+        // Vacío antes de llegar al total anunciado: la lectura quedó a medias
+        // (el inventario cambió mientras se paginaba). No se da por completa.
+        if (Number.isFinite(total) && inicio < Math.min(total, tope)) {
+          throw new GlpiError(
+            `GLPI anunció ${total} elementos de ${itemtype} pero solo entregó ${inicio}: lectura incompleta.`,
+            respuesta.status,
+            'LECTURA_INCOMPLETA',
+          );
+        }
+        return;
+      }
       yield bloque as GlpiItem[];
 
       // Content-Range: "0-9/137"

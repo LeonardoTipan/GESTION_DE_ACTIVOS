@@ -107,17 +107,9 @@ export class MantenimientosService {
 
   /** Crea el mantenimiento en fase PROGRAMADO. El activo debe estar vigente. */
   async programar(dto: ProgramarMantenimientoDto): Promise<MantenimientoDto> {
-    try {
-      await this.activos.findOne(dto.activoId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        // Es un dato del body, no la ruta: 400 en vez de 404.
-        throw new BadRequestException(
-          `El activo ${dto.activoId} no existe o fue dado de baja.`,
-        );
-      }
-      throw error;
-    }
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos activos,
+    // pero la regla no depende de ella.
+    await this.activos.exigirActivo(dto.activoId);
     const mantenimiento = await this.prisma.mantenimiento.create({
       data: dto,
       include: INCLUDE,

@@ -85,17 +85,9 @@ export class RespaldosService {
 
   /** Capa 1: define el alcance. El activo debe existir y estar vigente. */
   async create(dto: CreateRespaldoDto): Promise<RespaldoDto> {
-    try {
-      await this.activos.findOne(dto.activoId);
-    } catch (error) {
-      if (error instanceof NotFoundException) {
-        // Es un dato del body, no la ruta: 400 en vez de 404.
-        throw new BadRequestException(
-          `El activo ${dto.activoId} no existe o fue dado de baja.`,
-        );
-      }
-      throw error;
-    }
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos activos,
+    // pero la regla no depende de ella.
+    await this.activos.exigirActivo(dto.activoId);
     const respaldo = await this.prisma.respaldo.create({
       data: dto,
       include: INCLUDE,

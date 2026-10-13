@@ -404,12 +404,17 @@ describe('Inventario (e2e)', () => {
       it('admin da de baja → 204', () =>
         api(tokens.admin).delete(`/api/activos/${id}`).expect(204));
 
-      it('el activo dado de baja ya no se consulta ni se lista', async () => {
-        await api(tokens.auditor).get(`/api/activos/${id}`).expect(404);
+      it('el activo dado de baja sale del listado de activos, pero conserva su ficha', async () => {
+        const ficha = await api(tokens.auditor).get(`/api/activos/${id}`).expect(200);
+        expect(ficha.body.deletedAt).not.toBeNull();
         const lista = await api(tokens.auditor)
           .get('/api/activos?q=OLD-001')
           .expect(200);
         expect(lista.body.meta.total).toBe(0);
+        const noActivos = await api(tokens.auditor)
+          .get('/api/activos?q=OLD-001&situacion=no_activos')
+          .expect(200);
+        expect(noActivos.body.meta.total).toBe(1);
       });
 
       it('pero sigue en la base: visible con incluirBajas y en la sincronización', async () => {

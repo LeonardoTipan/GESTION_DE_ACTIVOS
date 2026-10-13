@@ -14,6 +14,9 @@ export const ACCIONES_BITACORA = [
   'CREAR',
   'ACTUALIZAR',
   'DAR_DE_BAJA',
+  // Los registra la sincronización con GLPI (papelera, ausencia o regreso).
+  'INACTIVAR',
+  'REACTIVAR',
 ] as const;
 export type AccionBitacora = (typeof ACCIONES_BITACORA)[number];
 

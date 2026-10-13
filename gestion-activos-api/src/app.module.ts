@@ -5,6 +5,7 @@ import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BackupsModule } from './backups/backups.module.js';
 import { validateEnv } from './config/env.validation.js';
+import { GlpiSyncModule } from './glpi-sync/api/glpi-sync.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -19,6 +20,7 @@ import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.
     BackupsModule,
     MaintenanceModule,
     VulnerabilitiesModule,
+    GlpiSyncModule,
   ],
   controllers: [AppController],
   providers: [AppService],

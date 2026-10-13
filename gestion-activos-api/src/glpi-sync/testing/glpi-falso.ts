@@ -15,6 +15,8 @@ export interface DatosGlpiFalso {
   rutasRotas?: string[];
   /** Segundos de vida de cada token (por defecto 3600). */
   expiresIn?: number;
+  /** true = el listado normal NO incluye la papelera (solo sale con is_deleted==1). */
+  papeleraOculta?: boolean;
 }
 
 export const CREDENCIALES_PRUEBA: CredencialesGlpi = {
@@ -87,13 +89,36 @@ export function glpiFalso(datos: DatosGlpiFalso) {
     if (!todos) {
       return Promise.resolve(json({ status: 'ERROR_ITEM_NOT_FOUND', title: 'Ruta desconocida' }, 404));
     }
+    // Filtro RSQL, como el GLPI real: condiciones unidas por ";". La fecha se
+    // compara en hora local del servidor, ignorando el desfase; un filtro
+    // desconocido es un error 400, nunca una lista vacía.
+    const filtro = url.searchParams.get('filter');
+    let lista = todos;
+    if (datos.papeleraOculta && !filtro?.includes('is_deleted==1')) {
+      lista = lista.filter((x) => !x.is_deleted);
+    }
+    for (const condicion of filtro?.split(';') ?? []) {
+      const fecha = /^date_mod=ge=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/.exec(condicion)?.[1];
+      if (condicion === 'is_deleted==1') {
+        lista = lista.filter((x) => x.is_deleted === true);
+      } else if (fecha) {
+        lista = lista.filter((x) => String(x.date_mod ?? '').slice(0, 19) >= fecha);
+      } else {
+        return Promise.resolve(
+          json(
+            { status: 'ERROR_INVALID_PARAMETER', title: 'RSQL query has invalid filters' },
+            400,
+          ),
+        );
+      }
+    }
     const inicio = Number(url.searchParams.get('start') ?? 0);
     const limite = Number(url.searchParams.get('limit') ?? 100);
-    const bloque = todos.slice(inicio, inicio + limite);
-    const quedan = inicio + limite < todos.length;
+    const bloque = lista.slice(inicio, inicio + limite);
+    const quedan = inicio + limite < lista.length;
     return Promise.resolve(
       json(bloque, quedan ? 206 : 200, {
-        'Content-Range': `${inicio}-${Math.max(0, inicio + bloque.length - 1)}/${todos.length}`,
+        'Content-Range': `${inicio}-${inicio + bloque.length - 1}/${lista.length}`,
       }),
     );
   }) as typeof fetch;

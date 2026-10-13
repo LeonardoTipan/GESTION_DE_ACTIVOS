@@ -22,6 +22,13 @@ import type {
 } from './dto/create-activo.dto.js';
 import type { QueryActivosDto } from './dto/query-activos.dto.js';
 
+/**
+ * Un equipo está ACTIVO si no se dio de baja en la aplicación ni la
+ * sincronización lo marcó (papelera de GLPI o ya inexistente allí). El estado
+ * de GLPI (Malo, Regular, Bueno) describe su condición y no interviene.
+ */
+const ACTIVO = { deletedAt: null, inactivoDesde: null } as const;
+
 /** El frontend siempre recibe el activo con su categoría y criticidad. */
 const INCLUDE = { categoria: true, criticidad: true } as const;
 
@@ -41,10 +48,11 @@ export class ActivosService {
     if (query.actualizadoDesde) {
       where.updatedAt = { gt: query.actualizadoDesde };
     }
-    // En sincronización incremental se incluyen las bajas para que el frontend las retire.
-    if (!query.incluirBajas && !query.actualizadoDesde) {
-      where.deletedAt = null;
-    }
+    // En sincronización incremental se incluyen todos para que el frontend los actualice.
+    const situacion =
+      query.incluirBajas || query.actualizadoDesde ? 'todos' : query.situacion;
+    if (situacion === 'activos') Object.assign(where, ACTIVO);
+    if (situacion === 'no_activos') where.NOT = ACTIVO;
     if (query.q) {
       // La collation de MySQL (utf8mb4_unicode_ci) ya ignora mayúsculas y tildes.
       where.OR = [
@@ -74,17 +82,41 @@ export class ActivosService {
     return paginate(data, total, query);
   }
 
-  async findOne(id: number, { incluirBajas = false } = {}): Promise<ActivoDto> {
-    const activo = await this.prisma.activo.findFirst({
-      where: { id, ...(incluirBajas ? {} : { deletedAt: null }) },
+  /** La ficha se conserva siempre: también la de un equipo No activo o dado de baja. */
+  async findOne(id: number): Promise<ActivoDto> {
+    const activo = await this.prisma.activo.findUnique({
+      where: { id },
       include: INCLUDE,
     });
     if (!activo) {
-      throw new NotFoundException(
-        `El activo ${id} no existe o fue dado de baja.`,
-      );
+      throw new NotFoundException(`El activo ${id} no existe.`);
     }
     return activo;
+  }
+
+  /**
+   * Para registrar una operación NUEVA (respaldo, mantenimiento, vulnerabilidad):
+   * el equipo debe existir y estar activo. Los registros anteriores de un
+   * equipo No activo se conservan y se siguen consultando.
+   */
+  async exigirActivo(id: number): Promise<void> {
+    const activo = await this.prisma.activo.findUnique({
+      where: { id },
+      select: { codigo: true, deletedAt: true, inactivoDesde: true, motivoInactivo: true },
+    });
+    if (!activo) {
+      throw new BadRequestException(`El activo ${id} no existe.`);
+    }
+    if (activo.deletedAt || activo.inactivoDesde) {
+      const motivo = activo.deletedAt
+        ? 'fue dado de baja'
+        : activo.motivoInactivo === 'PAPELERA_GLPI'
+          ? 'está en la papelera de GLPI'
+          : 'ya no existe en GLPI';
+      throw new BadRequestException(
+        `El activo ${activo.codigo} no está activo (${motivo}): no admite operaciones nuevas. Sus registros anteriores se conservan.`,
+      );
+    }
   }
 
   async create(dto: CreateActivoDto, user: AuthUser): Promise<ActivoDto> {
@@ -165,7 +197,7 @@ export class ActivosService {
     id: number,
     paginacion: PaginationQueryDto,
   ): Promise<Paginated<BitacoraDto>> {
-    await this.findOne(id, { incluirBajas: true });
+    await this.findOne(id);
     return this.bitacora.listarPorActivo(id, paginacion);
   }
 
