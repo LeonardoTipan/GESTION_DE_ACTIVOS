@@ -14,14 +14,15 @@ import {
   Title,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
+import { notifications } from '@mantine/notifications'
 import { IconCheck, IconPencil, IconPlayerPlay, IconX } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { BotonEliminar } from '../../shared/components/BotonEliminar.tsx'
+import { Link, useParams } from 'react-router'
 import { formatearFechaHora } from '../../shared/formato.ts'
-import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
+import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
+import { usePuedeOperar } from '../auth/use-puede.ts'
 import {
-  useEliminarMantenimiento,
+  useAnulacionMantenimiento,
   useMantenimiento,
   type Mantenimiento,
 } from './api/mantenimientos.ts'
@@ -31,6 +32,13 @@ import { CancelarModal } from './componentes/CancelarModal.tsx'
 import { FinalizarModal } from './componentes/FinalizarModal.tsx'
 import { IniciarModal } from './componentes/IniciarModal.tsx'
 import { accionesPermitidas, estadoPasos, pasoActivo, type EstadoPaso } from './fases.ts'
+
+/** Nombres de los campos, para las trazas. */
+const ETIQUETAS_MANTENIMIENTO: Record<string, string> = {
+  tipo: 'Tipo',
+  actividad: 'Actividad',
+  fecha: 'Fecha programada',
+}
 
 /** Un paso cancelado se pinta en rojo con ✗ y cambia su etiqueta. */
 function paso(estado: EstadoPaso, etiqueta: string, descripcion: string) {
@@ -114,9 +122,7 @@ export function MantenimientoPage() {
   const id = Number(useParams().id)
   const { data: m, isPending, error } = useMantenimiento(id)
   const puedeOperar = usePuedeOperar()
-  const puedeEliminar = usePuedeAdministrar()
-  const navigate = useNavigate()
-  const eliminar = useEliminarMantenimiento()
+  const anulacion = useAnulacionMantenimiento()
   const [editando, edicion] = useDisclosure()
 
   const migas = (
@@ -149,6 +155,7 @@ export function MantenimientoPage() {
   const pasos = estadoPasos(m)
   const [, ejecucion, cierre] = pasos
   const cancelado = m.fase === 'CANCELADO'
+  const anulado = m.anuladoEn !== null
 
   return (
     <Stack gap="lg">
@@ -169,29 +176,45 @@ export function MantenimientoPage() {
           </Text>
         </div>
         <Group gap="sm">
-          {puedeOperar && <Acciones mantenimiento={m} />}
+          {/* Un registro anulado no admite cambios de fase ni ediciones. */}
+          {puedeOperar && !anulado && <Acciones mantenimiento={m} />}
           {/* Lo planificado solo se corrige antes de iniciar. */}
-          {puedeOperar && m.fase === 'PROGRAMADO' && (
+          {puedeOperar && !anulado && m.fase === 'PROGRAMADO' && (
             <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
               Editar
             </Button>
           )}
-          {puedeEliminar && (
-            <BotonEliminar
-              titulo={`Eliminar el mantenimiento #${m.id}`}
-              eliminar={(opciones) => eliminar.mutate(m.id, opciones)}
-              eliminando={eliminar.isPending}
-              mensajeExito={`Mantenimiento #${m.id} de ${m.activo.codigo}`}
-              alEliminar={() => navigate('/mantenimientos')}
-            >
-              Se borrará definitivamente este mantenimiento y su resultado. El activo{' '}
-              <b>{m.activo.codigo}</b> no se ve afectado. Si solo quieres anularlo conservando el
-              registro, usa <b>Cancelar</b>. Esta acción no se puede deshacer.
-            </BotonEliminar>
-          )}
+          <ControlRegistro
+            registro={m}
+            entidad="MANTENIMIENTO"
+            registroId={m.id}
+            nombre={`el mantenimiento #${m.id}`}
+            etiquetas={ETIQUETAS_MANTENIMIENTO}
+            enviando={anulacion.isPending}
+            onAnulacion={(modo, motivo, listo) =>
+                anulacion.mutate(
+                  { id: m.id, modo, motivo },
+                  {
+                    onSuccess: () => {
+                      notifications.show({
+                        color: 'green',
+                        title: modo === 'anular' ? 'Registro anulado' : 'Anulación revertida',
+                        message:
+                          modo === 'anular'
+                            ? 'Se conserva para auditoría y deja de contar en los indicadores.'
+                            : 'Vuelve a contar en los indicadores.',
+                      })
+                      listo()
+                    },
+                    onError: (e) =>
+                      notifications.show({ color: 'red', title: 'No se pudo completar la acción', message: e.message }),
+                  },
+                )}
+          />
         </Group>
       </Group>
       <EditarMantenimientoModal opened={editando} onClose={edicion.close} mantenimiento={m} />
+      <AvisoAnulado registro={m} />
 
       {m.vencido && (
         <Alert color="red" title="Mantenimiento vencido" maw={720}>

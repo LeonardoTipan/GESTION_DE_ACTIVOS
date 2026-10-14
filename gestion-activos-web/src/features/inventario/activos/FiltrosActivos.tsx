@@ -3,14 +3,8 @@ import { useDebouncedValue } from '@mantine/hooks'
 import { IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { useCategorias, useCriticidades } from '../api/catalogos.ts'
-import type { FiltroSituacion } from '../componentes/situacion.ts'
+import { useEstadosActivo } from '../api/activos.ts'
 import type { FiltrosActivos as Filtros } from './filtros-url.ts'
-
-const OPCIONES_SITUACION: { value: FiltroSituacion; label: string }[] = [
-  { value: 'todos', label: 'Todos' },
-  { value: 'activos', label: 'Activos' },
-  { value: 'no_activos', label: 'No activos' },
-]
 
 const OPCIONES_CIFRADO = [
   { value: 'todos', label: 'Todos' },
@@ -27,6 +21,8 @@ export function FiltrosActivos({
 }) {
   const categorias = useCategorias()
   const criticidades = useCriticidades()
+  // Los estados que hay de verdad en el inventario: si GLPI envía uno nuevo, aparece solo.
+  const estados = useEstadosActivo()
 
   // La búsqueda espera 400 ms sin teclear antes de consultar la API.
   const [busqueda, setBusqueda] = useState(filtros.q)
@@ -72,11 +68,17 @@ export function FiltrosActivos({
         onChange={(v) => onChange({ criticidadId: v ? Number(v) : undefined, page: 1 })}
         w={{ base: '100%', sm: 160 }}
       />
-      <SegmentedControl
-        aria-label="Situación"
-        data={OPCIONES_SITUACION}
-        value={filtros.situacion}
-        onChange={(v) => onChange({ situacion: v as FiltroSituacion, page: 1 })}
+      <Select
+        label="Estado"
+        placeholder="Todos los estados"
+        clearable
+        data={(estados.data ?? []).map((e) => ({
+          value: e.clave,
+          label: `${e.etiqueta} (${e.total})${e.operativo ? '' : ' · no operativo'}`,
+        }))}
+        value={filtros.estado ?? null}
+        onChange={(v) => onChange({ estado: v ?? undefined, page: 1 })}
+        w={{ base: '100%', sm: 220 }}
       />
       <SegmentedControl
         data={OPCIONES_CIFRADO}

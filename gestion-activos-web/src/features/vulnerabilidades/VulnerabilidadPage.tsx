@@ -24,12 +24,12 @@ import {
   IconShieldExclamation,
 } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
-import { BotonEliminar } from '../../shared/components/BotonEliminar.tsx'
+import { Link, useParams } from 'react-router'
+import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import {
-  useEliminarVulnerabilidad,
+  useAnulacionVulnerabilidad,
   useIniciarMitigacion,
   useVulnerabilidad,
   type Vulnerabilidad,
@@ -154,13 +154,20 @@ function Acciones({ vulnerabilidad: v }: { vulnerabilidad: Vulnerabilidad }) {
   )
 }
 
+/** Nombres de los campos, para las trazas. */
+const ETIQUETAS_VULNERABILIDAD: Record<string, string> = {
+  cve: 'CVE',
+  descripcion: 'Descripción',
+  nivelRiesgo: 'Nivel de riesgo',
+  fecha: 'Fecha de detección',
+  fechaLimite: 'Fecha límite (SLA)',
+}
+
 export function VulnerabilidadPage() {
   const id = Number(useParams().id)
   const { data: v, isPending, error } = useVulnerabilidad(id)
   const puedeOperar = usePuedeOperar()
-  const puedeEliminar = usePuedeAdministrar()
-  const navigate = useNavigate()
-  const eliminar = useEliminarVulnerabilidad()
+  const anulacion = useAnulacionVulnerabilidad()
   const [editando, edicion] = useDisclosure()
 
   const migas = (
@@ -191,6 +198,7 @@ export function VulnerabilidadPage() {
   }
 
   const pasos = pasosCiclo(v.estado)
+  const anulada = v.anuladoEn !== null
 
   return (
     <Stack gap="lg">
@@ -210,28 +218,45 @@ export function VulnerabilidadPage() {
           </Text>
         </div>
         <Group gap="sm">
-          <Acciones vulnerabilidad={v} />
+          {/* Una anulada no admite cambios de estado ni ediciones. */}
+          {!anulada && <Acciones vulnerabilidad={v} />}
           {/* Una vulnerabilidad cerrada es evidencia: ya no se corrige. */}
-          {puedeOperar && accionesPermitidas(v.estado).length > 0 && (
+          {puedeOperar && !anulada && accionesPermitidas(v.estado).length > 0 && (
             <Button variant="light" leftSection={<IconPencil size={16} />} onClick={edicion.open}>
               Editar
             </Button>
           )}
-          {puedeEliminar && (
-            <BotonEliminar
-              titulo={`Eliminar ${v.cve ?? `la vulnerabilidad #${v.id}`}`}
-              eliminar={(opciones) => eliminar.mutate(v.id, opciones)}
-              eliminando={eliminar.isPending}
-              mensajeExito={`${v.cve ?? `Vulnerabilidad #${v.id}`} de ${v.activo.codigo}`}
-              alEliminar={() => navigate('/vulnerabilidades')}
-            >
-              Se borrará definitivamente esta vulnerabilidad y su mitigación. El activo{' '}
-              <b>{v.activo.codigo}</b> no se ve afectado. Esta acción no se puede deshacer.
-            </BotonEliminar>
-          )}
+          <ControlRegistro
+            registro={v}
+            entidad="VULNERABILIDAD"
+            registroId={v.id}
+            nombre={v.cve ?? `la vulnerabilidad #${v.id}`}
+            etiquetas={ETIQUETAS_VULNERABILIDAD}
+            enviando={anulacion.isPending}
+            onAnulacion={(modo, motivo, listo) =>
+                anulacion.mutate(
+                  { id: v.id, modo, motivo },
+                  {
+                    onSuccess: () => {
+                      notifications.show({
+                        color: 'green',
+                        title: modo === 'anular' ? 'Registro anulado' : 'Anulación revertida',
+                        message:
+                          modo === 'anular'
+                            ? 'Se conserva para auditoría y deja de contar en los indicadores.'
+                            : 'Vuelve a contar en los indicadores.',
+                      })
+                      listo()
+                    },
+                    onError: (e) =>
+                      notifications.show({ color: 'red', title: 'No se pudo completar la acción', message: e.message }),
+                  },
+                )}
+          />
         </Group>
       </Group>
       <EditarVulnerabilidadModal opened={editando} onClose={edicion.close} vulnerabilidad={v} />
+      <AvisoAnulado registro={v} />
 
       {v.vencida && (
         <Alert color="red" title="Plazo (SLA) vencido" maw={720}>

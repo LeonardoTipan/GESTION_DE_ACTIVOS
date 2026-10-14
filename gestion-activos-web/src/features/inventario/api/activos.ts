@@ -26,6 +26,14 @@ export function useActivos(filtros: FiltrosApiActivos) {
   })
 }
 
+/** Estados presentes en el inventario, con su recuento (filtro dinámico). */
+export function useEstadosActivo() {
+  return useQuery({
+    queryKey: [...claves.activos, 'estados'],
+    queryFn: () => ejecutar(api.GET('/api/activos/estados')),
+  })
+}
+
 export function useActivo(id: number, { enabled = true } = {}) {
   return useQuery({
     queryKey: claves.activo(id),

@@ -5,98 +5,171 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { api } from '../../../api/client.ts'
-import type { components, paths } from '../../../api/schema'
+import type { components } from '../../../api/schema'
 import { ejecutar } from '../../../shared/api/errores.ts'
 
-export type Respaldo = components['schemas']['RespaldoDto']
-export type Etapa = Respaldo['etapa']
-type DatosAlcance = components['schemas']['CreateRespaldoDto']
-type DatosEjecucion = components['schemas']['RegistrarEjecucionDto']
-type DatosPrueba = components['schemas']['RegistrarPruebaDto']
-export type FiltrosApiRespaldos = NonNullable<
-  paths['/api/respaldos']['get']['parameters']['query']
->
+type S = components['schemas']
+export type Plan = S['PlanRespaldoDto']
+export type Ejecucion = S['EjecucionRespaldoDto']
+export type Restauracion = S['RestauracionDto']
+export type RespaldoAnterior = S['RespaldoDto']
+export type Tablero = S['TableroRespaldosDto']
+export type VentanaCalendario = Tablero['calendario'][number]['ejecucion'][number]
+export type DatosPlanes = S['CrearPlanesDto']
+export type DatosModificarPlan = S['ModificarPlanDto']
+export type DatosEjecucion = S['RegistrarEjecucionDto']
+export type DatosModificarEjecucion = S['ModificarEjecucionDto']
+export type DatosRestauracion = S['RegistrarRestauracionDto']
+export type DatosModificarRestauracion = S['ModificarRestauracionDto']
 
-const claves = {
-  todo: ['respaldos'] as const,
-  lista: (filtros: FiltrosApiRespaldos) => ['respaldos', 'lista', filtros] as const,
-  detalle: (id: number) => ['respaldos', 'detalle', id] as const,
+const RAIZ = ['respaldos'] as const
+const PAGINA = { page: 1, limit: 100 } as const
+
+/** Tras cualquier cambio se recalculan listados, tablero e inventario de operaciones. */
+function useInvalidar() {
+  const queryClient = useQueryClient()
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: RAIZ })
+    void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+  }
 }
 
-export function useRespaldos(filtros: FiltrosApiRespaldos) {
+export function useTablero(desde: string, hasta: string) {
   return useQuery({
-    queryKey: claves.lista(filtros),
-    queryFn: () => ejecutar(api.GET('/api/respaldos', { params: { query: filtros } })),
+    queryKey: [...RAIZ, 'tablero', desde, hasta],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/tablero', { params: { query: { desde, hasta } } })),
     placeholderData: keepPreviousData,
   })
 }
 
-export function useRespaldo(id: number) {
+export function usePlanes() {
   return useQuery({
-    queryKey: claves.detalle(id),
-    queryFn: () => ejecutar(api.GET('/api/respaldos/{id}', { params: { path: { id } } })),
-    retry: false,
+    queryKey: [...RAIZ, 'planes'],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/planes', { params: { query: PAGINA } })),
   })
 }
 
-/** Tras cualquier cambio de capa se refrescan listados y detalle. */
-function useInvalidarRespaldos() {
-  const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: claves.todo })
-}
-
-/** Capa 1: definir el alcance (crea el respaldo). */
-export function useCrearRespaldo() {
-  const invalidar = useInvalidarRespaldos()
-  return useMutation({
-    mutationFn: (datos: DatosAlcance) => ejecutar(api.POST('/api/respaldos', { body: datos })),
-    onSuccess: invalidar,
+export function useEjecuciones(desde: string, hasta: string) {
+  return useQuery({
+    queryKey: [...RAIZ, 'ejecuciones', desde, hasta],
+    queryFn: () =>
+      ejecutar(api.GET('/api/respaldos/ejecuciones', { params: { query: { ...PAGINA, desde, hasta } } })),
+    placeholderData: keepPreviousData,
   })
 }
 
-/** Capa 2: registrar la ejecución. */
-export function useRegistrarEjecucion() {
-  const invalidar = useInvalidarRespaldos()
-  return useMutation({
-    mutationFn: ({ id, datos }: { id: number; datos: DatosEjecucion }) =>
-      ejecutar(
-        api.PATCH('/api/respaldos/{id}/ejecucion', { params: { path: { id } }, body: datos }),
-      ),
-    onSuccess: invalidar,
-  })
-}
-
-/** Capa 3: registrar la restauración/prueba. */
-export function useRegistrarPrueba() {
-  const invalidar = useInvalidarRespaldos()
-  return useMutation({
-    mutationFn: ({ id, datos }: { id: number; datos: DatosPrueba }) =>
-      ejecutar(
-        api.PATCH('/api/respaldos/{id}/prueba', { params: { path: { id } }, body: datos }),
-      ),
-    onSuccess: invalidar,
-  })
-}
-
-/** Corrige el alcance (solo con la ejecución pendiente). */
-export function useEditarRespaldo() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['UpdateRespaldoDto'] }) =>
-      ejecutar(api.PATCH('/api/respaldos/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
-  })
-}
-
-/** Borrado definitivo (solo admin). Refresca los listados sin recargar la aplicación. */
-export function useEliminarRespaldo() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (id: number) =>
-      ejecutar(api.DELETE('/api/respaldos/{id}', { params: { path: { id } } })),
-    // Solo los listados: la ficha del registro borrado no debe volver a pedirse.
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: [...claves.todo, 'lista'] })
+/** Ejecuciones que se pueden restaurar: vigentes y no fallidas, de cualquier fecha. */
+export function useEjecucionesRestaurables() {
+  return useQuery({
+    queryKey: [...RAIZ, 'ejecuciones', 'restaurables'],
+    queryFn: async () => {
+      const r = await ejecutar(
+        api.GET('/api/respaldos/ejecuciones', { params: { query: { ...PAGINA, incluirAnulados: false } } }),
+      )
+      return r.data.filter((e) => e.resultado !== 'FALLIDO')
     },
+  })
+}
+
+export function useRestauraciones(desde: string, hasta: string) {
+  return useQuery({
+    queryKey: [...RAIZ, 'restauraciones', desde, hasta],
+    queryFn: () =>
+      ejecutar(api.GET('/api/respaldos/restauraciones', { params: { query: { ...PAGINA, desde, hasta } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useAnteriores() {
+  return useQuery({
+    queryKey: [...RAIZ, 'anteriores'],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/anteriores', { params: { query: PAGINA } })),
+  })
+}
+
+export function useCrearPlanes() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: (datos: DatosPlanes) => ejecutar(api.POST('/api/respaldos/planes', { body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useModificarPlan() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: DatosModificarPlan }) =>
+      ejecutar(api.PATCH('/api/respaldos/planes/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useRegistrarEjecucion() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: (datos: DatosEjecucion) => ejecutar(api.POST('/api/respaldos/ejecuciones', { body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useModificarEjecucion() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: DatosModificarEjecucion }) =>
+      ejecutar(api.PATCH('/api/respaldos/ejecuciones/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useRegistrarRestauracion() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: (datos: DatosRestauracion) => ejecutar(api.POST('/api/respaldos/restauraciones', { body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useModificarRestauracion() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: DatosModificarRestauracion }) =>
+      ejecutar(api.PATCH('/api/respaldos/restauraciones/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export type TipoRegistro = 'planes' | 'ejecuciones' | 'restauraciones'
+
+/** Anular o revertir un plan, una ejecución o una restauración (solo admin). */
+export function useAnulacion() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: async ({
+      tipo,
+      id,
+      modo,
+      motivo,
+    }: {
+      tipo: TipoRegistro
+      id: number
+      modo: 'anular' | 'reversar'
+      motivo: string
+    }) => {
+      const opciones = { params: { path: { id } }, body: { motivo } }
+      if (tipo === 'planes') {
+        return modo === 'anular'
+          ? ejecutar(api.POST('/api/respaldos/planes/{id}/anular', opciones))
+          : ejecutar(api.POST('/api/respaldos/planes/{id}/reversar', opciones))
+      }
+      if (tipo === 'ejecuciones') {
+        return modo === 'anular'
+          ? ejecutar(api.POST('/api/respaldos/ejecuciones/{id}/anular', opciones))
+          : ejecutar(api.POST('/api/respaldos/ejecuciones/{id}/reversar', opciones))
+      }
+      return modo === 'anular'
+        ? ejecutar(api.POST('/api/respaldos/restauraciones/{id}/anular', opciones))
+        : ejecutar(api.POST('/api/respaldos/restauraciones/{id}/reversar', opciones))
+    },
+    onSuccess: invalidar,
   })
 }

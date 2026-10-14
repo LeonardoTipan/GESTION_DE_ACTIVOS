@@ -3,6 +3,8 @@ import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
+import { errorMotivo } from '../../../shared/registro/registro.ts'
 import {
   useEditarMantenimiento,
   type Mantenimiento,
@@ -33,13 +35,15 @@ export function EditarMantenimientoModal({ opened, onClose, mantenimiento }: Pro
 
 function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
   const editar = useEditarMantenimiento()
-  const form = useForm<{ tipo: TipoMantenimiento; actividad: string; fecha: string | null }>({
+  const form = useForm<{ tipo: TipoMantenimiento; actividad: string; fecha: string | null; motivoCambio: string }>({
     initialValues: {
       tipo: mantenimiento.tipo,
       actividad: mantenimiento.actividad,
       fecha: isoAFechaHoraLocal(mantenimiento.fecha),
+      motivoCambio: '',
     },
     validate: {
+      motivoCambio: errorMotivo,
       actividad: (v) =>
         !v.trim()
           ? 'Describe la actividad'
@@ -58,6 +62,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           tipo: v.tipo,
           actividad: v.actividad.trim(),
           fecha: fechaHoraLocalAIso(v.fecha!),
+          motivoCambio: v.motivoCambio.trim(),
         },
       },
       {
@@ -65,7 +70,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           notifications.show({
             color: 'green',
             title: 'Mantenimiento actualizado',
-            message: 'Se guardaron los cambios.',
+            message: 'Se guardó una nueva versión; la anterior queda en las trazas.',
           })
           onClose()
         },
@@ -80,7 +85,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
       <Stack gap="sm">
         <Text size="sm" c="dimmed">
           Solo se puede editar mientras está programado. El activo no se puede cambiar: si te
-          equivocaste de activo, elimina este mantenimiento y programa otro.
+          equivocaste de activo, anula este mantenimiento y programa otro.
         </Text>
         <div>
           <Text size="sm" fw={500} mb={4}>
@@ -104,6 +109,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           withAsterisk
           {...form.getInputProps('fecha')}
         />
+        <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver

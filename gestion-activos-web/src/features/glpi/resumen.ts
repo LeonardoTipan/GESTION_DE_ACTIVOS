@@ -22,7 +22,7 @@ export function lineasDeContadores(c: Contadores): string[] {
   const lineas: string[] = []
   if (c.creados) lineas.push(plural(c.creados, 'activo nuevo', 'activos nuevos'))
   if (c.actualizados) lineas.push(plural(c.actualizados, 'actualizado', 'actualizados'))
-  if (c.inactivados) lineas.push(plural(c.inactivados, 'pasó a No activo', 'pasaron a No activo'))
+  if (c.inactivados) lineas.push(plural(c.inactivados, 'dado de baja', 'dados de baja'))
   if (c.reactivados) lineas.push(plural(c.reactivados, 'reactivado', 'reactivados'))
   if (c.sinCambios) lineas.push(`${c.sinCambios} sin cambios`)
   if (c.omitidos) lineas.push(plural(c.omitidos, 'omitido', 'omitidos'))
@@ -83,7 +83,7 @@ export const ETIQUETA_RESULTADO: Record<string, string> = {
   CREAR: 'Nuevo',
   ENLAZAR: 'Vinculado',
   ACTUALIZAR: 'Actualizado',
-  INACTIVAR: 'No activo',
+  INACTIVAR: 'Dado de baja',
   REACTIVAR: 'Reactivado',
   OMITIR: 'Omitido',
   ERROR: 'Error',

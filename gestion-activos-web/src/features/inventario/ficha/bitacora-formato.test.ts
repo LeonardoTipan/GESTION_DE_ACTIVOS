@@ -41,7 +41,7 @@ describe('formato de la bitácora', () => {
     ])
   })
 
-  it('el paso a No activo que anota la sincronización se lee con palabras', () => {
+  it('la baja que anota la sincronización se lee con palabras', () => {
     const filas = cambiosLegibles(
       {
         inactivoDesde: { antes: null, despues: '2026-10-13T15:00:00.000Z' },
@@ -49,7 +49,7 @@ describe('formato de la bitácora', () => {
       },
       nombres,
     )
-    expect(filas[0]).toMatchObject({ campo: 'No activo desde', antes: '—' })
+    expect(filas[0]).toMatchObject({ campo: 'Dado de baja desde', antes: '—' })
     expect(filas[0].despues).toMatch(/2026/)
     expect(filas[1]).toEqual({ campo: 'Motivo', antes: '—', despues: 'Ya no existe en GLPI' })
     expect(formatearValor('motivoInactivo', 'PAPELERA_GLPI', nombres)).toBe(

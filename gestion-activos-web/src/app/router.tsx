@@ -7,7 +7,6 @@ import { CatalogosPage } from '../features/inventario/catalogos/CatalogosPage.ts
 import { ActivoFichaPage } from '../features/inventario/ficha/ActivoFichaPage.tsx'
 import { MantenimientoPage } from '../features/mantenimientos/MantenimientoPage.tsx'
 import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPage.tsx'
-import { RespaldoPage } from '../features/respaldos/RespaldoPage.tsx'
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
 import { VulnerabilidadPage } from '../features/vulnerabilidades/VulnerabilidadPage.tsx'
 import { VulnerabilidadesPage } from '../features/vulnerabilidades/VulnerabilidadesPage.tsx'
@@ -28,7 +27,6 @@ export const router = createBrowserRouter([
       { path: 'activos', element: <ActivosPage /> },
       { path: 'activos/:id', element: <ActivoFichaPage /> },
       { path: 'respaldos', element: <RespaldosPage /> },
-      { path: 'respaldos/:id', element: <RespaldoPage /> },
       { path: 'mantenimientos', element: <MantenimientosPage /> },
       { path: 'mantenimientos/:id', element: <MantenimientoPage /> },
       { path: 'vulnerabilidades', element: <VulnerabilidadesPage /> },

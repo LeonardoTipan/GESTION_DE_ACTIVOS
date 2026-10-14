@@ -14,6 +14,8 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
+import { errorMotivo } from '../../../shared/registro/registro.ts'
 import {
   useEditarVulnerabilidad,
   type NivelRiesgo,
@@ -53,6 +55,7 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
     nivelRiesgo: NivelRiesgo
     fecha: string | null
     fechaLimite: string | null
+    motivoCambio: string
   }>({
     initialValues: {
       cve: v0.cve ?? '',
@@ -60,8 +63,10 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
       nivelRiesgo: v0.nivelRiesgo,
       fecha: isoAFechaHoraLocal(v0.fecha),
       fechaLimite: v0.fechaLimite ? isoAFechaHoraLocal(v0.fechaLimite) : null,
+      motivoCambio: '',
     },
     validate: {
+      motivoCambio: errorMotivo,
       cve: (v) =>
         v.trim() && !FORMATO_CVE.test(v.trim().toUpperCase())
           ? 'Formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)'
@@ -91,6 +96,7 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
           nivelRiesgo: v.nivelRiesgo,
           fecha: fechaHoraLocalAIso(v.fecha!),
           fechaLimite: v.fechaLimite ? fechaHoraLocalAIso(v.fechaLimite) : undefined,
+          motivoCambio: v.motivoCambio.trim(),
         },
       },
       {
@@ -98,7 +104,7 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
           notifications.show({
             color: 'green',
             title: 'Vulnerabilidad actualizada',
-            message: 'Se guardaron los cambios.',
+            message: 'Se guardó una nueva versión; la anterior queda en las trazas.',
           })
           onClose()
         },
@@ -154,6 +160,7 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
             {...form.getInputProps('fechaLimite')}
           />
         </SimpleGrid>
+        <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver

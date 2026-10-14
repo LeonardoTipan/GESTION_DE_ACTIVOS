@@ -28,7 +28,7 @@ export const ETIQUETA_CAMPO: Record<string, string> = {
   criticidadId: 'Criticidad',
   deletedAt: 'Fecha de baja',
   // Los anota la sincronización cuando el equipo deja de estar vigente en GLPI.
-  inactivoDesde: 'No activo desde',
+  inactivoDesde: 'Dado de baja desde',
   motivoInactivo: 'Motivo',
 }
 
@@ -42,8 +42,8 @@ export const ETIQUETA_ACCION: Record<string, string> = {
   CREAR: 'Alta del activo',
   ACTUALIZAR: 'Modificación',
   DAR_DE_BAJA: 'Baja del activo',
-  INACTIVAR: 'Pasó a No activo',
-  REACTIVAR: 'Volvió a estar activo',
+  INACTIVAR: 'Dado de baja por la sincronización',
+  REACTIVAR: 'Vuelve a estar vigente en GLPI',
 }
 
 /** Nombres de los catálogos para mostrar "Hardware" en vez de "1". */

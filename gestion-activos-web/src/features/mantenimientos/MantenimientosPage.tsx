@@ -1,10 +1,12 @@
 import { Anchor, Button, Group, Select, Stack, Switch, Table, Text, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconPlus } from '@tabler/icons-react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
+import { BadgeRegistro, FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
+import { periodoPorId } from '../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import {
@@ -12,6 +14,7 @@ import {
   type Fase,
   type Mantenimiento,
   type TipoMantenimiento,
+  useIndicadoresMantenimiento,
 } from './api/mantenimientos.ts'
 import { BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
 import { ProgramarModal } from './componentes/ProgramarModal.tsx'
@@ -32,13 +35,15 @@ function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento
             <Table.Th>Fecha programada</Table.Th>
             <Table.Th>Fase</Table.Th>
             <Table.Th>Estado del equipo</Table.Th>
+            <Table.Th>Reg.</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {mantenimientos.map((m) => (
             <Table.Tr
               key={m.id}
-              style={{ cursor: 'pointer' }}
+              // Los anulados se conservan, atenuados: ya no cuentan en los indicadores.
+              style={{ cursor: 'pointer', opacity: m.anuladoEn ? 0.55 : 1 }}
               onClick={() => navigate(`/mantenimientos/${m.id}`)}
             >
               <Table.Td>
@@ -81,11 +86,36 @@ function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento
               <Table.Td>
                 <BadgeEstadoEquipo estado={m.estadoEquipo} />
               </Table.Td>
+              <Table.Td>
+                <BadgeRegistro registro={m} />
+              </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
       </Table>
     </Table.ScrollContainer>
+  )
+}
+
+/** Período (en la URL) e indicadores del módulo, como en el prototipo. */
+function IndicadoresDelPeriodo() {
+  const [params, setParams] = useSearchParams()
+  const periodo = periodoPorId(params.get('periodo'))
+  const indicadores = useIndicadoresMantenimiento(periodo.desde, periodo.hasta)
+  return (
+    <Stack gap="xs">
+      <Group justify="flex-end">
+        <SelectorPeriodo
+          periodo={periodo}
+          onChange={(id) => {
+            const nuevos = new URLSearchParams(params)
+            nuevos.set('periodo', id)
+            setParams(nuevos, { replace: true })
+          }}
+        />
+      </Group>
+      <FranjaIndicadores indicadores={indicadores.data} cargando={indicadores.isPending} error={indicadores.error} />
+    </Stack>
   )
 }
 
@@ -103,12 +133,14 @@ export function MantenimientosPage() {
 
   return (
     <Stack gap="md">
+      <IndicadoresDelPeriodo />
       <Group justify="space-between" align="flex-end">
         <div>
           <Title order={2}>Mantenimientos</Title>
           <Text c="dimmed" size="sm">
             Programado → en ejecución → finalizado
           </Text>
+          <Text c="dimmed" size="xs">ISO/IEC 27001:2022 · A.7.13 Mantenimiento de los equipos</Text>
         </div>
         {puedeOperar && (
           <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>

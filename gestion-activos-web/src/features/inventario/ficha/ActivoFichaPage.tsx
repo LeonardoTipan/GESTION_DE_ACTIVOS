@@ -29,8 +29,8 @@ import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import { useActivo, useDarDeBajaActivo } from '../api/activos.ts'
 import { ActivoFormModal } from '../activos/ActivoFormModal.tsx'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
-import { BadgeSituacion } from '../componentes/BadgeSituacion.tsx'
-import { situacionDe } from '../componentes/situacion.ts'
+import { BadgeEstado } from '../componentes/BadgeEstado.tsx'
+import { estadoDe } from '../componentes/estado.ts'
 import { BitacoraTimeline } from './BitacoraTimeline.tsx'
 
 /** Un dato opcional vacío (null o "") se muestra, atenuado, como "No registrado". */
@@ -88,7 +88,7 @@ export function ActivoFichaPage() {
       title: `Dar de baja ${activo.codigo}`,
       children: (
         <Text size="sm">
-          El activo pasará a No activo: ya no admitirá respaldos, mantenimientos ni
+          El activo quedará dado de baja: ya no admitirá respaldos, mantenimientos ni
           vulnerabilidades nuevos, pero conserva su ficha, su historial y sus registros. Esta
           acción no se puede deshacer desde la aplicación.
         </Text>
@@ -110,16 +110,16 @@ export function ActivoFichaPage() {
         }),
     })
 
-  const situacion = situacionDe(activo)
+  const estado = estadoDe(activo)
   const deBaja = activo.deletedAt !== null
 
   return (
     <Stack gap="lg">
       {volver}
 
-      {!situacion.activo && (
-        <Alert color="gray" icon={<IconArchive />} title={`No activo · ${situacion.motivo}`}>
-          Desde {formatearFechaHora(situacion.desde)}. No admite respaldos, mantenimientos ni
+      {estado.baja && (
+        <Alert color="gray" icon={<IconArchive />} title={`Dado de baja · ${estado.motivo}`}>
+          Desde {formatearFechaHora(estado.desde)}. No admite respaldos, mantenimientos ni
           vulnerabilidades nuevos. Su ficha, su historial y sus registros anteriores se conservan.
         </Alert>
       )}
@@ -130,7 +130,7 @@ export function ActivoFichaPage() {
             {activo.codigo} · {activo.nombre}
           </Title>
           <Group gap="xs" mt={6}>
-            <BadgeSituacion activo={activo} />
+            <BadgeEstado activo={activo} />
             <Badge variant="outline">{activo.categoria.nombre}</Badge>
             <BadgeCriticidad nivel={activo.criticidad.nivel} />
             {activo.cifrado ? (

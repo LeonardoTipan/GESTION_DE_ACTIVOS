@@ -53,12 +53,32 @@ export interface paths {
         };
         /**
          * Listar activos
-         * @description Paginado, con búsqueda, filtros, orden y sincronización incremental (actualizadoDesde).
+         * @description Paginado, con búsqueda, filtros (incluido el estado exacto), orden y sincronización incremental (actualizadoDesde).
          */
         get: operations["ActivosController_findAll"];
         put?: never;
         /** Registrar activo (admin, analista) */
         post: operations["ActivosController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/activos/estados": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estados presentes en el inventario
+         * @description Los valores reales de la columna estado, con su recuento: alimenta el filtro del inventario.
+         */
+        get: operations["ActivosController_estados"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -72,7 +92,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Detalle de un activo vigente */
+        /** Detalle de un activo (también si está dado de baja) */
         get: operations["ActivosController_findOne"];
         put?: never;
         post?: never;
@@ -194,7 +214,7 @@ export interface paths {
         patch: operations["CriticidadesController_update"];
         trace?: never;
     };
-    "/api/respaldos": {
+    "/api/respaldos/tablero": {
         parameters: {
             query?: never;
             header?: never;
@@ -202,85 +222,301 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Listar respaldos
-         * @description Paginado, del más reciente al más antiguo. Filtros por activo, etapa y estados; sincronización incremental con actualizadoDesde.
+         * Indicadores y calendarios de respaldos
+         * @description Indicadores RES-00…RES-07 y ventanas de ejecución y de prueba del período (por defecto, el trimestre actual).
          */
-        get: operations["RespaldosController_findAll"];
+        get: operations["TableroRespaldosController_ver"];
         put?: never;
-        /**
-         * Capa 1 · Definir alcance (admin, analista)
-         * @description Crea el respaldo en etapa PENDIENTE_EJECUCION.
-         */
-        post: operations["RespaldosController_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/respaldos/{id}": {
+    "/api/respaldos/planes": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Detalle de un respaldo */
+        /**
+         * Paso 1 · Planes de respaldo
+         * @description Incluye los anulados, marcados (incluirAnulados=false los oculta).
+         */
+        get: operations["PlanesRespaldoController_listar"];
+        put?: never;
+        /**
+         * Incorporar activos al plan de respaldo (admin, analista)
+         * @description Crea un plan por cada activo seleccionado, con los mismos parámetros. Solo activos operativos sin plan vigente.
+         */
+        post: operations["PlanesRespaldoController_crear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/planes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un plan de respaldo */
+        get: operations["PlanesRespaldoController_ver"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Modificar un plan con motivo (admin, analista)
+         * @description Sube la versión y conserva la anterior. El activo no se cambia.
+         */
+        patch: operations["PlanesRespaldoController_modificar"];
+        trace?: never;
+    };
+    "/api/respaldos/planes/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular un plan (eliminación lógica, admin) */
+        post: operations["PlanesRespaldoController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/planes/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación de un plan (admin) */
+        post: operations["PlanesRespaldoController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Paso 2 · Respaldos ejecutados
+         * @description Filtros por activo, plan, resultado y período (desde/hasta).
+         */
+        get: operations["EjecucionesRespaldoController_listar"];
+        put?: never;
+        /**
+         * Registrar la ejecución de un respaldo (admin, analista)
+         * @description Sobre un plan vigente de un activo operativo; la fecha no puede ser futura.
+         */
+        post: operations["EjecucionesRespaldoController_registrar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de una ejecución de respaldo */
+        get: operations["EjecucionesRespaldoController_ver"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Modificar una ejecución con motivo (admin, analista) */
+        patch: operations["EjecucionesRespaldoController_modificar"];
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular una ejecución (eliminación lógica, admin) */
+        post: operations["EjecucionesRespaldoController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación de una ejecución (admin) */
+        post: operations["EjecucionesRespaldoController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/restauraciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Paso 3 · Restauraciones y pruebas */
+        get: operations["RestauracionesController_listar"];
+        put?: never;
+        /**
+         * Registrar una restauración o prueba (admin, analista)
+         * @description Sobre una ejecución no fallida ni anulada; no puede ser anterior a ella ni futura.
+         */
+        post: operations["RestauracionesController_registrar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/restauraciones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de una restauración */
+        get: operations["RestauracionesController_ver"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Modificar una restauración con motivo (admin, analista) */
+        patch: operations["RestauracionesController_modificar"];
+        trace?: never;
+    };
+    "/api/respaldos/restauraciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular una restauración (eliminación lógica, admin) */
+        post: operations["RestauracionesController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/restauraciones/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación de una restauración (admin) */
+        post: operations["RestauracionesController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/anteriores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Registros anteriores de respaldos (solo lectura)
+         * @description Paginado, del más reciente al más antiguo. Filtros por activo, etapa y estados; sincronización incremental con actualizadoDesde.
+         */
+        get: operations["RespaldosController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/respaldos/anteriores/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un registro anterior de respaldo */
         get: operations["RespaldosController_findOne"];
         put?: never;
         post?: never;
-        /**
-         * Eliminar (solo admin)
-         * @description Borrado definitivo del respaldo, en cualquier estado. No afecta al activo ni a su historial.
-         */
-        delete: operations["RespaldosController_remove"];
+        delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Editar (admin, analista)
-         * @description Corrige el alcance. Solo mientras la ejecución está PENDIENTE.
-         */
-        patch: operations["RespaldosController_update"];
+        patch?: never;
         trace?: never;
     };
-    "/api/respaldos/{id}/ejecucion": {
+    "/api/trazas": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Trazas de un registro
+         * @description Versiones anteriores, anulaciones y reversiones de un registro de respaldos, mantenimientos o vulnerabilidades, del más reciente al más antiguo.
+         */
+        get: operations["TrazasController_listar"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Capa 2 · Registrar ejecución (admin, analista)
-         * @description Solo una vez, mientras la ejecución está PENDIENTE.
-         */
-        patch: operations["RespaldosController_registrarEjecucion"];
-        trace?: never;
-    };
-    "/api/respaldos/{id}/prueba": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Capa 3 · Registrar restauración/prueba (admin, analista)
-         * @description Solo una vez y solo si la ejecución fue EXITOSA.
-         */
-        patch: operations["RespaldosController_registrarPrueba"];
+        patch?: never;
         trace?: never;
     };
     "/api/mantenimientos": {
@@ -307,6 +543,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mantenimientos/indicadores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Indicadores (A.7.13)
+         * @description Del período indicado (por defecto, el trimestre actual). Los anulados no cuentan.
+         */
+        get: operations["MantenimientosController_indicadores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mantenimientos/{id}": {
         parameters: {
             query?: never;
@@ -318,16 +574,12 @@ export interface paths {
         get: operations["MantenimientosController_findOne"];
         put?: never;
         post?: never;
-        /**
-         * Eliminar (solo admin)
-         * @description Borrado definitivo del mantenimiento, en cualquier estado. No afecta al activo ni a su historial.
-         */
-        delete: operations["MantenimientosController_remove"];
+        delete?: never;
         options?: never;
         head?: never;
         /**
-         * Editar (admin, analista)
-         * @description Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO.
+         * Editar con motivo (admin, analista)
+         * @description Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO. Exige motivoCambio: sube la versión y conserva la anterior.
          */
         patch: operations["MantenimientosController_update"];
         trace?: never;
@@ -392,6 +644,43 @@ export interface paths {
         patch: operations["MantenimientosController_cancelar"];
         trace?: never;
     };
+    "/api/mantenimientos/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular (eliminación lógica, solo admin)
+         * @description No se borra: queda marcado, con su motivo, y deja de contar en los indicadores.
+         */
+        post: operations["MantenimientosController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación (solo admin) */
+        post: operations["MantenimientosController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vulnerabilidades": {
         parameters: {
             query?: never;
@@ -416,6 +705,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vulnerabilidades/indicadores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Indicadores (A.8.8)
+         * @description Del período indicado (por defecto, el trimestre actual). Los anulados no cuentan.
+         */
+        get: operations["VulnerabilidadesController_indicadores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vulnerabilidades/{id}": {
         parameters: {
             query?: never;
@@ -427,16 +736,12 @@ export interface paths {
         get: operations["VulnerabilidadesController_findOne"];
         put?: never;
         post?: never;
-        /**
-         * Eliminar (solo admin)
-         * @description Borrado definitivo de la vulnerabilidad, en cualquier estado. No afecta al activo ni a su historial.
-         */
-        delete: operations["VulnerabilidadesController_remove"];
+        delete?: never;
         options?: never;
         head?: never;
         /**
-         * Editar (admin, analista)
-         * @description Corrige CVE, descripción, nivel de riesgo o fechas. Solo mientras está pendiente.
+         * Editar con motivo (admin, analista)
+         * @description Corrige los datos mientras está pendiente. Exige motivoCambio: sube la versión y conserva la anterior.
          */
         patch: operations["VulnerabilidadesController_update"];
         trace?: never;
@@ -499,6 +804,43 @@ export interface paths {
          * @description ABIERTA o EN_MITIGACION → ACEPTADA. Decisión de gestión: exige justificación.
          */
         patch: operations["VulnerabilidadesController_aceptarRiesgo"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular (eliminación lógica, solo admin)
+         * @description No se borra: queda marcado, con su motivo, y deja de contar en los indicadores.
+         */
+        post: operations["VulnerabilidadesController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación (solo admin) */
+        post: operations["VulnerabilidadesController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/glpi/sincronizacion": {
@@ -725,11 +1067,11 @@ export interface components {
             deletedAt: string | null;
             /**
              * Format: date-time
-             * @description Desde cuándo la sincronización lo considera No activo; null si sigue vigente en GLPI.
+             * @description Desde cuándo la sincronización lo da de baja (papelera de GLPI o ya inexistente allí); null si sigue vigente.
              */
             inactivoDesde: string | null;
             /**
-             * @description Por qué pasó a No activo: está en la papelera de GLPI o ya no existe allí.
+             * @description Por qué se dio de baja: está en la papelera de GLPI o ya no existe allí.
              * @enum {string|null}
              */
             motivoInactivo: "PAPELERA_GLPI" | "AUSENTE_EN_GLPI" | null;
@@ -747,6 +1089,22 @@ export interface components {
         PaginatedActivoDto: {
             data: components["schemas"]["ActivoDto"][];
             meta: components["schemas"]["PaginationMetaDto"];
+        };
+        EstadoActivoDto: {
+            /**
+             * @description Valor para el parámetro "estado" de GET /activos. "@baja" y "@sin-estado" son claves especiales.
+             * @example Bueno
+             */
+            clave: string;
+            /** @example Bueno */
+            etiqueta: string;
+            /**
+             * @description Equipos en ese estado.
+             * @example 18
+             */
+            total: number;
+            /** @description false = los equipos en este estado no admiten respaldos, mantenimientos ni vulnerabilidades nuevos. */
+            operativo: boolean;
         };
         BitacoraDto: {
             /** @example 12 */
@@ -1013,6 +1371,485 @@ export interface components {
             /** @example Alta */
             nivel?: string;
         };
+        IndicadorDto: {
+            /** @example RES-01 */
+            id: string;
+            /** @example Tasa de éxito de respaldos */
+            nombre: string;
+            /**
+             * @description Control del Anexo A de ISO/IEC 27001:2022.
+             * @example A.8.13
+             */
+            control: string;
+            /**
+             * @description "%", "min", "días" o "" (recuento).
+             * @example %
+             */
+            unidad: string;
+            /** @description null = sin datos en el período. */
+            valor: number | null;
+            /** @example 98 */
+            meta: number;
+            /**
+             * @description "bajar" = cuanto menor, mejor.
+             * @enum {string}
+             */
+            direccion: "subir" | "bajar";
+            /** @enum {string} */
+            estado: "EN_META" | "EN_OBSERVACION" | "FUERA_DE_META" | "SIN_DATOS";
+            /** @description Avance hacia la meta, de 0 a 100 (para la barra). */
+            progreso: number;
+            /** @example respaldos exitosos ÷ respaldos ejecutados × 100 = 12/13 */
+            formula: string;
+            /** @description Qué falla, cuando no se cumple la meta. */
+            hallazgo: string | null;
+        };
+        ActivoTableroDto: {
+            id: number;
+            codigo: string;
+            nombre: string;
+        };
+        VentanaDto: {
+            /** @example 2026-07-01 */
+            ini: string;
+            /** @example 2026-07-31 */
+            fin: string;
+            /** @example jul 2026 */
+            corto: string;
+            /** @example julio de 2026 */
+            etiqueta: string;
+            /** @enum {string} */
+            estado: "CUMPLIDA" | "VENCIDA" | "EN_CURSO" | "PROGRAMADA";
+            /** @description Registros que la cubren. */
+            registros: number[];
+        };
+        CalendarioPlanDto: {
+            planId: number;
+            activo: components["schemas"]["ActivoTableroDto"];
+            frecuencia: string;
+            frecuenciaPrueba: string;
+            /** @description Ventanas de ejecución. */
+            ejecucion: components["schemas"]["VentanaDto"][];
+            /** @description Ventanas de prueba de restauración. */
+            prueba: components["schemas"]["VentanaDto"][];
+        };
+        PendientesDto: {
+            ejecucion: number;
+            prueba: number;
+        };
+        TableroRespaldosDto: {
+            /** @example 2026-07-01 */
+            desde: string;
+            /** @example 2026-09-30 */
+            hasta: string;
+            indicadores: components["schemas"]["IndicadorDto"][];
+            calendario: components["schemas"]["CalendarioPlanDto"][];
+            /** @description Ventanas en curso o vencidas sin registro. */
+            pendientes: components["schemas"]["PendientesDto"];
+        };
+        ActivoBreveDto: {
+            id: number;
+            codigo: string;
+            nombre: string;
+            tipo: string | null;
+            estado: string | null;
+            /**
+             * @description Nivel de criticidad.
+             * @example Alta
+             */
+            criticidad: string;
+        };
+        PlanRespaldoDto: {
+            /** @enum {string} */
+            frecuencia: "DIARIO" | "SEMANAL" | "QUINCENAL" | "MENSUAL" | "TRIMESTRAL";
+            /** @enum {string} */
+            tipo: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @enum {string} */
+            ventana: "NOCTURNA_22_02" | "NOCTURNA_00_04" | "FIN_DE_SEMANA" | "HORARIO_LABORAL" | "CONTINUA";
+            /** @enum {string} */
+            retencion: "DIAS_30" | "DIAS_90" | "MESES_6" | "ANIO_1" | "ANIOS_3" | "ANIOS_7";
+            /**
+             * @description Cada cuánto se prueba la restauración.
+             * @enum {string}
+             */
+            frecuenciaPrueba: "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * @description RPO comprometido, en horas.
+             * @example 24
+             */
+            rpoHoras: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos: number;
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /**
+             * @description Necesidad de continuidad, criticidad y clasificación que sustentan la inclusión.
+             * @example Base de datos institucional de criticidad alta con información reservada.
+             */
+            justificacion: string;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            activoId: number;
+            activo: components["schemas"]["ActivoBreveDto"];
+            /** @enum {string} */
+            estado: "VIGENTE" | "SUSPENDIDO";
+            /** Format: date-time */
+            vigenteDesde: string;
+        };
+        PaginatedPlanRespaldoDto: {
+            data: components["schemas"]["PlanRespaldoDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        CrearPlanesDto: {
+            /** @enum {string} */
+            frecuencia: "DIARIO" | "SEMANAL" | "QUINCENAL" | "MENSUAL" | "TRIMESTRAL";
+            /** @enum {string} */
+            tipo: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @enum {string} */
+            ventana: "NOCTURNA_22_02" | "NOCTURNA_00_04" | "FIN_DE_SEMANA" | "HORARIO_LABORAL" | "CONTINUA";
+            /** @enum {string} */
+            retencion: "DIAS_30" | "DIAS_90" | "MESES_6" | "ANIO_1" | "ANIOS_3" | "ANIOS_7";
+            /**
+             * @description Cada cuánto se prueba la restauración.
+             * @enum {string}
+             */
+            frecuenciaPrueba: "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * @description RPO comprometido, en horas.
+             * @example 24
+             */
+            rpoHoras: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos: number;
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /**
+             * @description Necesidad de continuidad, criticidad y clasificación que sustentan la inclusión.
+             * @example Base de datos institucional de criticidad alta con información reservada.
+             */
+            justificacion: string;
+            /**
+             * @description Activos operativos sin plan vigente.
+             * @example [
+             *       5,
+             *       8
+             *     ]
+             */
+            activoIds: number[];
+            /**
+             * Format: date
+             * @description Por defecto, hoy.
+             */
+            vigenteDesde?: string;
+        };
+        ModificarPlanDto: {
+            /** @enum {string} */
+            frecuencia?: "DIARIO" | "SEMANAL" | "QUINCENAL" | "MENSUAL" | "TRIMESTRAL";
+            /** @enum {string} */
+            tipo?: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio?: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @enum {string} */
+            ventana?: "NOCTURNA_22_02" | "NOCTURNA_00_04" | "FIN_DE_SEMANA" | "HORARIO_LABORAL" | "CONTINUA";
+            /** @enum {string} */
+            retencion?: "DIAS_30" | "DIAS_90" | "MESES_6" | "ANIO_1" | "ANIOS_3" | "ANIOS_7";
+            /**
+             * @description Cada cuánto se prueba la restauración.
+             * @enum {string}
+             */
+            frecuenciaPrueba?: "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * @description RPO comprometido, en horas.
+             * @example 24
+             */
+            rpoHoras?: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos?: number;
+            /** @example Coordinación de Infraestructura */
+            responsable?: string;
+            /**
+             * @description Necesidad de continuidad, criticidad y clasificación que sustentan la inclusión.
+             * @example Base de datos institucional de criticidad alta con información reservada.
+             */
+            justificacion?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+            /** @enum {string} */
+            estado?: "VIGENTE" | "SUSPENDIDO";
+        };
+        MotivoDto: {
+            /**
+             * @description Por qué se hace, y la evidencia que lo respalda.
+             * @example Registro duplicado por error de digitación; consta en el acta PR-10/2026.
+             */
+            motivo: string;
+        };
+        EjecucionRespaldoDto: {
+            /**
+             * @description Plan VIGENTE del activo respaldado.
+             * @example 3
+             */
+            planId: number;
+            /**
+             * Format: date
+             * @description No puede ser futura.
+             */
+            fecha: string;
+            /** @enum {string} */
+            tipo: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @example 100 */
+            volumenGb: number;
+            /** @example 60 */
+            duracionMin: number;
+            /** @example 24 */
+            rpoHoras: number;
+            /** @enum {string} */
+            resultado: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /** @description Cifrado (A.8.24). */
+            cifrado: boolean;
+            /** @description Copia fuera de sitio. */
+            fueraSitio: boolean;
+            /** @description Retención inmutable. */
+            inmutable: boolean;
+            /** @description Integridad verificada. */
+            integridad: boolean;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            activoId: number;
+            activo: components["schemas"]["ActivoBreveDto"];
+        };
+        PaginatedEjecucionRespaldoDto: {
+            data: components["schemas"]["EjecucionRespaldoDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        RegistrarEjecucionDto: {
+            /**
+             * @description Plan VIGENTE del activo respaldado.
+             * @example 3
+             */
+            planId: number;
+            /**
+             * Format: date
+             * @description No puede ser futura.
+             */
+            fecha: string;
+            /** @enum {string} */
+            tipo: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @example 100 */
+            volumenGb: number;
+            /** @example 60 */
+            duracionMin: number;
+            /** @example 24 */
+            rpoHoras: number;
+            /** @enum {string} */
+            resultado: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /** @description Cifrado (A.8.24). */
+            cifrado: boolean;
+            /** @description Copia fuera de sitio. */
+            fueraSitio: boolean;
+            /** @description Retención inmutable. */
+            inmutable: boolean;
+            /** @description Integridad verificada. */
+            integridad: boolean;
+        };
+        ModificarEjecucionDto: {
+            /**
+             * Format: date
+             * @description No puede ser futura.
+             */
+            fecha?: string;
+            /** @enum {string} */
+            tipo?: "COMPLETO" | "INCREMENTAL" | "DIFERENCIAL" | "SNAPSHOT";
+            /** @enum {string} */
+            medio?: "DISCO_A_DISCO" | "CINTA_LTO8" | "NUBE_INMUTABLE" | "NAS_SECUNDARIO";
+            /** @example 100 */
+            volumenGb?: number;
+            /** @example 60 */
+            duracionMin?: number;
+            /** @example 24 */
+            rpoHoras?: number;
+            /** @enum {string} */
+            resultado?: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /** @example Coordinación de Infraestructura */
+            responsable?: string;
+            /** @description Cifrado (A.8.24). */
+            cifrado?: boolean;
+            /** @description Copia fuera de sitio. */
+            fueraSitio?: boolean;
+            /** @description Retención inmutable. */
+            inmutable?: boolean;
+            /** @description Integridad verificada. */
+            integridad?: boolean;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+        };
+        RestauracionDto: {
+            /**
+             * @description Ejecución de origen (no fallida ni anulada).
+             * @example 12
+             */
+            ejecucionId: number;
+            /** Format: date */
+            fecha: string;
+            /** @enum {string} */
+            motivo: "PRUEBA_PROGRAMADA" | "INCIDENTE_DISPONIBILIDAD" | "SOLICITUD_PROPIETARIO" | "VERIFICACION_INTEGRIDAD";
+            /** @enum {string} */
+            resultado: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /**
+             * @description Tiempo real de restauración, en minutos.
+             * @example 120
+             */
+            tiempoRealMin: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos: number;
+            /** @description Integridad de los datos verificada (A.8.13). */
+            integridad: boolean;
+            /**
+             * @description Acta o ticket que la respalda.
+             * @example Acta PR-10/2026
+             */
+            evidencia: string;
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            activoId: number;
+            activo: components["schemas"]["ActivoBreveDto"];
+        };
+        PaginatedRestauracionDto: {
+            data: components["schemas"]["RestauracionDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        RegistrarRestauracionDto: {
+            /**
+             * @description Ejecución de origen (no fallida ni anulada).
+             * @example 12
+             */
+            ejecucionId: number;
+            /** Format: date */
+            fecha: string;
+            /** @enum {string} */
+            motivo: "PRUEBA_PROGRAMADA" | "INCIDENTE_DISPONIBILIDAD" | "SOLICITUD_PROPIETARIO" | "VERIFICACION_INTEGRIDAD";
+            /** @enum {string} */
+            resultado: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /**
+             * @description Tiempo real de restauración, en minutos.
+             * @example 120
+             */
+            tiempoRealMin: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos: number;
+            /** @description Integridad de los datos verificada (A.8.13). */
+            integridad: boolean;
+            /**
+             * @description Acta o ticket que la respalda.
+             * @example Acta PR-10/2026
+             */
+            evidencia: string;
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+        };
+        ModificarRestauracionDto: {
+            /** Format: date */
+            fecha?: string;
+            /** @enum {string} */
+            motivo?: "PRUEBA_PROGRAMADA" | "INCIDENTE_DISPONIBILIDAD" | "SOLICITUD_PROPIETARIO" | "VERIFICACION_INTEGRIDAD";
+            /** @enum {string} */
+            resultado?: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            /**
+             * @description Tiempo real de restauración, en minutos.
+             * @example 120
+             */
+            tiempoRealMin?: number;
+            /**
+             * @description RTO objetivo, en minutos.
+             * @example 240
+             */
+            rtoMinutos?: number;
+            /** @description Integridad de los datos verificada (A.8.13). */
+            integridad?: boolean;
+            /**
+             * @description Acta o ticket que la respalda.
+             * @example Acta PR-10/2026
+             */
+            evidencia?: string;
+            /** @example Coordinación de Infraestructura */
+            responsable?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+        };
         ActivoResumenDto: {
             /** @example 5 */
             id: number;
@@ -1053,43 +1890,32 @@ export interface components {
             data: components["schemas"]["RespaldoDto"][];
             meta: components["schemas"]["PaginationMetaDto"];
         };
-        CreateRespaldoDto: {
+        CambioCampoDto: {
             /**
-             * @description ID de un activo vigente.
-             * @example 5
+             * @description "__estado_registro" en anulaciones y reversiones.
+             * @example medio
              */
-            activoId: number;
-            /** @example Base de datos ERP completa + archivos de configuración */
-            alcanceDetalle: string;
+            campo: string;
+            /** @example CINTA_LTO8 */
+            antes: Record<string, never>;
+            /** @example NUBE_INMUTABLE */
+            despues: Record<string, never>;
         };
-        RegistrarEjecucionDto: {
+        TrazaDto: {
+            id: number;
             /** @enum {string} */
-            estadoEjecucion: "EXITOSA" | "FALLIDA";
-            /**
-             * Format: date-time
-             * @example 2026-09-30T02:00:00.000Z
-             */
-            fechaEjecucion: string;
-            /**
-             * @description URL o ruta de red donde está la evidencia (log, captura...).
-             * @example \\nas01\respaldos\erp\2026-09-30.log
-             */
-            rutaEvidencia: string;
-        };
-        RegistrarPruebaDto: {
+            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD";
+            registroId: number;
+            /** @description Versión del registro ANTES del cambio. */
+            version: number;
             /** @enum {string} */
-            estadoPrueba: "APROBADA" | "FALLIDA";
-            /** @example Restauración completa en entorno de pruebas en 42 min; datos íntegros. */
-            resultadoPrueba: string;
-            /**
-             * Format: date-time
-             * @example 2026-09-30T10:00:00.000Z
-             */
-            fechaPrueba: string;
-        };
-        UpdateRespaldoDto: {
-            /** @example Base de datos ERP completa + archivos de configuración */
-            alcanceDetalle: string;
+            accion: "MODIFICAR" | "ANULAR" | "REVERSAR";
+            motivo: string;
+            cambios: components["schemas"]["CambioCampoDto"][];
+            /** @example admin.test */
+            responsable: string;
+            /** Format: date-time */
+            fecha: string;
         };
         ActivoMantenidoDto: {
             /** @example 5 */
@@ -1136,6 +1962,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description Anulado (eliminación lógica); null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
         };
         PaginatedMantenimientoDto: {
             data: components["schemas"]["MantenimientoDto"][];
@@ -1204,6 +2042,8 @@ export interface components {
              * @example 2026-10-15T08:00:00.000Z
              */
             fecha?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
         };
         ActivoAfectadoDto: {
             /** @example 5 */
@@ -1249,6 +2089,18 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description Anulado (eliminación lógica); null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
         };
         PaginatedVulnerabilidadDto: {
             data: components["schemas"]["VulnerabilidadDto"][];
@@ -1321,6 +2173,8 @@ export interface components {
              * @example 2026-10-15T23:59:59.000Z
              */
             fechaLimite?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
         };
         ContadoresSincronizacionDto: {
             /**
@@ -1335,7 +2189,7 @@ export interface components {
             /** @example 0 */
             sinCambios: number;
             /**
-             * @description Pasaron a No activo.
+             * @description Pasaron a Dado de baja.
              * @example 0
              */
             inactivados: number;
@@ -1552,10 +2406,10 @@ export interface operations {
                 order?: "asc" | "desc";
                 /** @description Sincronización incremental: solo activos modificados DESPUÉS de esta fecha. Incluye los dados de baja (deletedAt ≠ null) para que el frontend los retire. */
                 actualizadoDesde?: string;
-                /** @description "activos": equipos vigentes (los únicos que admiten operaciones nuevas). "no_activos": dados de baja, en la papelera de GLPI o ya inexistentes allí. "todos": ambos. */
-                situacion?: "activos" | "no_activos" | "todos";
-                /** @description Obsoleto: equivale a situacion=todos. */
-                incluirBajas?: boolean;
+                /** @description Filtra por el estado EXACTO del activo, tal como lo informa GLPI (Bueno, Regular, Malo…). Los valores disponibles se consultan en GET /activos/estados. Claves especiales: "@baja" (dado de baja: a mano, en la papelera de GLPI o ya inexistente allí) y "@sin-estado". */
+                estado?: string;
+                /** @description true = solo equipos OPERATIVOS: ni dados de baja ni en un estado de la lista ESTADOS_NO_OPERATIVOS. Es lo que usan los selectores de respaldos, mantenimientos y vulnerabilidades. */
+                operativos?: boolean;
             };
             header?: never;
             path?: never;
@@ -1650,6 +2504,43 @@ export interface operations {
             };
             /** @description El código ya existe. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ActivosController_estados: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EstadoActivoDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2287,19 +3178,13 @@ export interface operations {
             };
         };
     };
-    RespaldosController_findAll: {
+    TableroRespaldosController_ver: {
         parameters: {
             query?: {
-                page?: number;
-                limit?: number;
-                /** @description Respaldos de un activo. */
-                activoId?: number;
-                /** @description P. ej. PENDIENTE_PRUEBA = ejecutados con éxito que falta probar. */
-                etapa?: "PENDIENTE_EJECUCION" | "EJECUCION_FALLIDA" | "PENDIENTE_PRUEBA" | "PRUEBA_FALLIDA" | "COMPLETADO";
-                estadoEjecucion?: "PENDIENTE" | "EXITOSA" | "FALLIDA";
-                estadoPrueba?: "PENDIENTE" | "APROBADA" | "FALLIDA";
-                /** @description Sincronización incremental: solo respaldos modificados después de esta fecha. */
-                actualizadoDesde?: string;
+                /** @description Por defecto, inicio del trimestre actual. */
+                desde?: string;
+                /** @description Por defecto, fin del trimestre actual. */
+                hasta?: string;
             };
             header?: never;
             path?: never;
@@ -2312,7 +3197,383 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PaginatedRespaldoDto"];
+                    "application/json": components["schemas"]["TableroRespaldosDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_listar: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                activoId?: number;
+                /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
+                estado?: "VIGENTE" | "SUSPENDIDO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlanRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_crear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearPlanesDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRespaldoDto"][];
+                };
+            };
+            /** @description Datos inválidos o activo no operativo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Algún activo ya tiene un plan vigente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_ver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_modificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificarPlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Anulado, modificado entretanto, o dejaría dos planes vigentes. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesRespaldoController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_listar: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                activoId?: number;
+                /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
+                desde?: string;
+                hasta?: string;
+                planId?: number;
+                resultado?: "EXITOSO" | "PARCIAL" | "FALLIDO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedEjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_registrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarEjecucionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
                 };
             };
             400: {
@@ -2343,7 +3604,229 @@ export interface operations {
             };
         };
     };
-    RespaldosController_create: {
+    EjecucionesRespaldoController_ver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_modificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificarEjecucionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_listar: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                activoId?: number;
+                /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
+                desde?: string;
+                hasta?: string;
+                ejecucionId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRestauracionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_registrar: {
         parameters: {
             query?: never;
             header?: never;
@@ -2352,7 +3835,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateRespaldoDto"];
+                "application/json": components["schemas"]["RegistrarRestauracionDto"];
             };
         };
         responses: {
@@ -2361,10 +3844,241 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RespaldoDto"];
+                    "application/json": components["schemas"]["RestauracionDto"];
                 };
             };
-            /** @description Datos inválidos o activo inexistente/dado de baja. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_ver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestauracionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_modificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificarRestauracionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestauracionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestauracionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RestauracionesController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RestauracionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RespaldosController_findAll: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description Respaldos de un activo. */
+                activoId?: number;
+                /** @description P. ej. PENDIENTE_PRUEBA = ejecutados con éxito que falta probar. */
+                etapa?: "PENDIENTE_EJECUCION" | "EJECUCION_FALLIDA" | "PENDIENTE_PRUEBA" | "PRUEBA_FALLIDA" | "COMPLETADO";
+                estadoEjecucion?: "PENDIENTE" | "EXITOSA" | "FALLIDA";
+                estadoPrueba?: "PENDIENTE" | "APROBADA" | "FALLIDA";
+                /** @description Sincronización incremental: solo respaldos modificados después de esta fecha. */
+                actualizadoDesde?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRespaldoDto"];
+                };
+            };
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -2440,80 +4154,24 @@ export interface operations {
             };
         };
     };
-    RespaldosController_remove: {
+    TrazasController_listar: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
+            query: {
+                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD";
+                registroId: number;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    RespaldosController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateRespaldoDto"];
-            };
-        };
-        responses: {
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RespaldoDto"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
+                    "application/json": components["schemas"]["TrazaDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
@@ -2527,160 +4185,6 @@ export interface operations {
             };
             /** @description Rol insuficiente. */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description La ejecución ya fue registrada. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    RespaldosController_registrarEjecucion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarEjecucionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RespaldoDto"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description La ejecución ya fue registrada. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    RespaldosController_registrarPrueba: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarPruebaDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RespaldoDto"];
-                };
-            };
-            /** @description Datos inválidos o fecha anterior a la ejecución. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Ejecución no exitosa o prueba ya registrada. */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -2709,6 +4213,8 @@ export interface operations {
                 order?: "asc" | "desc";
                 /** @description Sincronización incremental: solo mantenimientos modificados después de esta fecha. */
                 actualizadoDesde?: string;
+                /** @description false = oculta los anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
             };
             header?: never;
             path?: never;
@@ -2802,13 +4308,16 @@ export interface operations {
             };
         };
     };
-    MantenimientosController_findOne: {
+    MantenimientosController_indicadores: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
+            query?: {
+                /** @description Por defecto, inicio del trimestre actual. */
+                desde?: string;
+                /** @description Por defecto, fin del trimestre actual. */
+                hasta?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -2818,7 +4327,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["MantenimientoDto"];
+                    "application/json": components["schemas"]["IndicadorDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
@@ -2839,17 +4348,9 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
         };
     };
-    MantenimientosController_remove: {
+    MantenimientosController_findOne: {
         parameters: {
             query?: never;
             header?: never;
@@ -2860,11 +4361,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
             };
             /** @description Token ausente o inválido. */
             401: {
@@ -2951,7 +4454,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            /** @description Ya no está en fase PROGRAMADO. */
+            /** @description Cerrado, anulado o modificado entretanto. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3151,6 +4654,110 @@ export interface operations {
             };
         };
     };
+    MantenimientosController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ya estaba anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    MantenimientosController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description No estaba anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     VulnerabilidadesController_findAll: {
         parameters: {
             query?: {
@@ -3167,6 +4774,8 @@ export interface operations {
                 vencidas?: boolean;
                 /** @description Sincronización incremental: solo vulnerabilidades modificadas después de esta fecha. */
                 actualizadoDesde?: string;
+                /** @description false = oculta los anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
             };
             header?: never;
             path?: never;
@@ -3269,13 +4878,16 @@ export interface operations {
             };
         };
     };
-    VulnerabilidadesController_findOne: {
+    VulnerabilidadesController_indicadores: {
         parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
+            query?: {
+                /** @description Por defecto, inicio del trimestre actual. */
+                desde?: string;
+                /** @description Por defecto, fin del trimestre actual. */
+                hasta?: string;
             };
+            header?: never;
+            path?: never;
             cookie?: never;
         };
         requestBody?: never;
@@ -3285,7 +4897,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                    "application/json": components["schemas"]["IndicadorDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
@@ -3306,17 +4918,9 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
         };
     };
-    VulnerabilidadesController_remove: {
+    VulnerabilidadesController_findOne: {
         parameters: {
             query?: never;
             header?: never;
@@ -3327,11 +4931,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            204: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
             };
             /** @description Token ausente o inválido. */
             401: {
@@ -3418,7 +5024,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            /** @description Ya está cerrada, o el activo ya tiene ese CVE pendiente. */
+            /** @description Cerrado, anulado o modificado entretanto. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3611,6 +5217,110 @@ export interface operations {
                 };
             };
             /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ya estaba anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description No estaba anulado. */
             409: {
                 headers: {
                     [name: string]: unknown;

@@ -114,15 +114,32 @@ export function useEditarVulnerabilidad() {
   })
 }
 
-/** Borrado definitivo (solo admin). Refresca los listados sin recargar la aplicación. */
-export function useEliminarVulnerabilidad() {
+/**
+ * Anular (eliminación lógica) o revertir la anulación. Solo admin. Nada se
+ * borra: el registro queda marcado y deja de contar en los indicadores.
+ */
+export function useAnulacionVulnerabilidad() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: (id: number) =>
-      ejecutar(api.DELETE('/api/vulnerabilidades/{id}', { params: { path: { id } } })),
-    // Solo los listados: la ficha del registro borrado no debe volver a pedirse.
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: [...claves.todo, 'lista'] })
+    mutationFn: ({ id, modo, motivo }: { id: number; modo: 'anular' | 'reversar'; motivo: string }) => {
+      const opciones = { params: { path: { id } }, body: { motivo } }
+      return modo === 'anular'
+        ? ejecutar(api.POST('/api/vulnerabilidades/{id}/anular', opciones))
+        : ejecutar(api.POST('/api/vulnerabilidades/{id}/reversar', opciones))
     },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+/** Indicadores del período (los anulados no cuentan). */
+export function useIndicadoresVulnerabilidad(desde: string, hasta: string) {
+  return useQuery({
+    queryKey: [...claves.todo, 'indicadores', desde, hasta],
+    queryFn: () =>
+      ejecutar(api.GET('/api/vulnerabilidades/indicadores', { params: { query: { desde, hasta } } })),
+    placeholderData: keepPreviousData,
   })
 }

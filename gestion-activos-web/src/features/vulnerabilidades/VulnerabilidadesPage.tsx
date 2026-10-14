@@ -14,10 +14,12 @@ import {
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
 import { IconPlus, IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
+import { BadgeRegistro, FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
+import { periodoPorId } from '../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import {
@@ -25,6 +27,7 @@ import {
   type EstadoVulnerabilidad,
   type NivelRiesgo,
   type Vulnerabilidad,
+  useIndicadoresVulnerabilidad,
 } from './api/vulnerabilidades.ts'
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { RegistrarModal } from './componentes/RegistrarModal.tsx'
@@ -52,13 +55,15 @@ function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnera
             <Table.Th>Estado</Table.Th>
             <Table.Th>Plazo (SLA)</Table.Th>
             <Table.Th>Detectada</Table.Th>
+            <Table.Th>Reg.</Table.Th>
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {vulnerabilidades.map((v) => (
             <Table.Tr
               key={v.id}
-              style={{ cursor: 'pointer' }}
+              // Los anulados se conservan, atenuados: ya no cuentan en los indicadores.
+              style={{ cursor: 'pointer', opacity: v.anuladoEn ? 0.55 : 1 }}
               onClick={() => navigate(`/vulnerabilidades/${v.id}`)}
             >
               <Table.Td>
@@ -103,11 +108,36 @@ function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnera
                   {formatearFechaHora(v.fecha)}
                 </Text>
               </Table.Td>
+              <Table.Td>
+                <BadgeRegistro registro={v} />
+              </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
       </Table>
     </Table.ScrollContainer>
+  )
+}
+
+/** Período (en la URL) e indicadores del módulo, como en el prototipo. */
+function IndicadoresDelPeriodo() {
+  const [params, setParams] = useSearchParams()
+  const periodo = periodoPorId(params.get('periodo'))
+  const indicadores = useIndicadoresVulnerabilidad(periodo.desde, periodo.hasta)
+  return (
+    <Stack gap="xs">
+      <Group justify="flex-end">
+        <SelectorPeriodo
+          periodo={periodo}
+          onChange={(id) => {
+            const nuevos = new URLSearchParams(params)
+            nuevos.set('periodo', id)
+            setParams(nuevos, { replace: true })
+          }}
+        />
+      </Group>
+      <FranjaIndicadores indicadores={indicadores.data} cargando={indicadores.isPending} error={indicadores.error} />
+    </Stack>
   )
 }
 
@@ -137,12 +167,14 @@ export function VulnerabilidadesPage() {
 
   return (
     <Stack gap="md">
+      <IndicadoresDelPeriodo />
       <Group justify="space-between" align="flex-end">
         <div>
           <Title order={2}>Vulnerabilidades</Title>
           <Text c="dimmed" size="sm">
             Ordenadas por urgencia: mayor riesgo primero y, dentro de cada nivel, la más antigua
           </Text>
+          <Text c="dimmed" size="xs">ISO/IEC 27001:2022 · A.8.8 Gestión de las vulnerabilidades técnicas</Text>
         </div>
         {puedeOperar && (
           <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>

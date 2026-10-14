@@ -76,7 +76,7 @@ describe('resumen que se muestra tras pulsar "Sincronizar con GLPI"', () => {
     expect(resumen.lineas).toEqual([
       '1 activo nuevo',
       '2 actualizados',
-      '1 pasó a No activo',
+      '1 dado de baja',
       '1 reactivado',
       '1 sin cambios',
       '3 para revisión manual',

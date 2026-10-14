@@ -46,7 +46,7 @@ export function ActivosPage() {
     filtros.categoriaId !== undefined ||
     filtros.criticidadId !== undefined ||
     filtros.cifrado !== undefined ||
-    filtros.situacion !== 'todos'
+    filtros.estado !== undefined
 
   return (
     <Stack gap="md">

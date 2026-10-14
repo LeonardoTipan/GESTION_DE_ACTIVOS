@@ -1,11 +1,11 @@
-import { Anchor, Badge, Table, Text, Tooltip } from '@mantine/core'
+import { Anchor, Table, Text, Tooltip } from '@mantine/core'
 import { IconLock, IconLockOpen } from '@tabler/icons-react'
 import { Link, useNavigate } from 'react-router'
 import { formatearFecha, SIN_DATO } from '../../../shared/formato.ts'
 import type { Activo } from '../api/activos.ts'
 import { BadgeCriticidad } from '../componentes/BadgeCriticidad.tsx'
-import { BadgeSituacion } from '../componentes/BadgeSituacion.tsx'
-import { situacionDe } from '../componentes/situacion.ts'
+import { BadgeEstado } from '../componentes/BadgeEstado.tsx'
+import { estadoDe } from '../componentes/estado.ts'
 
 /** "Laptop · ASUSTeK · ROG Zephyrus": solo las partes que el activo tenga. */
 function descripcionEquipo(activo: Activo): string {
@@ -28,13 +28,12 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
   const navigate = useNavigate()
 
   return (
-    <Table.ScrollContainer minWidth={1280}>
+    <Table.ScrollContainer minWidth={1180}>
       <Table striped highlightOnHover verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
             <Table.Th>Código</Table.Th>
             <Table.Th>Nombre y equipo</Table.Th>
-            <Table.Th>Situación</Table.Th>
             <Table.Th>N.º de serie</Table.Th>
             <Table.Th>Estado</Table.Th>
             <Table.Th>Categoría</Table.Th>
@@ -52,8 +51,8 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
             return (
               <Table.Tr
                 key={activo.id}
-                // Los No activos se ven atenuados, pero siguen consultables.
-                style={{ cursor: 'pointer', opacity: situacionDe(activo).activo ? 1 : 0.65 }}
+                // Los dados de baja se ven atenuados, pero siguen consultables.
+                style={{ cursor: 'pointer', opacity: estadoDe(activo).baja ? 0.65 : 1 }}
                 onClick={() => navigate(`/activos/${activo.id}`)}
               >
                 <Table.Td>
@@ -85,9 +84,6 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
                   )}
                 </Table.Td>
                 <Table.Td>
-                  <BadgeSituacion activo={activo} />
-                </Table.Td>
-                <Table.Td>
                   {activo.numeroSerie?.trim() ? (
                     <Text size="sm" ff="monospace">
                       {activo.numeroSerie}
@@ -97,11 +93,7 @@ export function TablaActivos({ activos }: { activos: Activo[] }) {
                   )}
                 </Table.Td>
                 <Table.Td>
-                  {activo.estado?.trim() ? (
-                    <Badge variant="default">{activo.estado}</Badge>
-                  ) : (
-                    <Vacio />
-                  )}
+                  <BadgeEstado activo={activo} />
                 </Table.Td>
                 <Table.Td>{activo.categoria.nombre}</Table.Td>
                 <Table.Td>

@@ -14,13 +14,20 @@ export function useFiltrosUrl<F extends { page: number }>(
   const [params, setParams] = useSearchParams()
   const filtros = leer(params)
 
+  /** El período de los indicadores no es un filtro del listado: se conserva. */
+  const conPeriodo = (nuevos: URLSearchParams) => {
+    const periodo = params.get('periodo')
+    if (periodo) nuevos.set('periodo', periodo)
+    return nuevos
+  }
+
   const actualizar = (cambios: Partial<F>) =>
     // Cambiar de página crea una entrada en el historial; cambiar filtros la reemplaza.
-    setParams(escribir({ ...filtros, ...cambios }), {
+    setParams(conPeriodo(escribir({ ...filtros, ...cambios })), {
       replace: cambios.page === undefined || cambios.page === 1,
     })
 
-  const limpiar = () => setParams(new URLSearchParams())
+  const limpiar = () => setParams(conPeriodo(new URLSearchParams()))
 
   return { filtros, actualizar, limpiar }
 }
