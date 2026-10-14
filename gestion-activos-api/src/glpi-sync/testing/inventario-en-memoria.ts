@@ -149,16 +149,16 @@ export class InventarioEnMemoria implements InventarioLocal {
     }
     Object.assign(activo, glpi.datos);
     if (plan.nuevoCodigo) activo.codigo = plan.nuevoCodigo;
-    if (extra.situacion === 'INACTIVAR') {
+    if (extra.baja === 'INACTIVAR') {
       activo.inactivoDesde = new Date();
       activo.motivoInactivo = MOTIVO_INACTIVO.PAPELERA;
-    } else if (extra.situacion === 'REACTIVAR') {
+    } else if (extra.baja === 'REACTIVAR') {
       activo.inactivoDesde = null;
       activo.motivoInactivo = null;
     }
     this.historial.push({
       activoId: local.id,
-      accion: extra.situacion ?? 'ACTUALIZAR',
+      accion: extra.baja ?? 'ACTUALIZAR',
       responsable: RESPONSABLE_GLPI,
     });
     this.notificaciones.push({
@@ -166,7 +166,7 @@ export class InventarioEnMemoria implements InventarioLocal {
         codigo: activo.codigo,
         nombre: activo.nombre,
         accion: plan.accion === 'ENLAZAR' ? 'ENLAZAR' : 'ACTUALIZAR',
-        situacion: extra.situacion,
+        baja: extra.baja,
         motivo: MOTIVO_INACTIVO.PAPELERA,
         cambios: plan.diferencias,
       }),
@@ -187,7 +187,7 @@ export class InventarioEnMemoria implements InventarioLocal {
         codigo: activo.codigo,
         nombre: activo.nombre,
         accion: 'ACTUALIZAR',
-        situacion: 'INACTIVAR',
+        baja: 'INACTIVAR',
         motivo: MOTIVO_INACTIVO.AUSENTE,
         cambios: {},
       }),
@@ -222,7 +222,8 @@ export class InventarioEnMemoria implements InventarioLocal {
     const activa = this.ejecuciones.find((e) => e.enCurso);
     if (activa) {
       const caduca = activa.inicio.getTime() + datos.caducaMin * 60_000;
-      if (caduca > Date.now()) throw new EjecucionEnCursoError(activa.inicio);
+      // Se compara con el reloj de la ejecución que llega (las pruebas lo controlan).
+      if (caduca > datos.inicio.getTime()) throw new EjecucionEnCursoError(activa.inicio);
       activa.enCurso = false; // bloqueo abandonado
     }
     const id = this.ejecuciones.length + 1;

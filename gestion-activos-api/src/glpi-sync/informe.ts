@@ -6,10 +6,10 @@ import type {
   ModoEjecucion,
   OrigenEjecucion,
 } from './inventario-local.js';
-import type { Accion, Situacion } from './plan.js';
+import type { Accion, CambioBaja } from './plan.js';
 
 /** INACTIVAR / REACTIVAR: el activo cambia de situación (papelera, ausencia o regreso). */
-export type Resultado = Accion | Situacion | 'ERROR';
+export type Resultado = Accion | CambioBaja | 'ERROR';
 
 export interface ElementoInforme {
   itemtype: Itemtype;
@@ -107,7 +107,7 @@ export function formatearInforme(informe: Informe): string {
   for (const [tipo, t] of Object.entries(informe.totales)) {
     lineas.push(
       `${tipo}: ${t.leidos} leídos → ${t.CREAR} ${verbo.CREAR}, ${t.ENLAZAR} ${verbo.ENLAZAR}, ` +
-        `${t.ACTUALIZAR} ${verbo.ACTUALIZAR}, ${t.INACTIVAR} a No activo, ${t.REACTIVAR} reactivados, ` +
+        `${t.ACTUALIZAR} ${verbo.ACTUALIZAR}, ${t.INACTIVAR} a Dado de baja, ${t.REACTIVAR} reactivados, ` +
         `${t.SIN_CAMBIOS} sin cambios, ${t.OMITIR} omitidos, ${t.ERROR} con error`,
     );
   }

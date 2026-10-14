@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -16,14 +15,18 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
-  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { MotivoDto } from '../../audit/dto/traza.dto.js';
+import { QueryPeriodoIndicadoresDto } from '../../common/indicadores/periodo.dto.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
+import { IndicadorDto, periodoOTrimestre } from '../../common/indicadores/indicador.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
@@ -63,6 +66,17 @@ export class MantenimientosController {
     @Query() query: QueryMantenimientosDto,
   ): Promise<Paginated<MantenimientoDto>> {
     return this.mantenimientos.findAll(query);
+  }
+
+  @ApiOperation({
+    summary: 'Indicadores (A.7.13)',
+    description: 'Del período indicado (por defecto, el trimestre actual). Los anulados no cuentan.',
+  })
+  @ApiOkResponse({ type: [IndicadorDto] })
+  @Get('indicadores')
+  indicadores(@Query() q: QueryPeriodoIndicadoresDto): Promise<IndicadorDto[]> {
+    const { desde, hasta } = periodoOTrimestre(q.desde, q.hasta);
+    return this.mantenimientos.indicadores(desde, hasta);
   }
 
   @ApiOperation({ summary: 'Detalle de un mantenimiento' })
@@ -142,33 +156,51 @@ export class MantenimientosController {
   }
 
   @ApiOperation({
-    summary: 'Editar (admin, analista)',
-    description: 'Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO.',
+    summary: 'Editar con motivo (admin, analista)',
+    description: 'Cambia tipo, actividad o fecha programada. Solo en fase PROGRAMADO. Exige motivoCambio: sube la versión y conserva la anterior.',
   })
   @ApiOkResponse({ type: MantenimientoDto })
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @ApiNotFoundResponse({ type: ApiErrorDto })
-  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya no está en fase PROGRAMADO.' })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Cerrado, anulado o modificado entretanto.' })
   @Roles('admin', 'analista')
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: EditarMantenimientoDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<MantenimientoDto> {
-    return this.mantenimientos.update(id, dto);
+    return this.mantenimientos.update(id, dto, usuario);
   }
 
   @ApiOperation({
-    summary: 'Eliminar (solo admin)',
-    description:
-      'Borrado definitivo del mantenimiento, en cualquier estado. No afecta al activo ni a su historial.',
+    summary: 'Anular (eliminación lógica, solo admin)',
+    description: 'No se borra: queda marcado, con su motivo, y deja de contar en los indicadores.',
   })
-  @ApiNoContentResponse()
-  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiOkResponse({ type: MantenimientoDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya estaba anulado.' })
   @Roles('admin')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.mantenimientos.remove(id);
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/anular')
+  anular(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() usuario: AuthUser,
+  ): Promise<MantenimientoDto> {
+    return this.mantenimientos.anular(id, dto.motivo, usuario);
+  }
+
+  @ApiOperation({ summary: 'Revertir la anulación (solo admin)' })
+  @ApiOkResponse({ type: MantenimientoDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'No estaba anulado.' })
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/reversar')
+  reversar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() usuario: AuthUser,
+  ): Promise<MantenimientoDto> {
+    return this.mantenimientos.reversar(id, dto.motivo, usuario);
   }
 }

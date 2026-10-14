@@ -237,9 +237,9 @@ describe('4, 5 y 6 · modificación de un equipo existente', () => {
   });
 });
 
-describe('7 · de activo a No activo (papelera de GLPI)', () => {
+describe('7 · de activo a Dado de baja (papelera de GLPI)', () => {
   it.each([false, true])(
-    'un equipo enviado a la papelera pasa a No activo y vuelve si se restaura (papelera oculta en el listado: %s)',
+    'un equipo enviado a la papelera pasa a Dado de baja y vuelve si se restaura (papelera oculta en el listado: %s)',
     async (papeleraOculta) => {
       const e = entorno();
       e.datos.papeleraOculta = papeleraOculta;
@@ -360,7 +360,7 @@ describe('11 · ejecuciones simultáneas', () => {
       origen: 'AUTOMATICA',
       modo: 'COMPLETA',
       tipos: ['Computer', 'NetworkEquipment'],
-      inicio: new Date(Date.now() - 2 * HORA),
+      inicio: new Date(T0 - 2 * HORA),
       caducaMin: 30,
       enCurso: true,
     });
@@ -375,7 +375,7 @@ describe('12 · equipos eliminados definitivamente de GLPI', () => {
     e.datos.elementos.Computer = e.datos.elementos.Computer.filter((x) => !ids.includes(x.id));
   };
 
-  it('una incremental NUNCA marca como No activo lo que no aparece', async () => {
+  it('una incremental NUNCA marca como Dado de baja lo que no aparece', async () => {
     const e = entorno();
     await e.sincronizar();
     sinEl(e, 8);
@@ -385,7 +385,7 @@ describe('12 · equipos eliminados definitivamente de GLPI', () => {
     expect(e.local(8).inactivoDesde).toBeNull();
   });
 
-  it('la reconciliación completa periódica lo detecta y lo pasa a No activo, sin borrar nada', async () => {
+  it('la reconciliación completa periódica lo detecta y lo pasa a Dado de baja, sin borrar nada', async () => {
     const e = entorno({ origen: 'AUTOMATICA' });
     await e.sincronizar();
     sinEl(e, 8);
@@ -426,7 +426,7 @@ describe('12 · equipos eliminados definitivamente de GLPI', () => {
     expect((await e.sincronizar({ modo: 'completa' })).modo).toBe('COMPLETA');
   });
 
-  it('si la lectura completa FALLA, nadie pasa a No activo', async () => {
+  it('si la lectura completa FALLA, nadie pasa a Dado de baja', async () => {
     const e = entorno();
     await e.sincronizar();
     sinEl(e, 8);

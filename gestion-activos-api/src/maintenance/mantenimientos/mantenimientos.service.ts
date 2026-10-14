@@ -10,6 +10,9 @@ import {
   type Paginated,
 } from '../../common/dto/paginated-response.dto.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { TrazasService } from '../../audit/trazas.service.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
+import type { IndicadorDto } from '../../common/indicadores/indicador.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
@@ -27,6 +30,7 @@ import {
   TRANSICIONES,
   type AccionMantenimiento,
 } from './transiciones.js';
+import { indicadoresMantenimiento } from './indicadores.js';
 
 const INCLUDE = {
   activo: { select: { id: true, codigo: true, nombre: true } },
@@ -49,6 +53,7 @@ export class MantenimientosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activos: ActivosService,
+    private readonly trazas: TrazasService,
   ) {}
 
   async findAll(
@@ -75,6 +80,7 @@ export class MantenimientosService {
     if (query.actualizadoDesde) {
       filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     }
+    if (!query.incluirAnulados) filtros.push({ anuladoEn: null });
     const where: Prisma.MantenimientoWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
     const [total, filas] = await this.prisma.$transaction([
@@ -107,9 +113,9 @@ export class MantenimientosService {
 
   /** Crea el mantenimiento en fase PROGRAMADO. El activo debe estar vigente. */
   async programar(dto: ProgramarMantenimientoDto): Promise<MantenimientoDto> {
-    // Validado aquí, en el backend: la interfaz solo ofrece equipos activos,
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos,
     // pero la regla no depende de ella.
-    await this.activos.exigirActivo(dto.activoId);
+    await this.activos.exigirOperativo(dto.activoId);
     const mantenimiento = await this.prisma.mantenimiento.create({
       data: dto,
       include: INCLUDE,
@@ -163,6 +169,9 @@ export class MantenimientosService {
     actual: MantenimientoDto,
     accion: AccionMantenimiento,
   ): void {
+    if (actual.anuladoEn) {
+      throw new ConflictException(`El mantenimiento ${actual.id} está anulado: no admite cambios de fase.`);
+    }
     if (!puedeTransicionar(actual.fase, accion)) {
       throw new ConflictException(
         `No se puede ${accion} el mantenimiento ${actual.id}: está en fase ${actual.fase}.`,
@@ -181,7 +190,7 @@ export class MantenimientosService {
   ): Promise<MantenimientoDto> {
     const { desde, hacia } = TRANSICIONES[accion];
     const { count } = await this.prisma.mantenimiento.updateMany({
-      where: { id, fase: { in: desde } },
+      where: { id, fase: { in: desde }, anuladoEn: null },
       data: { ...data, fase: hacia },
     });
     if (count === 0) {
@@ -192,33 +201,50 @@ export class MantenimientosService {
     return this.findOne(id);
   }
 
-  /** Reprograma o corrige un mantenimiento. Una vez iniciado, lo planificado es historial. */
+
+  /**
+   * Edita con motivo: sube la versión y conserva la anterior en las trazas.
+   * Solo mientras está PROGRAMADO: una vez iniciado, lo planificado es historial.
+   */
   async update(
     id: number,
     dto: EditarMantenimientoDto,
+    usuario: AuthUser,
   ): Promise<MantenimientoDto> {
+    const { motivoCambio, ...datos } = dto;
     const actual = await this.findOne(id);
+    if (actual.anuladoEn) {
+      throw new ConflictException(`El mantenimiento ${id} está anulado: reviértelo antes de editarlo.`);
+    }
     if (actual.fase !== 'PROGRAMADO') {
       throw new ConflictException(
         `El mantenimiento ${id} está en fase ${actual.fase}: solo se puede editar mientras está PROGRAMADO.`,
       );
     }
-    const { count } = await this.prisma.mantenimiento.updateMany({
-      where: { id, fase: 'PROGRAMADO' },
-      data: dto,
-    });
-    if (count === 0) {
-      throw new ConflictException(
-        `El mantenimiento ${id} cambió de fase mientras se editaba; vuelve a consultarlo.`,
-      );
-    }
+    await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: 'PROGRAMADO' });
     return this.findOne(id);
   }
 
-  /** Borrado definitivo (solo admin). El activo y su bitácora no se ven afectados. */
-  async remove(id: number): Promise<void> {
+  /** Eliminación lógica (solo admin): se conserva y deja de contar en los indicadores. */
+  async anular(id: number, motivo: string, usuario: AuthUser): Promise<MantenimientoDto> {
     await this.findOne(id);
-    await this.prisma.mantenimiento.delete({ where: { id } });
+    await this.trazas.anular('MANTENIMIENTO', id, motivo, usuario.username);
+    return this.findOne(id);
+  }
+
+  /** Deshace la anulación (solo admin). */
+  async reversar(id: number, motivo: string, usuario: AuthUser): Promise<MantenimientoDto> {
+    await this.findOne(id);
+    await this.trazas.reversar('MANTENIMIENTO', id, motivo, usuario.username);
+    return this.findOne(id);
+  }
+
+  /** Indicadores del período (por fecha programada); los anulados no cuentan. */
+  async indicadores(desde: Date, hasta: Date): Promise<IndicadorDto[]> {
+    const registros = await this.prisma.mantenimiento.findMany({
+      where: { anuladoEn: null, fecha: { gte: desde, lte: hasta }, ...CON_ACTIVO },
+    });
+    return indicadoresMantenimiento(registros, new Date());
   }
 }
 

@@ -1,7 +1,6 @@
 import {
   Body,
   Controller,
-  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -16,14 +15,18 @@ import {
   ApiConflictResponse,
   ApiCreatedResponse,
   ApiForbiddenResponse,
-  ApiNoContentResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { MotivoDto } from '../../audit/dto/traza.dto.js';
+import { QueryPeriodoIndicadoresDto } from '../../common/indicadores/periodo.dto.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
+import { IndicadorDto, periodoOTrimestre } from '../../common/indicadores/indicador.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
@@ -62,6 +65,17 @@ export class VulnerabilidadesController {
     @Query() query: QueryVulnerabilidadesDto,
   ): Promise<Paginated<VulnerabilidadDto>> {
     return this.vulnerabilidades.findAll(query);
+  }
+
+  @ApiOperation({
+    summary: 'Indicadores (A.8.8)',
+    description: 'Del período indicado (por defecto, el trimestre actual). Los anulados no cuentan.',
+  })
+  @ApiOkResponse({ type: [IndicadorDto] })
+  @Get('indicadores')
+  indicadores(@Query() q: QueryPeriodoIndicadoresDto): Promise<IndicadorDto[]> {
+    const { desde, hasta } = periodoOTrimestre(q.desde, q.hasta);
+    return this.vulnerabilidades.indicadores(desde, hasta);
   }
 
   @ApiOperation({ summary: 'Detalle de una vulnerabilidad' })
@@ -155,33 +169,51 @@ export class VulnerabilidadesController {
   }
 
   @ApiOperation({
-    summary: 'Editar (admin, analista)',
-    description: 'Corrige CVE, descripción, nivel de riesgo o fechas. Solo mientras está pendiente.',
+    summary: 'Editar con motivo (admin, analista)',
+    description: 'Corrige los datos mientras está pendiente. Exige motivoCambio: sube la versión y conserva la anterior.',
   })
   @ApiOkResponse({ type: VulnerabilidadDto })
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @ApiNotFoundResponse({ type: ApiErrorDto })
-  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya está cerrada, o el activo ya tiene ese CVE pendiente.' })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Cerrado, anulado o modificado entretanto.' })
   @Roles('admin', 'analista')
   @Patch(':id')
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: EditarVulnerabilidadDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.update(id, dto);
+    return this.vulnerabilidades.update(id, dto, usuario);
   }
 
   @ApiOperation({
-    summary: 'Eliminar (solo admin)',
-    description:
-      'Borrado definitivo de la vulnerabilidad, en cualquier estado. No afecta al activo ni a su historial.',
+    summary: 'Anular (eliminación lógica, solo admin)',
+    description: 'No se borra: queda marcado, con su motivo, y deja de contar en los indicadores.',
   })
-  @ApiNoContentResponse()
-  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @ApiOkResponse({ type: VulnerabilidadDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya estaba anulado.' })
   @Roles('admin')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.vulnerabilidades.remove(id);
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/anular')
+  anular(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() usuario: AuthUser,
+  ): Promise<VulnerabilidadDto> {
+    return this.vulnerabilidades.anular(id, dto.motivo, usuario);
+  }
+
+  @ApiOperation({ summary: 'Revertir la anulación (solo admin)' })
+  @ApiOkResponse({ type: VulnerabilidadDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'No estaba anulado.' })
+  @Roles('admin')
+  @HttpCode(HttpStatus.OK)
+  @Post(':id/reversar')
+  reversar(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: MotivoDto,
+    @CurrentUser() usuario: AuthUser,
+  ): Promise<VulnerabilidadDto> {
+    return this.vulnerabilidades.reversar(id, dto.motivo, usuario);
   }
 }

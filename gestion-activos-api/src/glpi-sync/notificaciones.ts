@@ -1,5 +1,5 @@
 import type { Cambios } from '../inventory/bitacora/cambios.js';
-import { MOTIVO_INACTIVO, type MotivoInactivo, type Situacion } from './plan.js';
+import { MOTIVO_INACTIVO, type MotivoInactivo, type CambioBaja } from './plan.js';
 
 export const TIPOS_NOTIFICACION = [
   'ALTA',
@@ -35,25 +35,25 @@ export function notificacionDeCambio(cambio: {
   codigo: string;
   nombre: string;
   accion: 'CREAR' | 'ENLAZAR' | 'ACTUALIZAR';
-  situacion?: Situacion;
+  baja?: CambioBaja;
   motivo?: MotivoInactivo;
   cambios: Cambios;
 }): NotificacionNueva {
   const quien = `${cambio.codigo} · ${cambio.nombre}`;
   const { cambios: detalle } = cambio;
-  if (cambio.situacion === 'INACTIVAR') {
+  if (cambio.baja === 'INACTIVAR') {
     return {
       tipo: 'BAJA_DETECTADA',
       titulo: corto(
-        `${quien} pasó a No activo: ${TEXTO_MOTIVO[cambio.motivo ?? MOTIVO_INACTIVO.AUSENTE]}`,
+        `${quien} se dio de baja: ${TEXTO_MOTIVO[cambio.motivo ?? MOTIVO_INACTIVO.AUSENTE]}`,
       ),
       detalle,
     };
   }
-  if (cambio.situacion === 'REACTIVAR') {
+  if (cambio.baja === 'REACTIVAR') {
     return {
       tipo: 'REACTIVACION',
-      titulo: corto(`${quien} vuelve a estar Activo en GLPI`),
+      titulo: corto(`${quien} vuelve a estar vigente en GLPI`),
       detalle,
     };
   }

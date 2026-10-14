@@ -2,8 +2,8 @@ import {
   ApiProperty,
   ApiPropertyOptional,
   OmitType,
-  PartialType,
-} from '@nestjs/swagger';
+  PartialType, IntersectionType } from '@nestjs/swagger';
+import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
 import { Type } from 'class-transformer';
 import {
   IsDate,
@@ -58,8 +58,10 @@ export class ProgramarMantenimientoDto {
 }
 
 /** Edición: tipo, actividad y fecha programada; solo mientras está PROGRAMADO. */
-export class EditarMantenimientoDto extends PartialType(
-  OmitType(ProgramarMantenimientoDto, ['activoId'] as const),
+/** Toda edición exige motivo: se conserva la versión anterior. */
+export class EditarMantenimientoDto extends IntersectionType(
+  PartialType(OmitType(ProgramarMantenimientoDto, ['activoId'] as const)),
+  MotivoCambioDto,
 ) {}
 
 /** Iniciar: PROGRAMADO → EN_EJECUCION. */

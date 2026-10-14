@@ -299,7 +299,7 @@ describe('errores de GLPI y respuestas inesperadas', () => {
     const { sincronizador } = montar({ elementos: { Computer: [], NetworkEquipment: [] } }, {}, inv);
     const informe = await sincronizador.ejecutar();
     // GLPI respondió bien (no es un fallo de lectura), pero que desaparezca TODO
-    // el inventario no se acepta sin confirmación: nadie pasa a No activo.
+    // el inventario no se acepta sin confirmación: nadie pasa a Dado de baja.
     expect(informe.totales.Computer).toMatchObject({ leidos: 0, INACTIVAR: 0 });
     expect(informe.errores).toHaveLength(2);
     expect(informe.errores[0]).toContain('GLPI ya no devuelve 25 de los 25');
@@ -384,7 +384,7 @@ describe('paginación', () => {
     expect(formatearInforme(informe)).toContain('Lectura PARCIAL');
   });
 
-  it('las plantillas se omiten; la papelera se registra como No activo y no disputa códigos', async () => {
+  it('las plantillas se omiten; la papelera se registra como Dado de baja y no disputa códigos', async () => {
     const datos: DatosGlpiFalso = {
       elementos: {
         Computer: [

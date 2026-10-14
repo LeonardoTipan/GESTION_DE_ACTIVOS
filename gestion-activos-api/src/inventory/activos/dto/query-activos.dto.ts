@@ -24,8 +24,9 @@ export const CAMPOS_ORDEN_ACTIVOS = [
 ] as const;
 export type CampoOrdenActivos = (typeof CAMPOS_ORDEN_ACTIVOS)[number];
 
-export const SITUACIONES_ACTIVO = ['activos', 'no_activos', 'todos'] as const;
-export type SituacionActivo = (typeof SITUACIONES_ACTIVO)[number];
+/** Claves reservadas del filtro por estado (no son valores de GLPI). */
+export const ESTADO_BAJA = '@baja';
+export const ESTADO_SIN_ESTADO = '@sin-estado';
 
 /** En la query string todo llega como texto: "true"/"false" → boolean. */
 const toBoolean = () =>
@@ -89,22 +90,26 @@ export class QueryActivosDto extends PaginationQueryDto {
   actualizadoDesde?: Date;
 
   @ApiPropertyOptional({
-    enum: SITUACIONES_ACTIVO,
-    default: 'activos',
+    example: 'Bueno',
     description:
-      '"activos": equipos vigentes (los únicos que admiten operaciones nuevas). ' +
-      '"no_activos": dados de baja, en la papelera de GLPI o ya inexistentes allí. "todos": ambos.',
+      'Filtra por el estado EXACTO del activo, tal como lo informa GLPI (Bueno, Regular, Malo…). ' +
+      'Los valores disponibles se consultan en GET /activos/estados. Claves especiales: ' +
+      '"@baja" (dado de baja: a mano, en la papelera de GLPI o ya inexistente allí) y "@sin-estado".',
   })
   @IsOptional()
-  @IsIn(SITUACIONES_ACTIVO)
-  situacion: SituacionActivo = 'activos';
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  estado?: string;
 
   @ApiPropertyOptional({
-    description: 'Obsoleto: equivale a situacion=todos.',
     default: false,
+    description:
+      'true = solo equipos OPERATIVOS: ni dados de baja ni en un estado de la lista ' +
+      'ESTADOS_NO_OPERATIVOS. Es lo que usan los selectores de respaldos, mantenimientos y vulnerabilidades.',
   })
   @IsOptional()
   @toBoolean()
   @IsBoolean()
-  incluirBajas: boolean = false;
+  operativos: boolean = false;
 }

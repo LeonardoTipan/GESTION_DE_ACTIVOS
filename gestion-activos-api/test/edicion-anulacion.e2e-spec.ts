@@ -1,7 +1,7 @@
 /**
- * Pruebas e2e de EDITAR y ELIMINAR en respaldos, mantenimientos y
- * vulnerabilidades, y de la integridad entre estos registros y los activos.
- * Contra MySQL (base gestion_activos_test) y el Keycloak de desarrollo.
+ * Pruebas e2e de EDITAR (con motivo y versión) y ANULAR (eliminación lógica)
+ * en mantenimientos y vulnerabilidades, sus indicadores, y la integridad entre
+ * estos registros y los activos. Contra MySQL (gestion_activos_test) y Keycloak.
  */
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -17,8 +17,22 @@ import { getTokensDePrueba } from './utils/keycloak.js';
 const LENTO = 120_000;
 const MANANA = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 const HACE_UNA_HORA = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+const PLAN = {
+  frecuencia: 'MENSUAL',
+  tipo: 'COMPLETO',
+  medio: 'DISCO_A_DISCO',
+  ventana: 'NOCTURNA_22_02',
+  retencion: 'ANIO_1',
+  frecuenciaPrueba: 'TRIMESTRAL',
+  rpoHoras: 24,
+  rtoMinutos: 240,
+  responsable: 'Infraestructura',
+  justificacion: 'Servidor con información institucional que requiere continuidad.',
+};
 
-describe('Editar y eliminar (e2e)', () => {
+const MOTIVO = 'Corrección registrada tras la revisión del acta PR-10/2026.';
+
+describe('Editar con motivo y anular (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
@@ -75,64 +89,6 @@ describe('Editar y eliminar (e2e)', () => {
   const crear = async (url: string, body: object) =>
     (await api(tokens.analista).post(url, body).expect(201)).body as { id: number };
 
-  describe('respaldos', () => {
-    const nuevo = () =>
-      crear('/api/respaldos', { activoId, alcanceDetalle: 'Base de datos ERP' });
-
-    it('editar el alcance mientras la ejecución está pendiente → 200', async () => {
-      const { id } = await nuevo();
-      const res = await api(tokens.analista)
-        .patch(`/api/respaldos/${id}`, { alcanceDetalle: '  BD ERP + configuración  ' })
-        .expect(200);
-      expect(res.body).toMatchObject({
-        id,
-        alcanceDetalle: 'BD ERP + configuración',
-        etapa: 'PENDIENTE_EJECUCION',
-        activo: { id: activoId, codigo: 'SRV-ERP' },
-      });
-    });
-
-    it('con la ejecución ya registrada el alcance no se edita → 409', async () => {
-      const { id } = await nuevo();
-      await api(tokens.analista)
-        .patch(`/api/respaldos/${id}/ejecucion`, {
-          estadoEjecucion: 'EXITOSA',
-          fechaEjecucion: HACE_UNA_HORA,
-          rutaEvidencia: '\\\\nas01\\respaldos\\erp.log',
-        })
-        .expect(200);
-      const res = await api(tokens.analista)
-        .patch(`/api/respaldos/${id}`, { alcanceDetalle: 'Otro alcance' })
-        .expect(409);
-      expect(res.body.message).toContain('no se puede modificar');
-    });
-
-    it('validaciones: alcance vacío o campos de otras capas → 400; inexistente → 404', async () => {
-      const { id } = await nuevo();
-      await api(tokens.analista).patch(`/api/respaldos/${id}`, { alcanceDetalle: '  ' }).expect(400);
-      await api(tokens.analista)
-        .patch(`/api/respaldos/${id}`, { alcanceDetalle: 'ok', estadoEjecucion: 'EXITOSA' })
-        .expect(400);
-      await api(tokens.analista).patch('/api/respaldos/999999', { alcanceDetalle: 'x' }).expect(404);
-    });
-
-    it('eliminar: solo el admin → 204; después ya no existe ni se lista', async () => {
-      const { id } = await nuevo();
-      await api(tokens.auditor).delete(`/api/respaldos/${id}`).expect(403);
-      await api(tokens.analista).delete(`/api/respaldos/${id}`).expect(403);
-      await api(tokens.admin).delete(`/api/respaldos/${id}`).expect(204);
-      await api(tokens.admin).get(`/api/respaldos/${id}`).expect(404);
-      await api(tokens.admin).delete(`/api/respaldos/${id}`).expect(404);
-      const lista = await api(tokens.auditor).get('/api/respaldos').expect(200);
-      expect(lista.body.data.map((r: { id: number }) => r.id)).not.toContain(id);
-    });
-
-    it('el auditor no puede editar → 403', async () => {
-      const { id } = await nuevo();
-      await api(tokens.auditor).patch(`/api/respaldos/${id}`, { alcanceDetalle: 'x' }).expect(403);
-    });
-  });
-
   describe('mantenimientos', () => {
     const nuevo = () =>
       crear('/api/mantenimientos', {
@@ -145,7 +101,7 @@ describe('Editar y eliminar (e2e)', () => {
     it('editar tipo, actividad y fecha mientras está PROGRAMADO → 200', async () => {
       const { id } = await nuevo();
       const res = await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}`, { tipo: 'CORRECTIVO', actividad: 'Cambio de disco' })
+        .patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  tipo: 'CORRECTIVO', actividad: 'Cambio de disco' })
         .expect(200);
       expect(res.body).toMatchObject({
         id,
@@ -158,26 +114,78 @@ describe('Editar y eliminar (e2e)', () => {
 
     it('no se puede cambiar de activo ni tocar campos de otras fases → 400', async () => {
       const { id } = await nuevo();
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { activoId: 999 }).expect(400);
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { fase: 'FINALIZADO' }).expect(400);
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { tipo: 'OTRO' }).expect(400);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  activoId: 999 }).expect(400);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  fase: 'FINALIZADO' }).expect(400);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  tipo: 'OTRO' }).expect(400);
     });
 
     it('una vez iniciado ya no se edita → 409', async () => {
       const { id } = await nuevo();
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(200);
       const res = await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}`, { actividad: 'Otra' })
+        .patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  actividad: 'Otra' })
         .expect(409);
       expect(res.body.message).toContain('EN_EJECUCION');
     });
 
-    it('eliminar: solo el admin, en cualquier fase → 204', async () => {
+    it('editar exige motivo de al menos 20 caracteres, sube la versión y deja traza', async () => {
       const { id } = await nuevo();
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}`, { actividad: 'Otra' }).expect(400);
+      await api(tokens.analista)
+        .patch(`/api/mantenimientos/${id}`, { actividad: 'Otra', motivoCambio: 'corto' })
+        .expect(400);
+      const res = await api(tokens.analista)
+        .patch(`/api/mantenimientos/${id}`, { actividad: 'Otra', motivoCambio: MOTIVO })
+        .expect(200);
+      expect(res.body.version).toBe(2);
+      const trazas = await api(tokens.auditor)
+        .get(`/api/trazas?entidad=MANTENIMIENTO&registroId=${id}`)
+        .expect(200);
+      expect(trazas.body[0]).toMatchObject({
+        accion: 'MODIFICAR',
+        version: 1,
+        responsable: 'analista.test',
+        cambios: [{ campo: 'actividad', antes: 'Limpieza', despues: 'Otra' }],
+      });
+    });
+
+    it('anular: solo el admin, con motivo; se conserva, no admite cambios de fase y se puede revertir', async () => {
+      const { id } = await nuevo();
+      await api(tokens.analista).post(`/api/mantenimientos/${id}/anular`, { motivo: MOTIVO }).expect(403);
+      await api(tokens.admin).post(`/api/mantenimientos/${id}/anular`, { motivo: 'corto' }).expect(400);
+      const anulado = await api(tokens.admin)
+        .post(`/api/mantenimientos/${id}/anular`, { motivo: MOTIVO })
+        .expect(200);
+      expect(anulado.body).toMatchObject({ id, anuladoPor: 'admin.test', motivoAnulacion: MOTIVO });
+      // Sigue existiendo y se consulta.
+      await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
+      // Ni cambia de fase ni se edita.
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(409);
+      await api(tokens.analista)
+        .patch(`/api/mantenimientos/${id}`, { actividad: 'X', motivoCambio: MOTIVO })
+        .expect(409);
+      // Se oculta con incluirAnulados=false.
+      const vigentes = await api(tokens.auditor).get('/api/mantenimientos?incluirAnulados=false').expect(200);
+      expect(vigentes.body.data.some((m: { id: number }) => m.id === id)).toBe(false);
+      // Revertir.
+      await api(tokens.admin).post(`/api/mantenimientos/${id}/reversar`, { motivo: MOTIVO }).expect(200);
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(200);
-      await api(tokens.analista).delete(`/api/mantenimientos/${id}`).expect(403);
-      await api(tokens.admin).delete(`/api/mantenimientos/${id}`).expect(204);
-      await api(tokens.admin).get(`/api/mantenimientos/${id}`).expect(404);
+    });
+
+    it('no hay borrado físico: DELETE ya no existe', async () => {
+      const { id } = await nuevo();
+      await api(tokens.admin).delete(`/api/mantenimientos/${id}`).expect(404);
+      await api(tokens.admin).get(`/api/mantenimientos/${id}`).expect(200);
+    });
+
+    it('indicadores (A.7.13): los anulados no cuentan', async () => {
+      const { body } = await api(tokens.auditor).get('/api/mantenimientos/indicadores').expect(200);
+      expect(body.map((i: { id: string }) => i.id)).toEqual(['MAN-01', 'MAN-02', 'MAN-03', 'MAN-04', 'MAN-05']);
+      expect(body[0]).toMatchObject({ control: 'A.7.13' });
+      const total = await prisma.mantenimiento.count({ where: { anuladoEn: null } });
+      const anulados = await prisma.mantenimiento.count({ where: { anuladoEn: { not: null } } });
+      expect(total).toBeGreaterThan(0);
+      expect(anulados).toBe(0); // el anulado se revirtió
     });
   });
 
@@ -194,7 +202,7 @@ describe('Editar y eliminar (e2e)', () => {
     it('editar descripción, riesgo, CVE y plazo mientras está pendiente → 200', async () => {
       const { id } = await nueva();
       const res = await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}`, {
+        .patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO, 
           nivelRiesgo: 'CRITICO',
           cve: 'cve-2026-11111',
           fechaLimite: MANANA,
@@ -213,13 +221,13 @@ describe('Editar y eliminar (e2e)', () => {
     it('fecha límite anterior a la detección → 400', async () => {
       const { id } = await nueva();
       const ayer = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { fechaLimite: ayer }).expect(400);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO,  fechaLimite: ayer }).expect(400);
     });
 
     it('no puede quedar con el CVE de otra vulnerabilidad pendiente del mismo activo → 409', async () => {
       await nueva({ cve: 'CVE-2026-22222' });
       const { id } = await nueva();
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { cve: 'CVE-2026-22222' }).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO,  cve: 'CVE-2026-22222' }).expect(409);
     });
 
     it('una vez cerrada ya no se edita → 409', async () => {
@@ -227,14 +235,33 @@ describe('Editar y eliminar (e2e)', () => {
       await api(tokens.admin)
         .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, { justificacion: 'Sistema aislado' })
         .expect(200);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { descripcion: 'Otra' }).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO,  descripcion: 'Otra' }).expect(409);
     });
 
-    it('eliminar: solo el admin → 204', async () => {
+    it('anular: solo el admin, con motivo; no admite cambios de estado; revertir la reactiva', async () => {
       const { id } = await nueva();
-      await api(tokens.analista).delete(`/api/vulnerabilidades/${id}`).expect(403);
-      await api(tokens.admin).delete(`/api/vulnerabilidades/${id}`).expect(204);
-      await api(tokens.admin).get(`/api/vulnerabilidades/${id}`).expect(404);
+      await api(tokens.analista).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(403);
+      await api(tokens.admin).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(200);
+      await api(tokens.admin).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(409);
+      await api(tokens.admin).delete(`/api/vulnerabilidades/${id}`).expect(404);
+      await api(tokens.admin).post(`/api/vulnerabilidades/${id}/reversar`, { motivo: MOTIVO }).expect(200);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(200);
+      const trazas = await api(tokens.auditor)
+        .get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${id}`)
+        .expect(200);
+      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['REVERSAR', 'ANULAR']);
+    });
+
+    it('indicadores (A.8.8): una anulada deja de contar como abierta', async () => {
+      const critica = await nueva({ nivelRiesgo: 'CRITICO', cve: 'CVE-2026-33333' });
+      const antes = await api(tokens.auditor).get('/api/vulnerabilidades/indicadores').expect(200);
+      const abiertas = (r: { body: { id: string; valor: number }[] }) =>
+        r.body.find((i) => i.id === 'VUL-01')!.valor;
+      await api(tokens.admin).post(`/api/vulnerabilidades/${critica.id}/anular`, { motivo: MOTIVO }).expect(200);
+      const despues = await api(tokens.auditor).get('/api/vulnerabilidades/indicadores').expect(200);
+      expect(abiertas(despues)).toBe(abiertas(antes) - 1);
+      expect(despues.body.map((i: { id: string }) => i.id)).toEqual(['VUL-01', 'VUL-02', 'VUL-03', 'VUL-04']);
     });
   });
 
@@ -243,7 +270,7 @@ describe('Editar y eliminar (e2e)', () => {
       const otro = await prisma.activo.create({
         data: { ...datosActivo, codigo: 'SRV-CON-HISTORIAL' } as never,
       });
-      const respaldo = await crear('/api/respaldos', { activoId: otro.id, alcanceDetalle: 'Datos' });
+      const [plan] = (await api(tokens.analista).post('/api/respaldos/planes', { ...PLAN, activoIds: [otro.id] }).expect(201)).body as { id: number }[];
       const mantenimiento = await crear('/api/mantenimientos', {
         activoId: otro.id,
         tipo: 'PREVENTIVO',
@@ -254,17 +281,17 @@ describe('Editar y eliminar (e2e)', () => {
       await api(tokens.admin).delete(`/api/activos/${otro.id}`).expect(204);
 
       // El historial sigue consultable, con los datos del activo dado de baja.
-      const r = await api(tokens.auditor).get(`/api/respaldos/${respaldo.id}`).expect(200);
+      const r = await api(tokens.auditor).get(`/api/respaldos/planes/${plan.id}`).expect(200);
       expect(r.body.activo).toMatchObject({ id: otro.id, codigo: 'SRV-CON-HISTORIAL' });
       await api(tokens.auditor).get(`/api/mantenimientos/${mantenimiento.id}`).expect(200);
       // Y ya no se pueden abrir registros nuevos sobre él.
       await api(tokens.analista)
-        .post('/api/respaldos', { activoId: otro.id, alcanceDetalle: 'Otro' })
+        .post('/api/respaldos/planes', { ...PLAN, activoIds: [otro.id] })
         .expect(400);
     });
 
     it('la base impide borrar físicamente un activo con registros (clave foránea)', async () => {
-      await crear('/api/respaldos', { activoId, alcanceDetalle: 'Protegido' });
+      await api(tokens.analista).post('/api/respaldos/planes', { ...PLAN, activoIds: [activoId] }).expect(201);
       await expect(prisma.activo.delete({ where: { id: activoId } })).rejects.toMatchObject({
         code: 'P2003',
       });
@@ -296,7 +323,7 @@ describe('Editar y eliminar (e2e)', () => {
         const huerfano = await prisma.respaldo.findFirstOrThrow({ where: { activoId: 987654 } });
         try {
           // Antes esto devolvía 500 y dejaba la pantalla en blanco.
-          const respaldos = await api(tokens.auditor).get('/api/respaldos').expect(200);
+          const respaldos = await api(tokens.auditor).get('/api/respaldos/anteriores').expect(200);
           const mantenimientos = await api(tokens.auditor).get('/api/mantenimientos').expect(200);
           await api(tokens.auditor).get('/api/vulnerabilidades').expect(200);
 
@@ -306,7 +333,7 @@ describe('Editar y eliminar (e2e)', () => {
             await prisma.respaldo.count({ where: { activoId: { not: 987654 } } }),
           );
           expect(mantenimientos.body.data.every((m: { activoId: number }) => m.activoId !== 987654)).toBe(true);
-          await api(tokens.auditor).get(`/api/respaldos/${huerfano.id}`).expect(404);
+          await api(tokens.auditor).get(`/api/respaldos/anteriores/${huerfano.id}`).expect(404);
         } finally {
           await prisma.respaldo.deleteMany({ where: { activoId: 987654 } });
           await prisma.mantenimiento.deleteMany({ where: { activoId: 987654 } });
@@ -319,7 +346,7 @@ describe('Editar y eliminar (e2e)', () => {
       'base con CERO activos: todos los listados responden vacíos, sin errores',
       async () => {
         await limpiarBaseDeDatos(prisma);
-        for (const ruta of ['activos', 'respaldos', 'mantenimientos', 'vulnerabilidades', 'categorias', 'criticidades']) {
+        for (const ruta of ['activos', 'respaldos/planes', 'respaldos/ejecuciones', 'respaldos/restauraciones', 'respaldos/anteriores', 'mantenimientos', 'vulnerabilidades', 'categorias', 'criticidades']) {
           const res = await api(tokens.auditor).get(`/api/${ruta}`).expect(200);
           expect(Array.isArray(res.body) ? res.body : res.body.data).toEqual([]);
         }
@@ -328,12 +355,14 @@ describe('Editar y eliminar (e2e)', () => {
     );
   });
 
-  it('Swagger documenta editar y eliminar en los tres módulos', async () => {
+  it('Swagger documenta editar, anular y reversar (sin borrado físico)', async () => {
     const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
-    for (const ruta of ['respaldos', 'mantenimientos', 'vulnerabilidades']) {
-      expect(Object.keys(res.body.paths[`/api/${ruta}/{id}`])).toEqual(
-        expect.arrayContaining(['get', 'patch', 'delete']),
-      );
+    for (const ruta of ['mantenimientos', 'vulnerabilidades']) {
+      expect(Object.keys(res.body.paths[`/api/${ruta}/{id}`])).toEqual(expect.arrayContaining(['get', 'patch']));
+      expect(res.body.paths[`/api/${ruta}/{id}`]).not.toHaveProperty('delete');
+      expect(res.body.paths[`/api/${ruta}/{id}/anular`]).toHaveProperty('post');
+      expect(res.body.paths[`/api/${ruta}/{id}/reversar`]).toHaveProperty('post');
+      expect(res.body.paths[`/api/${ruta}/indicadores`]).toHaveProperty('get');
     }
   });
 });

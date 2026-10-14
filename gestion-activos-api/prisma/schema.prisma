@@ -91,7 +91,10 @@ model Activo {
   criticidad Criticidad @relation(fields: [criticidadId], references: [id])
 
   bitacora         BitacoraHistorial[] // "registra cambios en"
-  respaldos        Respaldo[] // "tiene capas de"
+  respaldos        Respaldo[] // "tiene capas de" (registros anteriores al plan de respaldo)
+  planesRespaldo   PlanRespaldo[]
+  ejecucionesRespaldo EjecucionRespaldo[]
+  restauraciones   Restauracion[]
   mantenimientos   Mantenimiento[] // "sigue ciclo de"
   vulnerabilidades Vulnerabilidad[] // "presenta ciclo de"
   notificaciones   Notificacion[]
@@ -171,6 +174,12 @@ model Mantenimiento {
   fecha        DateTime
   fechaInicio  DateTime?
   fechaFin     DateTime?
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
   createdAt    DateTime          @default(now())
   updatedAt    DateTime          @updatedAt
 
@@ -214,6 +223,12 @@ model Vulnerabilidad {
   // Plazo para remediarla (SLA) y fecha en que se cerró
   fechaLimite DateTime?
   fechaCierre DateTime?
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
   createdAt   DateTime             @default(now())
   updatedAt   DateTime             @updatedAt
 
@@ -328,4 +343,198 @@ enum TipoNotificacion {
   BAJA_DETECTADA
   REACTIVACION
   ERROR_SINCRONIZACION
+}
+
+// ---------------------------------------------------------------------------
+// Respaldos y restauración (A.8.13, A.5.30): plan → ejecución → restauración
+// ---------------------------------------------------------------------------
+
+// Paso 1 · Alcance: qué activo se respalda y con qué parámetros comprometidos.
+model PlanRespaldo {
+  id               Int                @id @default(autoincrement())
+  activoId         Int
+  frecuencia       FrecuenciaRespaldo
+  tipo             TipoRespaldo
+  medio            MedioRespaldo
+  ventana          VentanaRespaldo
+  retencion        RetencionRespaldo
+  frecuenciaPrueba FrecuenciaPrueba
+  // Pérdida de datos tolerable (horas) y tiempo objetivo de recuperación (minutos)
+  rpoHoras         Int
+  rtoMinutos       Int
+  responsable      String
+  estado           EstadoPlan         @default(VIGENTE)
+  // Desde cuándo rige: a partir de aquí se cuentan sus ventanas programadas
+  vigenteDesde     DateTime
+  justificacion    String             @db.Text
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  activo      Activo              @relation(fields: [activoId], references: [id])
+  ejecuciones EjecucionRespaldo[]
+
+  @@index([activoId, estado])
+  @@map("plan_respaldo")
+}
+
+// Paso 2 · Cada corrida del respaldo sobre un activo con plan.
+model EjecucionRespaldo {
+  id          Int                @id @default(autoincrement())
+  planId      Int
+  // El activo del plan (se copia para consultar y conservar el vínculo)
+  activoId    Int
+  fecha       DateTime
+  tipo        TipoRespaldo
+  medio       MedioRespaldo
+  volumenGb   Int
+  duracionMin Int
+  rpoHoras    Int
+  resultado   ResultadoOperacion
+  responsable String
+  // Controles de seguridad del respaldo
+  cifrado     Boolean
+  fueraSitio  Boolean
+  inmutable   Boolean
+  integridad  Boolean
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  plan           PlanRespaldo   @relation(fields: [planId], references: [id])
+  activo         Activo         @relation(fields: [activoId], references: [id])
+  restauraciones Restauracion[]
+
+  @@index([activoId, fecha])
+  @@index([fecha])
+  @@map("ejecucion_respaldo")
+}
+
+// Paso 3 · Restauración o prueba de un respaldo ejecutado (mide el RTO).
+model Restauracion {
+  id            Int                @id @default(autoincrement())
+  ejecucionId   Int
+  activoId      Int
+  fecha         DateTime
+  motivo        MotivoRestauracion
+  resultado     ResultadoOperacion
+  tiempoRealMin Int
+  rtoMinutos    Int
+  integridad    Boolean
+  // Acta o ticket que respalda la restauración
+  evidencia     String
+  responsable   String
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  ejecucion EjecucionRespaldo @relation(fields: [ejecucionId], references: [id])
+  activo    Activo            @relation(fields: [activoId], references: [id])
+
+  @@index([activoId, fecha])
+  @@index([fecha])
+  @@map("restauracion")
+}
+
+enum FrecuenciaRespaldo {
+  DIARIO
+  SEMANAL
+  QUINCENAL
+  MENSUAL
+  TRIMESTRAL
+}
+
+enum FrecuenciaPrueba {
+  MENSUAL
+  TRIMESTRAL
+  SEMESTRAL
+  ANUAL
+}
+
+enum TipoRespaldo {
+  COMPLETO
+  INCREMENTAL
+  DIFERENCIAL
+  SNAPSHOT
+}
+
+enum MedioRespaldo {
+  DISCO_A_DISCO
+  CINTA_LTO8
+  NUBE_INMUTABLE
+  NAS_SECUNDARIO
+}
+
+enum VentanaRespaldo {
+  NOCTURNA_22_02
+  NOCTURNA_00_04
+  FIN_DE_SEMANA
+  HORARIO_LABORAL
+  CONTINUA
+}
+
+enum RetencionRespaldo {
+  DIAS_30
+  DIAS_90
+  MESES_6
+  ANIO_1
+  ANIOS_3
+  ANIOS_7
+}
+
+enum EstadoPlan {
+  VIGENTE
+  SUSPENDIDO
+}
+
+enum ResultadoOperacion {
+  EXITOSO
+  PARCIAL
+  FALLIDO
+}
+
+enum MotivoRestauracion {
+  PRUEBA_PROGRAMADA
+  INCIDENTE_DISPONIBILIDAD
+  SOLICITUD_PROPIETARIO
+  VERIFICACION_INTEGRIDAD
+}
+
+// ---------------------------------------------------------------------------
+// Trazas: versiones anteriores de los registros de respaldos, mantenimientos
+// y vulnerabilidades (modificación con motivo, anulación y reversión)
+// ---------------------------------------------------------------------------
+
+model RegistroCambio {
+  id          Int      @id @default(autoincrement())
+  // PLAN_RESPALDO | EJECUCION_RESPALDO | RESTAURACION | MANTENIMIENTO | VULNERABILIDAD
+  entidad     String
+  registroId  Int
+  // Versión del registro ANTES del cambio
+  version     Int
+  // MODIFICAR | ANULAR | REVERSAR
+  accion      String
+  motivo      String   @db.Text
+  // JSON: [{ campo, antes, despues }]
+  cambios     String   @db.Text
+  responsable String
+  fecha       DateTime @default(now())
+
+  @@index([entidad, registroId])
+  @@map("registro_cambio")
 }

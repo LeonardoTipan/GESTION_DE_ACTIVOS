@@ -75,6 +75,18 @@ export class MantenimientoDto {
 
   @ApiProperty({ type: String, format: 'date-time' })
   updatedAt: Date;
+
+  @ApiProperty({ example: 1, description: 'Sube con cada modificación.' })
+  version: number;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Anulado (eliminación lógica); null = vigente.' })
+  anuladoEn: Date | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  anuladoPor: string | null;
+
+  @ApiProperty({ type: String, nullable: true })
+  motivoAnulacion: string | null;
 }
 
 export class PaginatedMantenimientoDto extends PaginatedResponseDto(

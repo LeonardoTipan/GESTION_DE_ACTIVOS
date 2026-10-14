@@ -1,23 +1,11 @@
-import {
-  BadRequestException,
-  ConflictException,
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   paginate,
   skipFor,
   type Paginated,
 } from '../../common/dto/paginated-response.dto.js';
 import type { Prisma } from '../../generated/prisma/client.js';
-import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type {
-  CreateRespaldoDto,
-  RegistrarEjecucionDto,
-  RegistrarPruebaDto,
-  UpdateRespaldoDto,
-} from './dto/capas.dto.js';
 import type { QueryRespaldosDto } from './dto/query-respaldos.dto.js';
 import type { RespaldoDto } from './dto/respaldo.dto.js';
 import { calcularEtapa, WHERE_POR_ETAPA } from './etapa.js';
@@ -36,12 +24,15 @@ const CON_ACTIVO = { activo: { id: { gt: 0 } } } as const;
 
 type RespaldoConActivo = Prisma.RespaldoGetPayload<{ include: typeof INCLUDE }>;
 
+/**
+ * Registros ANTERIORES al plan de respaldo (modelo de tres capas en un solo
+ * registro). Se conservan intactos y solo se consultan: no tienen los datos
+ * que exige el plan (frecuencia, medio, RPO…) y convertirlos obligaría a
+ * inventarlos. Lo nuevo se registra en planes, ejecuciones y restauraciones.
+ */
 @Injectable()
 export class RespaldosService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly activos: ActivosService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   async findAll(query: QueryRespaldosDto): Promise<Paginated<RespaldoDto>> {
     const filtros: Prisma.RespaldoWhereInput[] = [
@@ -81,101 +72,6 @@ export class RespaldosService {
       throw new NotFoundException(`El respaldo ${id} no existe.`);
     }
     return conEtapa(respaldo);
-  }
-
-  /** Capa 1: define el alcance. El activo debe existir y estar vigente. */
-  async create(dto: CreateRespaldoDto): Promise<RespaldoDto> {
-    // Validado aquí, en el backend: la interfaz solo ofrece equipos activos,
-    // pero la regla no depende de ella.
-    await this.activos.exigirActivo(dto.activoId);
-    const respaldo = await this.prisma.respaldo.create({
-      data: dto,
-      include: INCLUDE,
-    });
-    return conEtapa(respaldo);
-  }
-
-  /** Capa 2: registra la ejecución (una sola vez). */
-  async registrarEjecucion(
-    id: number,
-    dto: RegistrarEjecucionDto,
-  ): Promise<RespaldoDto> {
-    const actual = await this.findOne(id);
-    if (actual.estadoEjecucion !== 'PENDIENTE') {
-      throw new ConflictException(
-        `La ejecución del respaldo ${id} ya fue registrada (${actual.estadoEjecucion}).`,
-      );
-    }
-    // Actualización condicional: si otra petición se adelantó, no se sobrescribe.
-    const { count } = await this.prisma.respaldo.updateMany({
-      where: { id, estadoEjecucion: 'PENDIENTE' },
-      data: dto,
-    });
-    if (count === 0) {
-      throw new ConflictException(
-        `La ejecución del respaldo ${id} ya fue registrada.`,
-      );
-    }
-    return this.findOne(id);
-  }
-
-  /** Capa 3: registra la restauración/prueba (una sola vez, tras ejecución EXITOSA). */
-  async registrarPrueba(
-    id: number,
-    dto: RegistrarPruebaDto,
-  ): Promise<RespaldoDto> {
-    const actual = await this.findOne(id);
-    if (actual.estadoEjecucion !== 'EXITOSA') {
-      throw new ConflictException(
-        `Solo se puede probar un respaldo con ejecución EXITOSA (actual: ${actual.estadoEjecucion}).`,
-      );
-    }
-    if (actual.estadoPrueba !== 'PENDIENTE') {
-      throw new ConflictException(
-        `La prueba del respaldo ${id} ya fue registrada (${actual.estadoPrueba}).`,
-      );
-    }
-    if (actual.fechaEjecucion && dto.fechaPrueba < actual.fechaEjecucion) {
-      throw new BadRequestException(
-        'La fecha de la prueba no puede ser anterior a la de la ejecución.',
-      );
-    }
-    const { count } = await this.prisma.respaldo.updateMany({
-      where: { id, estadoEjecucion: 'EXITOSA', estadoPrueba: 'PENDIENTE' },
-      data: dto,
-    });
-    if (count === 0) {
-      throw new ConflictException(
-        `La prueba del respaldo ${id} ya fue registrada.`,
-      );
-    }
-    return this.findOne(id);
-  }
-
-  /** Corrige el alcance (capa 1). Con la ejecución ya registrada, el alcance es evidencia y no se toca. */
-  async update(id: number, dto: UpdateRespaldoDto): Promise<RespaldoDto> {
-    const actual = await this.findOne(id);
-    if (actual.estadoEjecucion !== 'PENDIENTE') {
-      throw new ConflictException(
-        `El respaldo ${id} ya tiene la ejecución registrada (${actual.estadoEjecucion}): su alcance no se puede modificar.`,
-      );
-    }
-    const { count } = await this.prisma.respaldo.updateMany({
-      where: { id, estadoEjecucion: 'PENDIENTE' },
-      data: dto,
-    });
-    if (count === 0) {
-      throw new ConflictException(
-        `El respaldo ${id} cambió mientras se editaba; vuelve a consultarlo.`,
-      );
-    }
-    return this.findOne(id);
-  }
-
-  /** Borrado definitivo (solo admin). El activo y su bitácora no se ven afectados. */
-  async remove(id: number): Promise<void> {
-    await this.findOne(id);
-    await this.prisma.respaldo.delete({ where: { id } });
   }
 }
 

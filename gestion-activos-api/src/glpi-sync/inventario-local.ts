@@ -15,7 +15,7 @@ import {
   RESPONSABLE_GLPI,
   type ActivoLocal,
   type Plan,
-  type Situacion,
+  type CambioBaja,
 } from './plan.js';
 
 export interface Catalogos {
@@ -104,7 +104,7 @@ export interface ResultadoEjecucion {
 /** Lo que acompaña a una escritura: a qué ejecución pertenece y si cambia la situación. */
 export interface ExtraEscritura {
   ejecucionId?: number;
-  situacion?: Situacion;
+  baja?: CambioBaja;
 }
 
 /**
@@ -126,7 +126,7 @@ export interface InventarioLocal {
   buscar(referencias: string[], valores: string[]): Promise<ActivoLocal[]>;
   /**
    * Alta vinculada a GLPI + historial firmado por GLPI + aviso. Devuelve el id
-   * nuevo. Un elemento en la papelera nace ya como "No activo".
+   * nuevo. Un elemento en la papelera nace ya como "Dado de baja".
    */
   crear(
     glpi: ActivoGlpi,
@@ -159,7 +159,7 @@ export interface InventarioLocal {
   vinculados(itemtype: Itemtype): Promise<ActivoLocal[]>;
   /**
    * El elemento ya no existe en GLPI (confirmado por una lectura completa):
-   * el activo pasa a "No activo". No borra nada: conserva ficha, historial y registros.
+   * el activo pasa a "Dado de baja". No borra nada: conserva ficha, historial y registros.
    */
   marcarAusente(local: ActivoLocal, ejecucionId?: number): Promise<void>;
 }
@@ -189,6 +189,9 @@ export class InventarioPrisma implements InventarioLocal {
     const encontrados: { tabla: string; cantidad: number }[] = [];
     for (const tabla of [
       'respaldo',
+      'plan_respaldo',
+      'ejecucion_respaldo',
+      'restauracion',
       'mantenimiento',
       'vulnerabilidad',
       'bitacora_historial',
@@ -274,9 +277,9 @@ export class InventarioPrisma implements InventarioLocal {
       ...(plan.accion === 'ENLAZAR' ? { origenGlpi: glpi.referencia } : {}),
       // Solo con la política explícita de mejorar códigos de respaldo.
       ...(plan.nuevoCodigo ? { codigo: plan.nuevoCodigo } : {}),
-      ...(extra.situacion === 'INACTIVAR'
+      ...(extra.baja === 'INACTIVAR'
         ? { inactivoDesde: new Date(), motivoInactivo: MOTIVO_INACTIVO.PAPELERA }
-        : extra.situacion === 'REACTIVAR'
+        : extra.baja === 'REACTIVAR'
           ? { inactivoDesde: null, motivoInactivo: null }
           : {}),
     };
@@ -299,7 +302,7 @@ export class InventarioPrisma implements InventarioLocal {
         }
         await this.bitacora.registrar(tx, {
           activoId: local.id,
-          accion: extra.situacion ?? 'ACTUALIZAR',
+          accion: extra.baja ?? 'ACTUALIZAR',
           responsable: RESPONSABLE_GLPI,
           cambios,
         });
@@ -309,7 +312,7 @@ export class InventarioPrisma implements InventarioLocal {
             codigo: plan.nuevoCodigo ?? local.codigo,
             nombre: data.nombre ?? local.nombre,
             accion: plan.accion === 'ENLAZAR' ? 'ENLAZAR' : 'ACTUALIZAR',
-            situacion: extra.situacion,
+            baja: extra.baja,
             motivo: MOTIVO_INACTIVO.PAPELERA,
             cambios,
           }),
@@ -348,7 +351,7 @@ export class InventarioPrisma implements InventarioLocal {
           codigo: local.codigo,
           nombre: local.nombre,
           accion: 'ACTUALIZAR',
-          situacion: 'INACTIVAR',
+          baja: 'INACTIVAR',
           motivo: MOTIVO_INACTIVO.AUSENTE,
           cambios,
         }),

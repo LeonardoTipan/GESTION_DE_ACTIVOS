@@ -1,7 +1,7 @@
 /**
  * Pruebas e2e de la sincronización lanzada desde la aplicación (botón manual),
- * los avisos, la clasificación Activo / No activo y las reglas de los módulos
- * de respaldos, mantenimientos y vulnerabilidades sobre equipos No activos.
+ * los avisos, el filtro por estado y las reglas de los módulos de respaldos,
+ * mantenimientos y vulnerabilidades sobre equipos dados de baja o no operativos.
  *
  * API real + MySQL real (gestion_activos_test) + Keycloak de desarrollo.
  * GLPI es simulado: ninguna prueba contacta con el servidor de la empresa.
@@ -32,6 +32,18 @@ import { getTokensDePrueba } from './utils/keycloak.js';
 const LENTO = 120_000;
 const MANANA = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 const AYER = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+const PLAN = {
+  frecuencia: 'MENSUAL',
+  tipo: 'COMPLETO',
+  medio: 'DISCO_A_DISCO',
+  ventana: 'NOCTURNA_22_02',
+  retencion: 'ANIO_1',
+  frecuenciaPrueba: 'TRIMESTRAL',
+  rpoHoras: 24,
+  rtoMinutos: 240,
+  responsable: 'Infraestructura',
+  justificacion: 'Equipo con información institucional que requiere continuidad.',
+};
 /** "Ahora" tal como lo escribiría el GLPI de Quito (UTC−5). */
 const ahoraGlpi = () =>
   `${new Date(Date.now() - 5 * 3_600_000).toISOString().slice(0, 19)}-05:00`;
@@ -289,7 +301,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
     }, LENTO);
   });
 
-  describe('7, 8 y 9 · de activo a No activo; operaciones solo sobre equipos activos', () => {
+  describe('7, 8 y 9 · de activo a dado de baja; operaciones solo sobre equipos operativos', () => {
     let activoId: number;
     const registros: { respaldo: number; mantenimiento: number; vulnerabilidad: number } = {
       respaldo: 0,
@@ -297,7 +309,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       vulnerabilidad: 0,
     };
     const operaciones = (id: number): [string, object][] => [
-      ['/api/respaldos', { activoId: id, alcanceDetalle: 'Base de datos' }],
+      ['/api/respaldos/planes', { ...PLAN, activoIds: [id] }],
       ['/api/mantenimientos', { activoId: id, tipo: 'PREVENTIVO', actividad: 'Limpieza', fecha: MANANA }],
       ['/api/vulnerabilidades', { activoId: id, descripcion: 'Parche pendiente', nivelRiesgo: 'ALTO', fecha: AYER }],
     ];
@@ -310,13 +322,13 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
         ),
       );
       Object.assign(registros, {
-        respaldo: r.body.id,
+        respaldo: r.body[0].id,
         mantenimiento: m.body.id,
         vulnerabilidad: v.body.id,
       });
     }, LENTO);
 
-    it('GLPI lo envía a la papelera → pasa a No activo, con historial y aviso', async () => {
+    it('GLPI lo envía a la papelera → pasa a dado de baja, con historial y aviso', async () => {
       Object.assign(pc(7), { is_deleted: true, date_mod: ahoraGlpi() });
       const res = await sincronizar();
       expect(res.contadores).toMatchObject({ inactivados: 1, aplicados: 1 });
@@ -336,30 +348,79 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       ).toBe(1);
     }, LENTO);
 
-    it('filtros del inventario: activos (por defecto), no activos y todos', async () => {
-      expect(await total('')).toBe(26);
-      expect(await total('situacion=activos')).toBe(26);
-      expect(await total('situacion=no_activos')).toBe(1);
-      expect(await total('situacion=todos')).toBe(27);
-      await api(tokens.auditor).get('/api/activos?situacion=otra').expect(400);
+    it('filtro por estado: valores reales del inventario, dado de baja y solo operativos', async () => {
+      // Sin filtro, el inventario lo muestra todo.
+      expect(await total('')).toBe(27);
+      // El ordenador #5 pasó a Malo; el #7 está dado de baja; el resto, Bueno.
+      expect(await total('estado=Bueno')).toBe(25);
+      expect(await total('estado=Malo')).toBe(1);
+      expect(await total('estado=malo')).toBe(1); // sin distinguir mayúsculas
+      expect(await total('estado=Regular')).toBe(0);
+      expect(await total('estado=@baja')).toBe(1);
+      expect(await total('estado=@sin-estado')).toBe(0);
+      // Lo que alimenta los selectores de los módulos.
+      expect(await total('operativos=true')).toBe(26);
       // Combinado con la búsqueda.
-      expect(await total('situacion=no_activos&q=Laptop')).toBe(1);
-      expect(await total('situacion=activos&q=Laptop 7')).toBe(0);
+      expect(await total('estado=@baja&q=Laptop')).toBe(1);
+      expect(await total('operativos=true&q=Laptop 7')).toBe(0);
     }, LENTO);
 
-    it('el backend rechaza operaciones NUEVAS sobre un equipo No activo (400)', async () => {
+    it('GET /activos/estados devuelve los estados que hay, con su recuento (filtro dinámico)', async () => {
+      const { body } = await api(tokens.auditor).get('/api/activos/estados').expect(200);
+      expect(body).toEqual([
+        { clave: 'Bueno', etiqueta: 'Bueno', total: 25, operativo: true },
+        { clave: 'Malo', etiqueta: 'Malo', total: 1, operativo: true },
+        { clave: '@baja', etiqueta: 'Dado de baja', total: 1, operativo: false },
+      ]);
+      await api().get('/api/activos/estados').expect(401);
+    }, LENTO);
+
+    it('un estado de GLPI que indica baja excluye al equipo de los módulos (lista configurable)', async () => {
+      const id = (await activoDe('Computer #16')).id;
+      Object.assign(pc(16), { status: { id: 9, name: 'Dado de baja' }, date_mod: ahoraGlpi() });
+      await sincronizar();
+
+      // Aparece solo en el filtro: nadie tuvo que declararlo.
+      const { body } = await api(tokens.auditor).get('/api/activos/estados').expect(200);
+      expect(body).toContainEqual({
+        clave: 'Dado de baja',
+        etiqueta: 'Dado de baja',
+        total: 1,
+        operativo: false,
+      });
+      expect(await total('estado=Dado de baja')).toBe(1);
+      expect(await total('operativos=true')).toBe(25);
+      // Y el backend no admite operaciones nuevas sobre él.
+      for (const [url, cuerpo] of operaciones(id)) {
+        const res = await api(tokens.admin).post(url, cuerpo).expect(400);
+        expect(res.body.message).toContain('no está operativo (su estado es "Dado de baja")');
+      }
+      // Un equipo en mal estado SÍ es operativo: es el que necesita mantenimiento.
+      const malo = (await activoDe('Computer #5')).id;
+      const creado = await api(tokens.analista).post(...operaciones(malo)[1]).expect(201);
+      await api(tokens.admin)
+        .post(`/api/mantenimientos/${creado.body.id}/anular`, { motivo: 'Creado solo para comprobar la regla de estados.' })
+        .expect(200);
+
+      // GLPI lo devuelve a Bueno: vuelve a ser operativo.
+      Object.assign(pc(16), { status: { id: 3, name: 'Bueno' }, date_mod: ahoraGlpi() });
+      await sincronizar();
+      expect(await total('operativos=true')).toBe(26);
+    }, LENTO);
+
+    it('el backend rechaza operaciones NUEVAS sobre un equipo dado de baja (400)', async () => {
       for (const [url, cuerpo] of operaciones(activoId)) {
         const res = await api(tokens.admin).post(url, cuerpo).expect(400);
-        expect(res.body.message).toContain('no está activo (está en la papelera de GLPI)');
+        expect(res.body.message).toContain('no está operativo (está en la papelera de GLPI)');
       }
-      expect(await prisma.respaldo.count({ where: { activoId } })).toBe(1);
+      expect(await prisma.planRespaldo.count({ where: { activoId } })).toBe(1);
       expect(await prisma.mantenimiento.count({ where: { activoId } })).toBe(1);
       expect(await prisma.vulnerabilidad.count({ where: { activoId } })).toBe(1);
     }, LENTO);
 
     it('sus registros anteriores se conservan y se siguen consultando y gestionando', async () => {
       for (const [modulo, id] of [
-        ['respaldos', registros.respaldo],
+        ['respaldos/planes', registros.respaldo],
         ['mantenimientos', registros.mantenimiento],
         ['vulnerabilidades', registros.vulnerabilidad],
       ] as const) {
@@ -378,15 +439,16 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       Object.assign(pc(7), { is_deleted: false, date_mod: ahoraGlpi() });
       const res = await sincronizar();
       expect(res.contadores).toMatchObject({ reactivados: 1 });
-      expect(await total('situacion=no_activos')).toBe(0);
-      await api(tokens.analista).post(...operaciones(activoId)[0]).expect(201);
+      expect(await total('estado=@baja')).toBe(0);
+      await api(tokens.analista).post(...operaciones(activoId)[1]).expect(201);
     }, LENTO);
 
-    it('baja manual desde la aplicación: también es No activo, conserva su ficha y no admite operaciones', async () => {
+    it('baja manual desde la aplicación: también es dado de baja, conserva su ficha y no admite operaciones', async () => {
       const id = (await activoDe('Computer #9')).id;
       await api(tokens.analista).delete(`/api/activos/${id}`).expect(403);
       await api(tokens.admin).delete(`/api/activos/${id}`).expect(204);
-      expect(await total('situacion=no_activos')).toBe(1);
+      expect(await total('estado=@baja')).toBe(1);
+      expect(await total('estado=Bueno')).toBe(25); // ya no cuenta como Bueno
       const ficha = await api(tokens.auditor).get(`/api/activos/${id}`).expect(200);
       expect(ficha.body.deletedAt).not.toBeNull();
       const res = await api(tokens.admin).post(...operaciones(id)[1]).expect(400);
@@ -401,7 +463,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
   });
 
   describe('12 · eliminación definitiva en GLPI (reconciliación completa)', () => {
-    it('la incremental no la detecta; la completa la confirma y pasa el equipo a No activo sin borrar nada', async () => {
+    it('la incremental no la detecta; la completa la confirma y pasa el equipo a dado de baja sin borrar nada', async () => {
       const activo = await activoDe('Computer #12');
       glpi.elementos.Computer = glpi.elementos.Computer.filter((x) => x.id !== 12);
 
@@ -529,7 +591,9 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       expect(body.paths['/api/glpi/sincronizacion']).toHaveProperty('get');
       expect(body.paths['/api/notificaciones/{id}/leida']).toHaveProperty('patch');
       const parametros = body.paths['/api/activos'].get.parameters.map((p: { name: string }) => p.name);
-      expect(parametros).toContain('situacion');
+      expect(parametros).toEqual(expect.arrayContaining(['estado', 'operativos']));
+      expect(parametros).not.toContain('situacion');
+      expect(body.paths['/api/activos/estados']).toHaveProperty('get');
     }, LENTO);
   });
 });

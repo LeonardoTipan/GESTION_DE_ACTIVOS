@@ -2,8 +2,8 @@ import {
   ApiProperty,
   ApiPropertyOptional,
   OmitType,
-  PartialType,
-} from '@nestjs/swagger';
+  PartialType, IntersectionType } from '@nestjs/swagger';
+import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
 import { Transform, Type } from 'class-transformer';
 import {
   IsDate,
@@ -90,8 +90,10 @@ export class RegistrarVulnerabilidadDto {
 }
 
 /** Edición de los datos del registro; solo mientras está pendiente (ABIERTA o EN_MITIGACION). */
-export class EditarVulnerabilidadDto extends PartialType(
-  OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const),
+/** Toda edición exige motivo: se conserva la versión anterior. */
+export class EditarVulnerabilidadDto extends IntersectionType(
+  PartialType(OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const)),
+  MotivoCambioDto,
 ) {}
 
 /** Mitigar: EN_MITIGACION → MITIGADA. */

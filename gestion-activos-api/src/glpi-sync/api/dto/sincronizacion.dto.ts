@@ -44,7 +44,7 @@ export class ContadoresSincronizacionDto {
   @ApiProperty({ example: 0 })
   sinCambios: number;
 
-  @ApiProperty({ example: 0, description: 'Pasaron a No activo.' })
+  @ApiProperty({ example: 0, description: 'Pasaron a Dado de baja.' })
   inactivados: number;
 
   @ApiProperty({ example: 0 })

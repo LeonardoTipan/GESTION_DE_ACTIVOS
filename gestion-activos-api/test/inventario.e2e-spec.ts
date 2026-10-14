@@ -407,19 +407,25 @@ describe('Inventario (e2e)', () => {
       it('el activo dado de baja sale del listado de activos, pero conserva su ficha', async () => {
         const ficha = await api(tokens.auditor).get(`/api/activos/${id}`).expect(200);
         expect(ficha.body.deletedAt).not.toBeNull();
+        // Sigue en el inventario, con el estado "Dado de baja"…
         const lista = await api(tokens.auditor)
           .get('/api/activos?q=OLD-001')
           .expect(200);
-        expect(lista.body.meta.total).toBe(0);
-        const noActivos = await api(tokens.auditor)
-          .get('/api/activos?q=OLD-001&situacion=no_activos')
+        expect(lista.body.meta.total).toBe(1);
+        const deBaja = await api(tokens.auditor)
+          .get('/api/activos?q=OLD-001&estado=@baja')
           .expect(200);
-        expect(noActivos.body.meta.total).toBe(1);
+        expect(deBaja.body.meta.total).toBe(1);
+        // …pero ya no se ofrece para operar con él.
+        const operativos = await api(tokens.auditor)
+          .get('/api/activos?q=OLD-001&operativos=true')
+          .expect(200);
+        expect(operativos.body.meta.total).toBe(0);
       });
 
-      it('pero sigue en la base: visible con incluirBajas y en la sincronización', async () => {
+      it('sigue en la base, con su fecha de baja, y aparece en la sincronización', async () => {
         const conBajas = await api(tokens.auditor)
-          .get('/api/activos?q=OLD-001&incluirBajas=true')
+          .get('/api/activos?q=OLD-001')
           .expect(200);
         expect(conBajas.body.data[0].deletedAt).not.toBeNull();
 

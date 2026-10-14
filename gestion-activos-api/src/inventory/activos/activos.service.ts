@@ -3,6 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import {
@@ -15,19 +16,26 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { BitacoraService } from '../bitacora/bitacora.service.js';
 import { calcularCambios, cambiosDeCreacion } from '../bitacora/cambios.js';
 import type { BitacoraDto } from '../bitacora/dto/bitacora.dto.js';
-import type { ActivoDto } from './dto/activo.dto.js';
+import type { ActivoDto, EstadoActivoDto } from './dto/activo.dto.js';
 import type {
   CreateActivoDto,
   UpdateActivoDto,
 } from './dto/create-activo.dto.js';
-import type { QueryActivosDto } from './dto/query-activos.dto.js';
+import {
+  ESTADO_BAJA,
+  ESTADO_SIN_ESTADO,
+  type QueryActivosDto,
+} from './dto/query-activos.dto.js';
 
 /**
- * Un equipo está ACTIVO si no se dio de baja en la aplicación ni la
- * sincronización lo marcó (papelera de GLPI o ya inexistente allí). El estado
- * de GLPI (Malo, Regular, Bueno) describe su condición y no interviene.
+ * Equipo VIGENTE: no se dio de baja en la aplicación ni la sincronización lo
+ * marcó (papelera de GLPI o ya inexistente allí). Los que no lo están se
+ * muestran con el estado "Dado de baja".
  */
-const ACTIVO = { deletedAt: null, inactivoDesde: null } as const;
+const VIGENTE = { deletedAt: null, inactivoDesde: null } as const;
+
+/** Estados que, por defecto, impiden operar con el equipo (ESTADOS_NO_OPERATIVOS). */
+const NO_OPERATIVOS_POR_DEFECTO = 'Dado de baja,Inactivo,Desechado';
 
 /** El frontend siempre recibe el activo con su categoría y criticidad. */
 const INCLUDE = { categoria: true, criticidad: true } as const;
@@ -37,7 +45,73 @@ export class ActivosService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly bitacora: BitacoraService,
+    private readonly config: ConfigService,
   ) {}
+
+  /**
+   * Estados (de GLPI) con los que un equipo NO admite respaldos, mantenimientos
+   * ni vulnerabilidades nuevos. Configurable: ESTADOS_NO_OPERATIVOS, separados por comas.
+   */
+  private estadosNoOperativos(): string[] {
+    return (
+      this.config.get<string>('ESTADOS_NO_OPERATIVOS') ?? NO_OPERATIVOS_POR_DEFECTO
+    )
+      .split(',')
+      .map((estado) => estado.trim())
+      .filter(Boolean);
+  }
+
+  private esNoOperativo(estado: string | null): boolean {
+    const clave = estado?.trim().toLowerCase();
+    return (
+      clave !== undefined &&
+      this.estadosNoOperativos().some((e) => e.toLowerCase() === clave)
+    );
+  }
+
+  /** Vigente y en un estado que permite operar (sin estado también cuenta). */
+  filtroOperativo(): Prisma.ActivoWhereInput {
+    const excluidos = this.estadosNoOperativos();
+    return excluidos.length === 0
+      ? VIGENTE
+      : {
+          ...VIGENTE,
+          // NOT IN descarta los NULL en SQL: los equipos sin estado se incluyen aparte.
+          OR: [{ estado: null }, { estado: { notIn: excluidos } }],
+        };
+  }
+
+  /**
+   * Los estados que hay REALMENTE en el inventario, con cuántos equipos tiene
+   * cada uno: alimenta el filtro dinámico. No es una lista fija: si GLPI
+   * empieza a enviar un estado nuevo, aparece solo.
+   */
+  async estados(): Promise<EstadoActivoDto[]> {
+    const [grupos, bajas] = await Promise.all([
+      this.prisma.activo.groupBy({
+        by: ['estado'],
+        where: VIGENTE,
+        _count: { _all: true },
+        orderBy: { estado: 'asc' },
+      }),
+      this.prisma.activo.count({ where: { NOT: VIGENTE } }),
+    ]);
+    const estados: EstadoActivoDto[] = grupos.map((grupo) => ({
+      clave: grupo.estado ?? ESTADO_SIN_ESTADO,
+      etiqueta: grupo.estado ?? 'Sin estado',
+      total: grupo._count._all,
+      operativo: !this.esNoOperativo(grupo.estado),
+    }));
+    if (bajas > 0) {
+      estados.push({
+        clave: ESTADO_BAJA,
+        etiqueta: 'Dado de baja',
+        total: bajas,
+        operativo: false,
+      });
+    }
+    return estados;
+  }
 
   async findAll(query: QueryActivosDto): Promise<Paginated<ActivoDto>> {
     const where: Prisma.ActivoWhereInput = {
@@ -48,11 +122,16 @@ export class ActivosService {
     if (query.actualizadoDesde) {
       where.updatedAt = { gt: query.actualizadoDesde };
     }
-    // En sincronización incremental se incluyen todos para que el frontend los actualice.
-    const situacion =
-      query.incluirBajas || query.actualizadoDesde ? 'todos' : query.situacion;
-    if (situacion === 'activos') Object.assign(where, ACTIVO);
-    if (situacion === 'no_activos') where.NOT = ACTIVO;
+    const condiciones: Prisma.ActivoWhereInput[] = [];
+    if (query.estado === ESTADO_BAJA) condiciones.push({ NOT: VIGENTE });
+    else if (query.estado === ESTADO_SIN_ESTADO) {
+      condiciones.push({ ...VIGENTE, estado: null });
+    } else if (query.estado) {
+      // Un equipo dado de baja se muestra como tal, no con su último estado de GLPI.
+      condiciones.push({ ...VIGENTE, estado: query.estado });
+    }
+    if (query.operativos) condiciones.push(this.filtroOperativo());
+    if (condiciones.length > 0) where.AND = condiciones;
     if (query.q) {
       // La collation de MySQL (utf8mb4_unicode_ci) ya ignora mayúsculas y tildes.
       where.OR = [
@@ -82,7 +161,7 @@ export class ActivosService {
     return paginate(data, total, query);
   }
 
-  /** La ficha se conserva siempre: también la de un equipo No activo o dado de baja. */
+  /** La ficha se conserva siempre: también la de un equipo dado de baja. */
   async findOne(id: number): Promise<ActivoDto> {
     const activo = await this.prisma.activo.findUnique({
       where: { id },
@@ -96,25 +175,36 @@ export class ActivosService {
 
   /**
    * Para registrar una operación NUEVA (respaldo, mantenimiento, vulnerabilidad):
-   * el equipo debe existir y estar activo. Los registros anteriores de un
-   * equipo No activo se conservan y se siguen consultando.
+   * el equipo debe existir y estar OPERATIVO: ni dado de baja ni en un estado
+   * de ESTADOS_NO_OPERATIVOS. Los registros anteriores se conservan y se
+   * siguen consultando.
    */
-  async exigirActivo(id: number): Promise<void> {
+  async exigirOperativo(id: number): Promise<void> {
     const activo = await this.prisma.activo.findUnique({
       where: { id },
-      select: { codigo: true, deletedAt: true, inactivoDesde: true, motivoInactivo: true },
+      select: {
+        codigo: true,
+        estado: true,
+        deletedAt: true,
+        inactivoDesde: true,
+        motivoInactivo: true,
+      },
     });
     if (!activo) {
       throw new BadRequestException(`El activo ${id} no existe.`);
     }
-    if (activo.deletedAt || activo.inactivoDesde) {
-      const motivo = activo.deletedAt
-        ? 'fue dado de baja'
-        : activo.motivoInactivo === 'PAPELERA_GLPI'
+    const motivo = activo.deletedAt
+      ? 'fue dado de baja'
+      : activo.inactivoDesde
+        ? activo.motivoInactivo === 'PAPELERA_GLPI'
           ? 'está en la papelera de GLPI'
-          : 'ya no existe en GLPI';
+          : 'ya no existe en GLPI'
+        : this.esNoOperativo(activo.estado)
+          ? `su estado es "${activo.estado}"`
+          : null;
+    if (motivo) {
       throw new BadRequestException(
-        `El activo ${activo.codigo} no está activo (${motivo}): no admite operaciones nuevas. Sus registros anteriores se conservan.`,
+        `El activo ${activo.codigo} no está operativo (${motivo}): no admite operaciones nuevas. Sus registros anteriores se conservan.`,
       );
     }
   }

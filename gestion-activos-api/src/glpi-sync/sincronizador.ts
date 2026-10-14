@@ -22,7 +22,7 @@ import {
   planificar,
   type ActivoLocal,
   type CandidatoEvaluado,
-  type Situacion,
+  type CambioBaja,
 } from './plan.js';
 import { desfaseCoincide, fechaLocalDeZona } from './saneamiento.js';
 
@@ -70,9 +70,9 @@ const MAX_RESUMEN = 150;
  *      referencia de GLPI) y, si no es simulación, escribir con historial
  *      firmado por "GLPI" y un aviso por cada cambio real.
  *   4. RECONCILIAR (solo lectura completa y correcta): lo que ya no existe en
- *      GLPI pasa a "No activo".
+ *      GLPI pasa a "Dado de baja".
  *
- * Nunca borra activos. Un equipo solo pasa a "No activo" si GLPI lo tiene en
+ * Nunca borra activos. Un equipo solo pasa a "Dado de baja" si GLPI lo tiene en
  * la papelera o si una lectura COMPLETA y sin errores confirma que ya no
  * existe: jamás por un fallo de conexión, una lectura parcial o por no
  * aparecer en una consulta incremental.
@@ -523,35 +523,35 @@ export class Sincronizador {
       }
 
       // Situación: GLPI dice expresamente si el elemento está en la papelera.
-      let situacion: Situacion | undefined;
+      let baja: CambioBaja | undefined;
       if (plan.local && plan.accion !== 'OMITIR') {
-        if (glpi.enPapelera && !plan.local.inactivoDesde) situacion = 'INACTIVAR';
-        if (!glpi.enPapelera && plan.local.inactivoDesde) situacion = 'REACTIVAR';
+        if (glpi.enPapelera && !plan.local.inactivoDesde) baja = 'INACTIVAR';
+        if (!glpi.enPapelera && plan.local.inactivoDesde) baja = 'REACTIVAR';
       }
 
       elemento.codigo = plan.nuevoCodigo ?? plan.codigo;
-      elemento.resultado = situacion ?? plan.accion;
+      elemento.resultado = baja ?? plan.accion;
       elemento.planificado = elemento.resultado;
       elemento.diferencias = {
         ...plan.diferencias,
-        ...(situacion
+        ...(baja
           ? {
-              situacion:
-                situacion === 'INACTIVAR'
-                  ? { antes: 'Activo', despues: 'No activo (papelera de GLPI)' }
-                  : { antes: 'No activo', despues: 'Activo' },
+              baja:
+                baja === 'INACTIVAR'
+                  ? { antes: 'Activo', despues: 'Dado de baja (papelera de GLPI)' }
+                  : { antes: 'Dado de baja', despues: 'Activo' },
             }
           : {}),
       };
       elemento.motivo =
         plan.accion === 'CREAR' && glpi.enPapelera
-          ? 'Está en la papelera de GLPI: se registra como No activo.'
+          ? 'Está en la papelera de GLPI: se registra como Dado de baja.'
           : plan.motivo;
       elemento.revision = [...glpi.revision, ...plan.revision];
       elemento.activoId = plan.local?.id;
 
       if (this.config.dryRun) continue;
-      const extra = { ejecucionId: ejecucion.id, situacion };
+      const extra = { ejecucionId: ejecucion.id, baja };
       try {
         if (plan.accion === 'CREAR') {
           elemento.activoId = await this.local.crear(
@@ -572,7 +572,7 @@ export class Sincronizador {
         } else if (
           plan.accion === 'ENLAZAR' ||
           plan.accion === 'ACTUALIZAR' ||
-          situacion
+          baja
         ) {
           await this.local.aplicar(plan.local!, glpi, plan, extra);
           elemento.aplicado = true;
@@ -589,7 +589,7 @@ export class Sincronizador {
 
   /**
    * Tras una lectura COMPLETA y correcta de un tipo: los activos vinculados a
-   * elementos que GLPI ya no devuelve pasan a "No activo". No se borra nada.
+   * elementos que GLPI ya no devuelve pasan a "Dado de baja". No se borra nada.
    *
    * Salvaguarda: si desaparece todo el tipo o buena parte de él, lo más
    * probable es un problema en GLPI (permisos, entidad) y no una baja real:
@@ -615,7 +615,7 @@ export class Sincronizador {
           ausentes.length * 100 > vigentes.length * MAX_PORCENTAJE_BAJAS);
       if (masiva && !this.config.confirmarBajasMasivas) {
         informe.errores.push(
-          `${itemtype}: GLPI ya no devuelve ${ausentes.length} de los ${vigentes.length} activos vinculados. Parece un problema de GLPI (permisos, entidad) más que una baja real: NO se marcó ninguno como No activo. Si es correcto, ejecuta una sincronización completa con --confirmar-bajas.`,
+          `${itemtype}: GLPI ya no devuelve ${ausentes.length} de los ${vigentes.length} activos vinculados. Parece un problema de GLPI (permisos, entidad) más que una baja real: NO se marcó ninguno como Dado de baja. Si es correcto, ejecuta una sincronización completa con --confirmar-bajas.`,
         );
         return;
       }
@@ -630,9 +630,9 @@ export class Sincronizador {
           planificado: 'INACTIVAR',
           activoId: local.id,
           diferencias: {
-            situacion: {
+            baja: {
               antes: 'Activo',
-              despues: `No activo (${TEXTO_MOTIVO[MOTIVO_INACTIVO.AUSENTE]})`,
+              despues: `Dado de baja (${TEXTO_MOTIVO[MOTIVO_INACTIVO.AUSENTE]})`,
             },
           },
           avisos: [],

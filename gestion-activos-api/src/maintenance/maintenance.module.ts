@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module.js';
 import { InventoryModule } from '../inventory/inventory.module.js';
 import { MantenimientosController } from './mantenimientos/mantenimientos.controller.js';
 import { MantenimientosService } from './mantenimientos/mantenimientos.service.js';
@@ -9,7 +10,7 @@ import { MantenimientosService } from './mantenimientos/mantenimientos.service.j
  * para validar que el activo existe y está vigente.
  */
 @Module({
-  imports: [InventoryModule],
+  imports: [InventoryModule, AuditModule],
   controllers: [MantenimientosController],
   providers: [MantenimientosService],
 })

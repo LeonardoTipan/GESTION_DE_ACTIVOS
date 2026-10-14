@@ -33,12 +33,12 @@ export interface ActivoLocal {
   fechaAlta: Date | null;
   /** Baja manual desde la aplicación. */
   deletedAt: Date | null;
-  /** "No activo" detectado por la sincronización (papelera o ausencia en GLPI). */
+  /** "Dado de baja" detectado por la sincronización (papelera o ausencia en GLPI). */
   inactivoDesde: Date | null;
   motivoInactivo: string | null;
 }
 
-/** Por qué la sincronización considera un activo "No activo". */
+/** Por qué la sincronización considera un activo "Dado de baja". */
 export const MOTIVO_INACTIVO = {
   PAPELERA: 'PAPELERA_GLPI',
   AUSENTE: 'AUSENTE_EN_GLPI',
@@ -46,8 +46,8 @@ export const MOTIVO_INACTIVO = {
 export type MotivoInactivo =
   (typeof MOTIVO_INACTIVO)[keyof typeof MOTIVO_INACTIVO];
 
-/** Cambio de situación que acompaña (o sustituye) a una actualización. */
-export type Situacion = 'INACTIVAR' | 'REACTIVAR';
+/** El equipo pasa a estar dado de baja (o deja de estarlo); acompaña o sustituye a una actualización. */
+export type CambioBaja = 'INACTIVAR' | 'REACTIVAR';
 
 export type Accion =
   /** No existe en local: se da de alta. */

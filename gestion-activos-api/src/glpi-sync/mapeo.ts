@@ -83,7 +83,7 @@ export interface ActivoGlpi {
   /** Motivo por el que no debe sincronizarse (plantilla de GLPI). */
   excluido?: string;
   /**
-   * Está en la papelera de GLPI: se conserva en el inventario como "No activo".
+   * Está en la papelera de GLPI: se conserva en el inventario como "Dado de baja".
    * No compite por los códigos operativos (candidatos vacío).
    */
   enPapelera: boolean;

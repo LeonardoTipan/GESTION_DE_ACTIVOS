@@ -27,7 +27,7 @@ Cada ejecución sigue cuatro pasos:
 1. **Decidir el modo.** *Completa* (todo el inventario) o *incremental* (solo lo modificado en GLPI desde la última ejecución sin errores).
 2. **Leer.** Pide el token y, por cada tipo, lee sus elementos por bloques (`GET /api.php/v2/Assets/Computer?start=0&limit=50`), ordenados por id, hasta el total que GLPI informa en `Content-Range`. Convierte cada elemento a nuestro modelo, saneando textos y fechas.
 3. **Decidir y aplicar.** En bloques, compara con la base (una consulta por bloque) y, si no es una simulación, escribe cada activo en su propia transacción: el cambio, su entrada de historial firmada por **`GLPI`** y su aviso, o nada.
-4. **Reconciliar** (solo tras una lectura completa y correcta): lo que ya no existe en GLPI pasa a *No activo*.
+4. **Reconciliar** (solo tras una lectura completa y correcta): lo que ya no existe en GLPI queda *Dado de baja*.
 
 Al terminar muestra el informe en consola, lo guarda en JSON (`glpi-informes/`) y registra la ejecución en la tabla `sincronizacion`.
 
@@ -86,9 +86,9 @@ Con 26 equipos el tiempo lo domina el coste fijo (pedir el token y abrir conexio
 
 Cada tipo cuesta dos consultas: el listado y la papelera (ver abajo).
 
-## Activo y No activo
+## Bajas detectadas por la sincronización
 
-Un equipo es **No activo** en tres casos, y solo en estos:
+Un equipo queda **Dado de baja** en tres casos, y solo en estos:
 
 | Caso | Cómo se detecta | Se guarda en |
 |---|---|---|
@@ -98,15 +98,15 @@ Un equipo es **No activo** en tres casos, y solo en estos:
 
 Los estados de GLPI (`Malo`, `Regular`, `Bueno`) describen la condición del equipo y **no** intervienen: se muestran tal cual en la columna *Estado*.
 
-- **Papelera.** Se pide expresamente (`filter=is_deleted==1`) además del listado normal, así se detecta tanto si el listado la incluye como si la oculta. Un elemento restaurado vuelve a *Activo* solo. Un elemento que se ve por primera vez estando ya en la papelera se registra como No activo, con su código de respaldo.
+- **Papelera.** Se pide expresamente (`filter=is_deleted==1`) además del listado normal, así se detecta tanto si el listado la incluye como si la oculta. Un elemento restaurado vuelve a *Activo* solo. Un elemento que se ve por primera vez estando ya en la papelera se registra como dado de baja, con su código de respaldo.
 - **Eliminación definitiva.** GLPI no avisa: el elemento simplemente deja de aparecer. Solo la **reconciliación completa** puede confirmarlo. Una incremental **nunca** marca a nadie por no aparecer.
 - **Salvaguarda.** Si en una lectura completa desaparece todo un tipo, o 5 o más equipos que supongan más de la mitad, lo más probable es un problema en GLPI (permisos, entidad) y no una baja real: no se marca a nadie y queda como error. Si es correcto, se confirma desde consola con `--completa --confirmar-bajas`.
-- **Nada se borra.** El activo conserva su ficha, su historial, sus respaldos, mantenimientos y vulnerabilidades, y la entrada *Pasó a No activo* queda en el historial firmada por GLPI.
+- **Nada se borra.** El activo conserva su ficha, su historial, sus respaldos, mantenimientos y vulnerabilidades, y la entrada *Dado de baja por la sincronización* queda en el historial firmada por GLPI.
 - Un activo dado de baja a mano no lo toca la sincronización: ni lo actualiza ni lo reactiva.
 
 **Límite:** hoy la papelera del GLPI de la institución está vacía, así que su detección está probada con un GLPI simulado, no contra el servidor real. Sí está comprobado que el servidor acepta el filtro.
 
-En el inventario hay un filtro *Todos / Activos / No activos*. Solo los equipos activos se ofrecen al crear un respaldo, un mantenimiento o una vulnerabilidad, y la API lo valida por su cuenta (400). Los registros anteriores de un equipo No activo se siguen consultando y gestionando.
+La baja se guarda aparte del campo **estado** (que es el valor de GLPI: Bueno, Regular, Malo…): así no se confunde la condición del equipo con su baja administrativa. En el inventario, el filtro *Estado* ofrece los valores reales más *Dado de baja*. Solo los equipos operativos se ofrecen al crear un plan de respaldo, un mantenimiento o una vulnerabilidad, y la API lo valida por su cuenta (400). Los registros anteriores de un equipo dado de baja se siguen consultando y gestionando.
 
 ## Historial y avisos
 
@@ -117,7 +117,7 @@ Cada cambio real se escribe en una transacción con tres partes: el cambio en el
 | Alta | Un equipo nuevo en GLPI |
 | Modificación | Cambió algún dato gestionado por GLPI |
 | Cambio de estado | Cambió el estado (Bueno → Malo…) |
-| Baja detectada | Pasó a No activo (papelera o ya inexistente) |
+| Baja detectada | Quedó dado de baja (papelera o ya inexistente) |
 | Reactivación | Volvió a estar vigente en GLPI |
 | Error | Una ejecución no terminó limpia |
 
@@ -284,7 +284,7 @@ sed -E 's/`gestion_activos_db`/`verif_respaldo_tmp`/' respaldo.sql | docker exec
 docker exec servidor-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SELECT COUNT(*) FROM verif_respaldo_tmp.activo; DROP DATABASE verif_respaldo_tmp;"'
 ```
 
-Deshacer **solo** lo que hizo la sincronización, sin restaurar: cada cambio está en el historial del activo con su valor anterior, y los equipos marcados como No activo vuelven solos a Activo si reaparecen en GLPI.
+Deshacer **solo** lo que hizo la sincronización, sin restaurar: cada cambio está en el historial del activo con su valor anterior, y los equipos marcados como dado de baja vuelven solos a Activo si reaparecen en GLPI.
 
 ## GLPI local de pruebas (Docker)
 

@@ -13,6 +13,10 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
   }
   // Orden: primero las tablas hijas, luego las que referencian.
   await prisma.$transaction([
+    prisma.registroCambio.deleteMany(),
+    prisma.restauracion.deleteMany(),
+    prisma.ejecucionRespaldo.deleteMany(),
+    prisma.planRespaldo.deleteMany(),
     prisma.notificacion.deleteMany(),
     prisma.sincronizacion.deleteMany(),
     prisma.bitacoraHistorial.deleteMany(),

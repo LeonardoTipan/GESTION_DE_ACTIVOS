@@ -80,4 +80,15 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @Type(() => Date)
   @IsDate()
   actualizadoDesde?: Date;
+
+  @ApiPropertyOptional({
+    default: true,
+    description: 'false = oculta los anulados (por defecto se muestran, marcados).',
+  })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    value === 'true' ? true : value === 'false' ? false : value,
+  )
+  @IsBoolean()
+  incluirAnulados: boolean = true;
 }

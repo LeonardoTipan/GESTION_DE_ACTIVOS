@@ -140,7 +140,7 @@ export class ActivoDto {
     format: 'date-time',
     nullable: true,
     description:
-      'Desde cuándo la sincronización lo considera No activo; null si sigue vigente en GLPI.',
+      'Desde cuándo la sincronización lo da de baja (papelera de GLPI o ya inexistente allí); null si sigue vigente.',
   })
   inactivoDesde: Date | null;
 
@@ -148,9 +148,31 @@ export class ActivoDto {
     type: String,
     nullable: true,
     enum: ['PAPELERA_GLPI', 'AUSENTE_EN_GLPI'],
-    description: 'Por qué pasó a No activo: está en la papelera de GLPI o ya no existe allí.',
+    description: 'Por qué se dio de baja: está en la papelera de GLPI o ya no existe allí.',
   })
   motivoInactivo: string | null;
+}
+
+/** Un estado presente en el inventario (para el filtro dinámico). */
+export class EstadoActivoDto {
+  @ApiProperty({
+    example: 'Bueno',
+    description:
+      'Valor para el parámetro "estado" de GET /activos. "@baja" y "@sin-estado" son claves especiales.',
+  })
+  clave: string;
+
+  @ApiProperty({ example: 'Bueno' })
+  etiqueta: string;
+
+  @ApiProperty({ example: 18, description: 'Equipos en ese estado.' })
+  total: number;
+
+  @ApiProperty({
+    description:
+      'false = los equipos en este estado no admiten respaldos, mantenimientos ni vulnerabilidades nuevos.',
+  })
+  operativo: boolean;
 }
 
 export class PaginatedActivoDto extends PaginatedResponseDto(ActivoDto) {}

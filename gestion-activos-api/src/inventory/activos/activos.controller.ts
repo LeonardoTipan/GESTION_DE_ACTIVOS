@@ -34,7 +34,11 @@ import {
   PaginatedBitacoraDto,
 } from '../bitacora/dto/bitacora.dto.js';
 import { ActivosService } from './activos.service.js';
-import { ActivoDto, PaginatedActivoDto } from './dto/activo.dto.js';
+import {
+  ActivoDto,
+  EstadoActivoDto,
+  PaginatedActivoDto,
+} from './dto/activo.dto.js';
 import { CreateActivoDto, UpdateActivoDto } from './dto/create-activo.dto.js';
 import { QueryActivosDto } from './dto/query-activos.dto.js';
 
@@ -51,7 +55,7 @@ export class ActivosController {
   @ApiOperation({
     summary: 'Listar activos',
     description:
-      'Paginado, con búsqueda, filtros, orden y sincronización incremental (actualizadoDesde).',
+      'Paginado, con búsqueda, filtros (incluido el estado exacto), orden y sincronización incremental (actualizadoDesde).',
   })
   @ApiOkResponse({ type: PaginatedActivoDto })
   @ApiBadRequestResponse({
@@ -63,7 +67,18 @@ export class ActivosController {
     return this.activos.findAll(query);
   }
 
-  @ApiOperation({ summary: 'Detalle de un activo vigente' })
+  @ApiOperation({
+    summary: 'Estados presentes en el inventario',
+    description:
+      'Los valores reales de la columna estado, con su recuento: alimenta el filtro del inventario.',
+  })
+  @ApiOkResponse({ type: [EstadoActivoDto] })
+  @Get('estados')
+  estados(): Promise<EstadoActivoDto[]> {
+    return this.activos.estados();
+  }
+
+  @ApiOperation({ summary: 'Detalle de un activo (también si está dado de baja)' })
   @ApiOkResponse({ type: ActivoDto })
   @ApiNotFoundResponse({ type: ApiErrorDto })
   @Get(':id')
