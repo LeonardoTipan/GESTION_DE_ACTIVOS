@@ -2,9 +2,45 @@ import type { CredencialesGlpi } from './glpi-client.js';
 import type { OrigenEjecucion } from './inventario-local.js';
 import type { ReglaCodigoInstitucional } from './mapeo.js';
 
-/** Tipos de GLPI que sabe sincronizar el motor. */
-export const ITEMTYPES = ['Computer', 'NetworkEquipment', 'Software'] as const;
-export type Itemtype = (typeof ITEMTYPES)[number];
+/**
+ * Tipos de activo de GLPI que sabe sincronizar el motor: los de la API v2.2
+ * (GET /Assets) que tienen listado propio. Cada uno con su categoría local
+ * (el catálogo de clasificación del inventario) y el prefijo del código de
+ * respaldo ("GLPI-MON-7"). `fisico`: lleva etiqueta institucional (los programas,
+ * licencias, certificados y aplicativos no). `papelera`: GLPI admite filtrar por
+ * is_deleted (las tomas de red no tienen papelera: el filtro responde 400).
+ *
+ * No están, a propósito: cartuchos y consumibles (la API no ofrece su
+ * listado: solo los de un artículo concreto, y GET /Assets/Cartridge responde
+ * 500), tarjetas SIM (son componentes de otro activo: /Components/SIMCard),
+ * "Global" (vista de todos los activos físicos, no un tipo) y los activos no
+ * administrados (la cuenta de servicio no tiene permiso: 403).
+ */
+export const TIPOS_GLPI = {
+  Computer: { categoria: 'Computadoras', prefijo: 'PC', fisico: true, papelera: true },
+  Monitor: { categoria: 'Monitores', prefijo: 'MON', fisico: true, papelera: true },
+  Software: { categoria: 'Programas', prefijo: 'SW', fisico: false, papelera: true },
+  NetworkEquipment: { categoria: 'Dispositivos de redes', prefijo: 'RED', fisico: true, papelera: true },
+  Peripheral: { categoria: 'Periféricos', prefijo: 'PER', fisico: true, papelera: true },
+  Printer: { categoria: 'Impresoras', prefijo: 'IMP', fisico: true, papelera: true },
+  Phone: { categoria: 'Teléfonos', prefijo: 'TEL', fisico: true, papelera: true },
+  Rack: { categoria: 'Racks', prefijo: 'RACK', fisico: true, papelera: true },
+  Enclosure: { categoria: 'Gabinetes', prefijo: 'GAB', fisico: true, papelera: true },
+  PDU: { categoria: 'Multitomas', prefijo: 'PDU', fisico: true, papelera: true },
+  PassiveDCEquipment: { categoria: 'Dispositivos pasivos', prefijo: 'PAS', fisico: true, papelera: true },
+  Cable: { categoria: 'Cables', prefijo: 'CAB', fisico: true, papelera: true },
+  Socket: { categoria: 'Tomas de red', prefijo: 'TOM', fisico: true, papelera: false },
+  SoftwareLicense: { categoria: 'Licencias', prefijo: 'LIC', fisico: false, papelera: true },
+  Certificate: { categoria: 'Certificados', prefijo: 'CER', fisico: false, papelera: true },
+  Appliance: { categoria: 'Aplicativos', prefijo: 'APL', fisico: false, papelera: true },
+} as const;
+export type Itemtype = keyof typeof TIPOS_GLPI;
+export const ITEMTYPES = Object.keys(TIPOS_GLPI) as Itemtype[];
+
+/** Categoría local de cada tipo, salvo que GLPI_CATEGORIA_<TIPO> diga otra. */
+export const CATEGORIAS_POR_DEFECTO = Object.fromEntries(
+  ITEMTYPES.map((t) => [t, TIPOS_GLPI[t].categoria]),
+) as Record<Itemtype, string>;
 
 export interface GlpiSyncConfig {
   /** Base de la API de GLPI, p. ej. https://glpi.empresa.com/api.php */
@@ -223,11 +259,9 @@ export function leerConfig(env: Env): GlpiSyncConfig {
       etiqueta: texto('GLPI_CODIGO_INSTITUCIONAL_ETIQUETA'),
       formato: formatoInstitucional,
     },
-    categoriaPorTipo: {
-      Computer: texto('GLPI_CATEGORIA_COMPUTER') || 'Hardware',
-      NetworkEquipment: texto('GLPI_CATEGORIA_NETWORKEQUIPMENT') || 'Red',
-      Software: texto('GLPI_CATEGORIA_SOFTWARE') || 'Software',
-    },
+    categoriaPorTipo: Object.fromEntries(
+      ITEMTYPES.map((t) => [t, texto(`GLPI_CATEGORIA_${t.toUpperCase()}`) || CATEGORIAS_POR_DEFECTO[t]]),
+    ) as Record<Itemtype, string>,
     dirInformes: texto('GLPI_DIR_INFORMES') || 'glpi-informes',
     timeoutMs: entero(env, 'GLPI_TIMEOUT_MS', 30_000, errores),
     databaseUrl,

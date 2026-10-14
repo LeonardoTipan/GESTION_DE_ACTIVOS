@@ -8,6 +8,11 @@ export const TIPOS_NOTIFICACION = [
   'BAJA_DETECTADA',
   'REACTIVACION',
   'ERROR_SINCRONIZACION',
+  // Eventos de los módulos operativos
+  'RESPALDO_FALLIDO',
+  'MANTENIMIENTO_NO_SATISFACTORIO',
+  'VULNERABILIDAD_CRITICA',
+  'VULNERABILIDAD_REABIERTA',
 ] as const;
 export type TipoNotificacion = (typeof TIPOS_NOTIFICACION)[number];
 

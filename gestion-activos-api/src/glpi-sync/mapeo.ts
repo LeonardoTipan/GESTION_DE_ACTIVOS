@@ -1,4 +1,4 @@
-import type { Itemtype } from './config.js';
+import { TIPOS_GLPI, type Itemtype } from './config.js';
 import type { GlpiItem } from './glpi-client.js';
 import {
   fechaGlpiAUtc,
@@ -9,12 +9,6 @@ import {
   truncar,
 } from './saneamiento.js';
 
-/** Prefijo del código de respaldo ("GLPI-PC-12"). */
-const PREFIJO: Record<Itemtype, string> = {
-  Computer: 'PC',
-  NetworkEquipment: 'RED',
-  Software: 'SW',
-};
 
 /** Cómo reconocer el código institucional dentro del comentario de GLPI. */
 export interface ReglaCodigoInstitucional {
@@ -215,7 +209,8 @@ export function mapearActivo(
   const candidatos: CandidatoCodigo[] = [];
   const institucional = extraerCodigoInstitucional(item.comment, regla.etiqueta);
   if (institucional === null) {
-    if (regla.etiqueta) {
+    // Solo los equipos físicos llevan etiqueta institucional (un programa, no).
+    if (regla.etiqueta && TIPOS_GLPI[itemtype].fisico) {
       revision.push(
         `Sin código institucional: el comentario no contiene "${regla.etiqueta}: …".`,
       );
@@ -258,7 +253,7 @@ export function mapearActivo(
   const ubicacion = campo('ubicacion', textoGlpi(item.location), RELLENO.ubicacion);
 
   tecnico('numeroSerie', textoGlpi(item.serial));
-  tecnico('estado', textoGlpi(item.status));
+  tecnico('estado', textoGlpi(item.status) ?? textoGlpi(item.state));
   tecnico('fabricante', textoGlpi(item.manufacturer));
   // Columna TEXT: se guarda completo, con sus saltos de línea.
   tecnico('comentario', textoLargoGlpi(item.comment), MAX_TEXTO_LARGO);
@@ -283,7 +278,7 @@ export function mapearActivo(
     glpiId: item.id,
     referencia: `${itemtype} #${item.id}`,
     candidatos,
-    codigoRespaldo: `GLPI-${PREFIJO[itemtype]}-${item.id}`,
+    codigoRespaldo: `GLPI-${TIPOS_GLPI[itemtype].prefijo}-${item.id}`,
     excluido: item.is_template
       ? 'Es una plantilla de GLPI, no un activo real.'
       : undefined,

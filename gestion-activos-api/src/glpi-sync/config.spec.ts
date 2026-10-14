@@ -1,4 +1,4 @@
-import { leerConfig } from './config.js';
+import { ITEMTYPES, leerConfig } from './config.js';
 
 const BASE = {
   DATABASE_URL: 'mysql://u:c@localhost:3306/gestion_activos_db',
@@ -11,7 +11,7 @@ const BASE = {
 };
 
 describe('leerConfig', () => {
-  it('valores por defecto seguros: simulación, bloques de 10 y los 3 tipos', () => {
+  it('valores por defecto seguros: simulación, bloques de 10 y todos los tipos de GLPI', () => {
     expect(leerConfig(BASE)).toMatchObject({
       apiUrl: 'https://glpi.empresa.com/api.php',
       apiVersion: 'v2',
@@ -25,7 +25,7 @@ describe('leerConfig', () => {
       dryRun: true,
       tamanoBloque: 10,
       maxPorTipo: undefined,
-      itemtypes: ['Computer', 'NetworkEquipment', 'Software'],
+      itemtypes: ITEMTYPES,
       criticidadPorDefecto: 'Media',
       cron: '*/15 * * * *',
       modo: 'auto',
@@ -67,7 +67,7 @@ describe('leerConfig', () => {
     expect(() =>
       leerConfig({
         GLPI_TIMEZONE: 'Quito',
-        GLPI_ITEMTYPES: 'Computer,Monitor',
+        GLPI_ITEMTYPES: 'Computer,Cartridge',
         GLPI_TAMANO_BLOQUE: '0',
       }),
     ).toThrow(

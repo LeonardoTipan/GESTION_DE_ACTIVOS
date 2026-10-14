@@ -121,8 +121,8 @@ describe('2 · segunda sincronización', () => {
     // Punto de control 15:00 UTC − 15 min de ventana = 14:45 UTC = 09:45 en Quito.
     expect(informe.desde).toBe('2026-10-13T14:45:00.000Z');
     expect(e.filtros()).toEqual([
-      'date_mod=ge=2026-10-13T09:45:00',
-      'is_deleted==1;date_mod=ge=2026-10-13T09:45:00',
+      '(date_mod=ge=2026-10-13T09:45:00,date_creation=ge=2026-10-13T09:45:00)',
+      'is_deleted==1;(date_mod=ge=2026-10-13T09:45:00,date_creation=ge=2026-10-13T09:45:00)',
     ]);
     expect(informe.errores).toEqual([]);
     expect(informe.totales.Computer).toMatchObject({ leidos: 0, CREAR: 0 });
@@ -550,6 +550,61 @@ describe('15 · respuesta vacía válida frente a error de GLPI', () => {
     const e = entorno({ zonaHoraria: 'Europe/Madrid' });
     const informe = await e.sincronizar();
     expect(informe.errores[0]).toContain('GLPI_TIMEZONE="Europe/Madrid" no coincide');
+    expect(informe.puntoControl).toBeNull();
+  });
+});
+
+describe('todos los tipos de activo de GLPI', () => {
+  it('importa monitores, periféricos, cables… cada uno con su categoría y su código de respaldo', async () => {
+    const e = entorno({ itemtypes: ['Computer', 'Monitor', 'Cable', 'Software'] });
+    Object.assign(e.datos.elementos, {
+      Monitor: [{ id: 1, name: 'Monitor env', otherserial: '001', serial: 'M1', is_deleted: false, date_mod: '2026-05-12T12:20:45-05:00', status: { id: 3, name: 'Bueno' } }],
+      // Los cables informan su estado en "state".
+      Cable: [{ id: 1, name: 'Adaptador USB', otherserial: '', is_deleted: false, date_mod: '2026-05-19T10:30:21-05:00', state: { id: 3, name: 'Bueno' } }],
+      Software: [],
+    });
+    const informe = await e.sincronizar();
+    expect(informe.errores).toEqual([]);
+    const ref = (r: string) => e.inv.activos.find((a) => a.origenGlpi === r)!;
+    expect(ref('Monitor #1')).toMatchObject({ codigo: 'GLPI-MON-1', numeroSerie: 'M1', estado: 'Bueno' });
+    expect(ref('Cable #1')).toMatchObject({ codigo: 'GLPI-CAB-1', estado: 'Bueno' });
+    // El ordenador #1 y el monitor #1 comparten id en GLPI, pero son activos distintos.
+    expect(ref('Computer #1').id).not.toBe(ref('Monitor #1').id);
+  });
+
+  it('la incremental recoge lo CREADO aunque GLPI no le haya puesto fecha de modificación', async () => {
+    const e = entorno({ itemtypes: ['Computer', 'Software'] });
+    e.datos.elementos.Software = [];
+    await e.sincronizar();
+    e.pasan(30 * MIN);
+    e.datos.elementos.Software.push({
+      id: 7,
+      name: 'Navegador',
+      is_deleted: false,
+      date_creation: e.ahoraGlpi(),
+      date_mod: null as unknown as string, // como 339 de los 341 programas reales
+      category: { id: 2, name: 'application' },
+    });
+    e.pasan(MIN);
+    const informe = await e.sincronizar();
+    expect(informe.modo).toBe('INCREMENTAL');
+    expect(informe.totales.Software).toMatchObject({ leidos: 1, CREAR: 1 });
+    expect(e.inv.activos.find((a) => a.origenGlpi === 'Software #7')).toMatchObject({
+      codigo: 'GLPI-SW-7',
+      sistemas: 'application',
+    });
+  });
+
+  it('un tipo que falla no afecta a los demás ni da de baja a nadie', async () => {
+    const e = entorno({ itemtypes: ['Computer', 'Monitor'] });
+    e.datos.elementos.Monitor = [{ id: 1, name: 'Monitor', is_deleted: false, date_mod: '2026-05-12T12:20:45-05:00' }];
+    await e.sincronizar();
+    e.datos.rutasRotas = ['/v2/Assets/Monitor'];
+    const informe = await e.sincronizar({ modo: 'completa' });
+    expect(informe.errores).toHaveLength(1);
+    expect(informe.errores[0]).toContain('Monitor: no se pudo leer de GLPI');
+    expect(informe.totales.Computer).toMatchObject({ leidos: 25, ERROR: 0 });
+    expect(e.inv.activos.every((a) => a.inactivoDesde === null)).toBe(true);
     expect(informe.puntoControl).toBeNull();
   });
 });

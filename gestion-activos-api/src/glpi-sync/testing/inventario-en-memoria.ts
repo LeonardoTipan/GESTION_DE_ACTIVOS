@@ -1,4 +1,4 @@
-import type { GlpiSyncConfig, Itemtype } from '../config.js';
+import { CATEGORIAS_POR_DEFECTO, type GlpiSyncConfig, type Itemtype } from '../config.js';
 import {
   ActivoDuplicadoError,
   claveCodigo,
@@ -70,7 +70,13 @@ export class InventarioEnMemoria implements InventarioLocal {
 
   catalogos(): Promise<Catalogos> {
     return Promise.resolve({
-      categorias: new Map([['Hardware', 1], ['Red', 2], ['Software', 3]]),
+      // Catálogo corto de las pruebas más una categoría por tipo de GLPI.
+      categorias: new Map([
+        ['Hardware', 1],
+        ['Red', 2],
+        ['Software', 3],
+        ...Object.values(CATEGORIAS_POR_DEFECTO).map((nombre, i): [string, number] => [nombre, 10 + i]),
+      ]),
       criticidades: new Map([['Baja', 1], ['Media', 2], ['Alta', 3]]),
     });
   }
@@ -295,7 +301,13 @@ export const CONFIG_PRUEBA: GlpiSyncConfig = {
   cron: '*/15 * * * *',
   criticidadPorDefecto: 'Media',
   codigoInstitucional: REGLA,
-  categoriaPorTipo: { Computer: 'Hardware', NetworkEquipment: 'Red', Software: 'Software' },
+  // Las pruebas usan un catálogo corto: Hardware, Red y Software.
+  categoriaPorTipo: {
+    ...CATEGORIAS_POR_DEFECTO,
+    Computer: 'Hardware',
+    NetworkEquipment: 'Red',
+    Software: 'Software',
+  },
   dirInformes: 'glpi-informes',
   timeoutMs: 1000,
   databaseUrl: 'mysql://no-se-usa',

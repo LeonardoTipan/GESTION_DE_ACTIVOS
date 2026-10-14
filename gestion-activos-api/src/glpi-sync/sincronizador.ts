@@ -1,4 +1,4 @@
-import type { GlpiSyncConfig, Itemtype } from './config.js';
+import { TIPOS_GLPI, type GlpiSyncConfig, type Itemtype } from './config.js';
 import type { GlpiClient, GlpiItem } from './glpi-client.js';
 import {
   ES_CAMBIO,
@@ -291,8 +291,11 @@ export class Sincronizador {
     const lecturas: Lectura[] = [];
     const { tamanoBloque: tamano, maxPorTipo: max, zonaHoraria } = this.config;
     // GLPI interpreta la fecha del filtro en SU hora local (comprobado): se envía así.
-    const modificados = desde
-      ? `date_mod=ge=${fechaLocalDeZona(desde, zonaHoraria)}`
+    // Modificados O CREADOS desde entonces: muchos elementos (339 de 341
+    // programas en el GLPI de la institución) no tienen fecha de modificación.
+    const desdeLocal = desde ? fechaLocalDeZona(desde, zonaHoraria) : undefined;
+    const modificados = desdeLocal
+      ? `(date_mod=ge=${desdeLocal},date_creation=ge=${desdeLocal})`
       : undefined;
     // La papelera se pide aparte y expresamente: así se detecta tanto si el
     // listado normal de GLPI la incluye como si la oculta.
@@ -307,7 +310,9 @@ export class Sincronizador {
       const lectura: Lectura = { itemtype, activos: [], invalidos: [] };
       const vistos = new Set<number>();
       try {
-        for (const filtro of filtros) {
+        // Un tipo sin papelera en GLPI (tomas de red) rechaza el filtro is_deleted.
+        const consultas = TIPOS_GLPI[itemtype].papelera ? filtros : filtros.slice(0, 1);
+        for (const filtro of consultas) {
           let n = 0;
           for await (const bloque of this.glpi.listarPorBloques(itemtype, {
             tamano,

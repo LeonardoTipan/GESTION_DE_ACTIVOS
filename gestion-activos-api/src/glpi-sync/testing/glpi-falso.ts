@@ -97,13 +97,18 @@ export function glpiFalso(datos: DatosGlpiFalso) {
     if (datos.papeleraOculta && !filtro?.includes('is_deleted==1')) {
       lista = lista.filter((x) => !x.is_deleted);
     }
-    for (const condicion of filtro?.split(';') ?? []) {
-      const fecha = /^date_mod=ge=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/.exec(condicion)?.[1];
-      if (condicion === 'is_deleted==1') {
-        lista = lista.filter((x) => x.is_deleted === true);
-      } else if (fecha) {
-        lista = lista.filter((x) => String(x.date_mod ?? '').slice(0, 19) >= fecha);
-      } else {
+    const cumple = (x: GlpiItem, condicion: string): boolean | null => {
+      const fecha = /^(date_mod|date_creation)=ge=(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})$/.exec(condicion);
+      if (condicion === 'is_deleted==1') return x.is_deleted === true;
+      if (fecha) {
+        const valor = x[fecha[1]];
+        return typeof valor === 'string' && valor.slice(0, 19) >= fecha[2];
+      }
+      return null; // desconocida
+    };
+    for (const termino of filtro?.split(';') ?? []) {
+      const alternativas = termino.replace(/^\(|\)$/g, '').split(',');
+      if (alternativas.some((c) => cumple({ id: 0 }, c) === null)) {
         return Promise.resolve(
           json(
             { status: 'ERROR_INVALID_PARAMETER', title: 'RSQL query has invalid filters' },
@@ -111,6 +116,7 @@ export function glpiFalso(datos: DatosGlpiFalso) {
           ),
         );
       }
+      lista = lista.filter((x) => alternativas.some((c) => cumple(x, c)));
     }
     const inicio = Number(url.searchParams.get('start') ?? 0);
     const limite = Number(url.searchParams.get('limit') ?? 100);
