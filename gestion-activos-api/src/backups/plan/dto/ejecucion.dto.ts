@@ -102,6 +102,27 @@ export class RegistrarEjecucionDto {
   @ApiProperty({ description: 'Integridad verificada.' })
   @IsBoolean()
   integridad: boolean;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    maxLength: 191,
+    example: 'NAS02/respaldos/BD-CORE/2026-07-05.bak',
+    description:
+      'Referencia a lo generado (ruta, etiqueta de cinta, id del trabajo). Se DOCUMENTA: la aplicación no comprueba que el archivo exista.',
+  })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  evidencia?: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  observaciones?: string;
 }
 
 export class ModificarEjecucionDto extends IntersectionType(
@@ -124,9 +145,11 @@ export class QueryEjecucionesDto extends QueryPeriodoDto {
 }
 
 export class EjecucionRespaldoDto extends IntersectionType(
-  OmitType(RegistrarEjecucionDto, [] as const),
+  OmitType(RegistrarEjecucionDto, ['evidencia', 'observaciones'] as const),
   RegistroDto,
 ) {
+  @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
+  @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
   @ApiProperty() id: number;
   @ApiProperty() activoId: number;
   @ApiProperty({ type: ActivoBreveDto }) activo: ActivoBreveDto;
@@ -187,6 +210,13 @@ export class RegistrarRestauracionDto {
   @MinLength(1)
   @MaxLength(191)
   responsable: string;
+
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  observaciones?: string;
 }
 
 export class ModificarRestauracionDto extends IntersectionType(
@@ -195,6 +225,16 @@ export class ModificarRestauracionDto extends IntersectionType(
 ) {}
 
 export class QueryRestauracionesDto extends QueryPeriodoDto {
+  @ApiPropertyOptional({ enum: ResultadoOperacion })
+  @IsOptional()
+  @IsEnum(ResultadoOperacion)
+  resultado?: ResultadoOperacion;
+
+  @ApiPropertyOptional({ enum: MotivoRestauracion })
+  @IsOptional()
+  @IsEnum(MotivoRestauracion)
+  motivo?: MotivoRestauracion;
+
   @ApiPropertyOptional()
   @IsOptional()
   @Type(() => Number)
@@ -204,9 +244,10 @@ export class QueryRestauracionesDto extends QueryPeriodoDto {
 }
 
 export class RestauracionDto extends IntersectionType(
-  OmitType(RegistrarRestauracionDto, [] as const),
+  OmitType(RegistrarRestauracionDto, ['observaciones'] as const),
   RegistroDto,
 ) {
+  @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
   @ApiProperty() id: number;
   @ApiProperty() activoId: number;
   @ApiProperty({ type: ActivoBreveDto }) activo: ActivoBreveDto;

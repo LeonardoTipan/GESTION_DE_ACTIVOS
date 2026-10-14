@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginatedResponseDto } from '../../../common/dto/paginated-response.dto.js';
+import { ActivoBreveDto } from '../../../common/dto/registro.dto.js';
 import {
   EstadoVulnerabilidad,
+  FuenteVulnerabilidad,
   NivelRiesgo,
+  PrioridadVulnerabilidad,
 } from '../../../generated/prisma/enums.js';
 
 /** Datos mínimos del activo afectado, para mostrarlo sin otra petición. */
@@ -24,8 +27,8 @@ export class VulnerabilidadDto {
   @ApiProperty({ example: 5 })
   activoId: number;
 
-  @ApiProperty({ type: ActivoAfectadoDto })
-  activo: ActivoAfectadoDto;
+  @ApiProperty({ type: ActivoBreveDto })
+  activo: ActivoBreveDto;
 
   @ApiProperty({ type: String, nullable: true, example: 'CVE-2026-12345' })
   cve: string | null;
@@ -52,6 +55,20 @@ export class VulnerabilidadDto {
       'Acción aplicada al mitigar, o justificación al aceptar el riesgo.',
   })
   mitigacion: string | null;
+
+  @ApiProperty({ enum: FuenteVulnerabilidad }) fuente: FuenteVulnerabilidad;
+  @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Capa 1: confirmada tras comprobarla.' })
+  confirmadaEn: Date | null;
+  @ApiProperty({ type: String, nullable: true }) confirmadaPor: string | null;
+  @ApiProperty({ enum: PrioridadVulnerabilidad, nullable: true, description: 'Capa 2: evaluación.' })
+  prioridad: PrioridadVulnerabilidad | null;
+  @ApiProperty({ type: String, nullable: true }) responsable: string | null;
+  @ApiProperty({ type: String, nullable: true }) planRemediacion: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) evaluadaEn: Date | null;
+  @ApiProperty({ type: String, nullable: true }) evaluadaPor: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Quién la cerró (verificación) o aceptó el riesgo.' })
+  cerradaPor: string | null;
 
   @ApiProperty({
     type: String,

@@ -1,5 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginatedResponseDto } from '../../../common/dto/paginated-response.dto.js';
+import { ActivoBreveDto } from '../../../common/dto/registro.dto.js';
+import type { CierreMantenimiento } from '../../planes/frecuencia.js';
 import {
   EstadoEquipo,
   FaseMantenimiento,
@@ -25,8 +27,11 @@ export class MantenimientoDto {
   @ApiProperty({ example: 5 })
   activoId: number;
 
-  @ApiProperty({ type: ActivoMantenidoDto })
-  activo: ActivoMantenidoDto;
+  @ApiProperty({ type: ActivoBreveDto })
+  activo: ActivoBreveDto;
+
+  @ApiProperty({ type: Number, nullable: true, description: 'Plan del que procede (capa 1).' })
+  planId: number | null;
 
   @ApiProperty({ enum: TipoMantenimiento })
   tipo: TipoMantenimiento;
@@ -78,6 +83,20 @@ export class MantenimientoDto {
 
   @ApiProperty({ example: 1, description: 'Sube con cada modificación.' })
   version: number;
+
+  @ApiProperty({ type: String, nullable: true }) tecnico: string | null;
+  @ApiProperty({ type: String, nullable: true }) diagnostico: string | null;
+  @ApiProperty({ type: Number, nullable: true, description: 'Minutos.' }) duracionMin: number | null;
+  @ApiProperty({ type: Number, nullable: true }) costo: number | null;
+  @ApiProperty({ type: String, nullable: true }) repuestos: string | null;
+  @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
+  @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
+
+  @ApiProperty({
+    enum: ['NO_APLICA', 'PENDIENTE_VERIFICACION', 'CERRADO', 'EN_SEGUIMIENTO', 'NO_SATISFACTORIO'],
+    description: 'Capa 3: según la última verificación vigente (solo en los FINALIZADOS).',
+  })
+  cierre: CierreMantenimiento;
 
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Anulado (eliminación lógica); null = vigente.' })
   anuladoEn: Date | null;

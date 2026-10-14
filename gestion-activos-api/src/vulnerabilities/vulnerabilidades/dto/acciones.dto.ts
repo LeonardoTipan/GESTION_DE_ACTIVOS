@@ -18,7 +18,7 @@ import {
   Min,
 } from 'class-validator';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
-import { NivelRiesgo } from '../../../generated/prisma/enums.js';
+import { FuenteVulnerabilidad, NivelRiesgo } from '../../../generated/prisma/enums.js';
 
 /** Margen para diferencias de reloj entre el equipo del usuario y el servidor. */
 const AHORA_CON_MARGEN = () => new Date(Date.now() + 5 * 60 * 1000);
@@ -87,6 +87,23 @@ export class RegistrarVulnerabilidadDto {
   @Type(() => Date)
   @IsDate()
   fechaLimite?: Date;
+
+  @ApiPropertyOptional({
+    enum: FuenteVulnerabilidad,
+    default: 'MANUAL',
+    description:
+      'De dónde viene. Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.',
+  })
+  @IsOptional()
+  @IsEnum(FuenteVulnerabilidad)
+  fuente?: FuenteVulnerabilidad;
+
+  @ApiPropertyOptional({ example: 'Informe Nessus 2026-09-30, hallazgo 4521' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  evidencia?: string;
 }
 
 /** Edición de los datos del registro; solo mientras está pendiente (ABIERTA o EN_MITIGACION). */
@@ -95,20 +112,6 @@ export class EditarVulnerabilidadDto extends IntersectionType(
   PartialType(OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const)),
   MotivoCambioDto,
 ) {}
-
-/** Mitigar: EN_MITIGACION → MITIGADA. */
-export class MitigarVulnerabilidadDto {
-  @ApiProperty({
-    example:
-      'Actualizado OpenSSL a 3.0.15 y reiniciado el servicio; verificado con escaneo.',
-    maxLength: MAX_TEXTO_LARGO,
-  })
-  @Trim()
-  @IsString()
-  @IsNotEmpty()
-  @MaxLength(MAX_TEXTO_LARGO)
-  mitigacion: string;
-}
 
 /** Aceptar riesgo (solo admin): ABIERTA o EN_MITIGACION → ACEPTADA. */
 export class AceptarRiesgoDto {

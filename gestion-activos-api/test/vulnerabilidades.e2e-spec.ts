@@ -94,7 +94,38 @@ describe('Vulnerabilidades (e2e)', () => {
         .expect(201)
     ).body as { id: number };
 
-  describe('ciclo completo: registrar → iniciar mitigación → mitigar', () => {
+  /** Capa 1 y 2: confirmar y evaluar, requisito para iniciar el tratamiento. */
+  const prepararTratamiento = async (id: number) => {
+    await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/confirmar`).expect(200);
+    await api(tokens.analista)
+      .patch(`/api/vulnerabilidades/${id}/evaluar`, {
+        prioridad: 'P2',
+        responsable: 'Infraestructura',
+        planRemediacion: 'Aplicar el parche del fabricante en la próxima ventana.',
+      })
+      .expect(200);
+  };
+  /** Capas 2 y 3: una acción correctiva y la verificación que la cierra. */
+  const cerrarConVerificacion = async (id: number, observaciones = 'Escaneo posterior sin hallazgos.') => {
+    await api(tokens.analista)
+      .post(`/api/vulnerabilidades/${id}/acciones`, {
+        fecha: new Date().toISOString(),
+        descripcion: 'Parche aplicado.',
+        responsable: 'jperez',
+      })
+      .expect(201);
+    return api(tokens.analista)
+      .post(`/api/vulnerabilidades/${id}/verificaciones`, {
+        fecha: new Date().toISOString(),
+        resultado: 'CORREGIDA',
+        observaciones,
+        evidencia: 'Informe de escaneo',
+        responsable: 'Seguridad',
+      })
+      .expect(201);
+  };
+
+  describe('ciclo completo: registrar → confirmar → evaluar → tratar → verificar', () => {
     let id: number;
 
     it('registrar → 201 ABIERTA, con el CVE normalizado a mayúsculas', async () => {
@@ -135,16 +166,31 @@ describe('Vulnerabilidades (e2e)', () => {
       expect(res.body.message).toMatch(/ya tiene CVE-2026-12345 pendiente/);
     });
 
-    it('no se puede mitigar sin haber iniciado la mitigación → 409', () =>
+    it('no se puede verificar ni cerrar sin haber iniciado el tratamiento → 409', () =>
       api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/mitigar`, { mitigacion: 'X' })
+        .post(`/api/vulnerabilidades/${id}/verificaciones`, {
+          fecha: new Date().toISOString(),
+          resultado: 'CORREGIDA',
+          observaciones: 'Intento de cierre directo.',
+          evidencia: 'Ninguna',
+          responsable: 'X',
+        })
         .expect(409));
 
-    it('iniciar mitigación → EN_MITIGACION', async () => {
+    it('ya no existe el cierre manual: PATCH /mitigar → 404', () =>
+      api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/mitigar`, { mitigacion: 'X' })
+        .expect(404));
+
+    it('iniciar el tratamiento exige la evaluación; después → EN_MITIGACION', async () => {
+      await api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
+        .expect(409);
+      await prepararTratamiento(id);
       const res = await api(tokens.analista)
         .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
         .expect(200);
-      expect(res.body.estado).toBe('EN_MITIGACION');
+      expect(res.body).toMatchObject({ estado: 'EN_MITIGACION', prioridad: 'P2', evaluadaPor: 'analista.test' });
     });
 
     it('no se puede iniciar dos veces → 409', () =>
@@ -152,21 +198,16 @@ describe('Vulnerabilidades (e2e)', () => {
         .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
         .expect(409));
 
-    it('mitigar → MITIGADA con la acción aplicada y fecha de cierre automática', async () => {
-      const antes = Date.now();
-      const res = await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/mitigar`, {
-          mitigacion: 'Actualizado OpenSSL a 3.0.15; verificado con escaneo.',
-        })
-        .expect(200);
+    it('una verificación CORREGIDA la cierra: MITIGADA, con quién la cerró y la fecha', async () => {
+      await cerrarConVerificacion(id, 'Actualizado OpenSSL a 3.0.15; verificado con escaneo.');
+      const res = await api(tokens.auditor).get(`/api/vulnerabilidades/${id}`).expect(200);
       expect(res.body).toMatchObject({
         estado: 'MITIGADA',
         mitigacion: 'Actualizado OpenSSL a 3.0.15; verificado con escaneo.',
+        cerradaPor: 'analista.test',
         vencida: false,
       });
-      expect(new Date(res.body.fechaCierre).getTime()).toBeGreaterThanOrEqual(
-        antes - 1000,
-      );
+      expect(res.body.fechaCierre).not.toBeNull();
     });
 
     it('cerrada, ya no admite aceptar el riesgo → 409', () =>
@@ -208,6 +249,7 @@ describe('Vulnerabilidades (e2e)', () => {
 
     it('admin acepta desde EN_MITIGACION', async () => {
       const { id } = await registrar({ descripcion: 'Mitigación inviable' });
+      await prepararTratamiento(id);
       await api(tokens.analista)
         .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
         .expect(200);
@@ -371,6 +413,8 @@ describe('Vulnerabilidades (e2e)', () => {
     });
 
     async function limpiarVulnerabilidades() {
+      await prisma.accionRemediacion.deleteMany();
+      await prisma.verificacionVulnerabilidad.deleteMany();
       await prisma.vulnerabilidad.deleteMany();
     }
 
@@ -405,14 +449,11 @@ describe('Vulnerabilidades (e2e)', () => {
     });
 
     it('abiertas=true / false y filtro por nivel de riesgo', async () => {
+      await prepararTratamiento(criticaId);
       await api(tokens.analista)
         .patch(`/api/vulnerabilidades/${criticaId}/iniciar-mitigacion`)
         .expect(200);
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${criticaId}/mitigar`, {
-          mitigacion: 'Parcheado',
-        })
-        .expect(200);
+      await cerrarConVerificacion(criticaId, 'Parcheado y verificado.');
 
       const abiertas = await api(tokens.auditor)
         .get('/api/vulnerabilidades?abiertas=true')
@@ -445,6 +486,7 @@ describe('Vulnerabilidades (e2e)', () => {
 
     it('?actualizadoDesde devuelve solo lo modificado después de esa fecha', async () => {
       const { id } = await registrar({ descripcion: 'Sincronización' });
+      await prepararTratamiento(id);
       const desde = new Date().toISOString();
       await new Promise((r) => setTimeout(r, 20));
       await api(tokens.analista)
@@ -477,7 +519,10 @@ describe('Vulnerabilidades (e2e)', () => {
         '/api/vulnerabilidades',
         '/api/vulnerabilidades/{id}',
         '/api/vulnerabilidades/{id}/iniciar-mitigacion',
-        '/api/vulnerabilidades/{id}/mitigar',
+        '/api/vulnerabilidades/{id}/confirmar',
+        '/api/vulnerabilidades/{id}/evaluar',
+        '/api/vulnerabilidades/{id}/acciones',
+        '/api/vulnerabilidades/{id}/verificaciones',
         '/api/vulnerabilidades/{id}/aceptar-riesgo',
       ]),
     );

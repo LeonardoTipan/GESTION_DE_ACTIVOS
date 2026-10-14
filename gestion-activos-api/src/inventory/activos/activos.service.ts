@@ -144,6 +144,10 @@ export class ActivosService {
         { numeroSerie: { contains: query.q } },
         { fabricante: { contains: query.q } },
         { modelo: { contains: query.q } },
+        // También por categoría (tipo de GLPI), referencia de GLPI («Monitor #7») o id.
+        { categoria: { nombre: { contains: query.q } } },
+        { origenGlpi: { contains: query.q } },
+        ...(/^\d+$/.test(query.q) ? [{ id: Number(query.q) }] : []),
       ];
     }
 

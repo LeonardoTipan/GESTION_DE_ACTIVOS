@@ -129,6 +129,11 @@ export class ModificarPlanDto extends IntersectionType(
 }
 
 export class QueryPlanesDto extends QueryRegistrosDto {
+  @ApiPropertyOptional({ enum: FrecuenciaRespaldo })
+  @IsOptional()
+  @IsEnum(FrecuenciaRespaldo)
+  frecuencia?: FrecuenciaRespaldo;
+
   @ApiPropertyOptional({ enum: EstadoPlan })
   @IsOptional()
   @IsEnum(EstadoPlan)

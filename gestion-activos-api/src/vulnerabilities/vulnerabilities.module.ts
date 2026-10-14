@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module.js';
 import { InventoryModule } from '../inventory/inventory.module.js';
 import { VulnerabilidadesController } from './vulnerabilidades/vulnerabilidades.controller.js';
+import { TratamientoVulnerabilidadController } from './tratamiento/tratamiento.controller.js';
+import { TratamientoVulnerabilidadService } from './tratamiento/tratamiento.service.js';
 import { VulnerabilidadesService } from './vulnerabilidades/vulnerabilidades.service.js';
 
 /**
@@ -11,7 +13,8 @@ import { VulnerabilidadesService } from './vulnerabilidades/vulnerabilidades.ser
  */
 @Module({
   imports: [InventoryModule, AuditModule],
-  controllers: [VulnerabilidadesController],
-  providers: [VulnerabilidadesService],
+  // Las rutas fijas (lote, acciones/…, verificaciones/…) antes que /vulnerabilidades/:id.
+  controllers: [TratamientoVulnerabilidadController, VulnerabilidadesController],
+  providers: [VulnerabilidadesService, TratamientoVulnerabilidadService],
 })
 export class VulnerabilitiesModule {}

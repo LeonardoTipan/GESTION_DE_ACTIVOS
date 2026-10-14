@@ -7,6 +7,8 @@ import {
   IsIn,
   IsInt,
   IsOptional,
+  IsString,
+  MaxLength,
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto.js';
@@ -29,6 +31,40 @@ export class QueryMantenimientosDto extends PaginationQueryDto {
   @IsInt()
   @Min(1)
   activoId?: number;
+
+  @ApiPropertyOptional({ example: 7, description: 'Categoría del activo.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoriaId?: number;
+
+  @ApiPropertyOptional({ description: 'Busca en el código y nombre del activo y en la actividad.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Técnico (contiene el texto).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  tecnico?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  planId?: number;
+
+  @ApiPropertyOptional({
+    enum: ['PENDIENTE_VERIFICACION', 'CERRADO'],
+    description: 'Finalizados sin verificar, o cerrados como operativos.',
+  })
+  @IsOptional()
+  @IsIn(['PENDIENTE_VERIFICACION', 'CERRADO'])
+  cierre?: 'PENDIENTE_VERIFICACION' | 'CERRADO';
 
   @ApiPropertyOptional({ enum: TipoMantenimiento })
   @IsOptional()

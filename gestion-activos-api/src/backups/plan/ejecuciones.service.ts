@@ -9,7 +9,8 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { activoBreve, SELECT_ACTIVO } from './dto/comun.dto.js';
+import { activoBreve, filtroRegistros, finDelDia, SELECT_ACTIVO } from './dto/comun.dto.js';
+import { AvisosService } from '../../audit/avisos.service.js';
 import type {
   EjecucionRespaldoDto,
   ModificarEjecucionDto,
@@ -35,7 +36,10 @@ function exigirNoFutura(fecha: Date | undefined): void {
 
 /** Filtro de período por fecha del registro. */
 const periodo = (desde?: Date, hasta?: Date) =>
-  desde || hasta ? { fecha: { gte: desde, lte: hasta } } : {};
+  desde || hasta ? { fecha: { gte: desde, lte: hasta ? finDelDia(hasta) : undefined } } : {};
+
+/** Responsable que contiene el texto. */
+const responsable = (texto?: string) => (texto ? { responsable: { contains: texto } } : {});
 
 /**
  * Paso 2 · Ejecución del respaldo: cada corrida sobre un activo con plan
@@ -48,15 +52,16 @@ export class EjecucionesRespaldoService {
     private readonly activos: ActivosService,
     private readonly planes: PlanesRespaldoService,
     private readonly trazas: TrazasService,
+    private readonly avisos: AvisosService,
   ) {}
 
   async findAll(query: QueryEjecucionesDto): Promise<Paginated<EjecucionRespaldoDto>> {
     const where: Prisma.EjecucionRespaldoWhereInput = {
-      activoId: query.activoId,
+      ...filtroRegistros(query),
       planId: query.planId,
       resultado: query.resultado,
       ...periodo(query.desde, query.hasta),
-      ...(query.incluirAnulados ? {} : { anuladoEn: null }),
+      ...responsable(query.responsable),
     };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.ejecucionRespaldo.count({ where }),
@@ -81,9 +86,23 @@ export class EjecucionesRespaldoService {
     exigirNoFutura(dto.fecha);
     const plan = await this.planes.exigirVigente(dto.planId);
     await this.activos.exigirOperativo(plan.activoId);
-    const r = await this.prisma.ejecucionRespaldo.create({
-      data: { ...dto, activoId: plan.activoId },
-      include: INCLUDE,
+    const r = await this.prisma.$transaction(async (tx) => {
+      const creada = await tx.ejecucionRespaldo.create({
+        data: { ...dto, activoId: plan.activoId },
+        include: INCLUDE,
+      });
+      if (creada.resultado === 'FALLIDO') {
+        await this.avisos.avisar(
+          {
+            tipo: 'RESPALDO_FALLIDO',
+            titulo: `Respaldo fallido: ${creada.activo.codigo} · ${creada.activo.nombre}`,
+            mensaje: `La ejecución ${creada.id} del plan ${plan.id} terminó con resultado FALLIDO.`,
+            activoId: creada.activoId,
+          },
+          tx,
+        );
+      }
+      return creada;
     });
     return aDto(r);
   }
@@ -120,10 +139,12 @@ export class RestauracionesService {
 
   async findAll(query: QueryRestauracionesDto): Promise<Paginated<RestauracionDto>> {
     const where: Prisma.RestauracionWhereInput = {
-      activoId: query.activoId,
+      ...filtroRegistros(query),
       ejecucionId: query.ejecucionId,
+      resultado: query.resultado,
+      motivo: query.motivo,
       ...periodo(query.desde, query.hasta),
-      ...(query.incluirAnulados ? {} : { anuladoEn: null }),
+      ...responsable(query.responsable),
     };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.restauracion.count({ where }),

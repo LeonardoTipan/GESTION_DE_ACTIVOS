@@ -14,7 +14,7 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import { activoBreve, SELECT_ACTIVO } from './dto/comun.dto.js';
+import { activoBreve, filtroRegistros, SELECT_ACTIVO } from './dto/comun.dto.js';
 import type {
   CrearPlanesDto,
   ModificarPlanDto,
@@ -47,9 +47,10 @@ export class PlanesRespaldoService {
 
   async findAll(query: QueryPlanesDto): Promise<Paginated<PlanRespaldoDto>> {
     const where: Prisma.PlanRespaldoWhereInput = {
-      activoId: query.activoId,
+      ...filtroRegistros(query),
       estado: query.estado,
-      ...(query.incluirAnulados ? {} : { anuladoEn: null }),
+      frecuencia: query.frecuencia,
+      ...(query.responsable ? { responsable: { contains: query.responsable } } : {}),
     };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.planRespaldo.count({ where }),

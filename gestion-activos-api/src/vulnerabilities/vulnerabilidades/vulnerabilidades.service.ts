@@ -10,7 +10,9 @@ import {
   type Paginated,
 } from '../../common/dto/paginated-response.dto.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import { AvisosService } from '../../audit/avisos.service.js';
 import { TrazasService } from '../../audit/trazas.service.js';
+import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
@@ -19,7 +21,6 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   AceptarRiesgoDto,
   EditarVulnerabilidadDto,
-  MitigarVulnerabilidadDto,
   RegistrarVulnerabilidadDto,
 } from './dto/acciones.dto.js';
 import type { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
@@ -32,9 +33,7 @@ import {
   type AccionVulnerabilidad,
 } from './transiciones.js';
 
-const INCLUDE = {
-  activo: { select: { id: true, codigo: true, nombre: true } },
-} as const;
+const INCLUDE = { activo: SELECT_ACTIVO } as const;
 
 /**
  * Solo registros cuyo activo existe. Las claves foráneas lo garantizan, pero si
@@ -54,6 +53,7 @@ export class VulnerabilidadesService {
     private readonly prisma: PrismaService,
     private readonly activos: ActivosService,
     private readonly trazas: TrazasService,
+    private readonly avisos: AvisosService,
   ) {}
 
   async findAll(
@@ -69,8 +69,23 @@ export class VulnerabilidadesService {
         activoId: query.activoId,
         nivelRiesgo: query.nivelRiesgo,
         estado: query.estado,
+        prioridad: query.prioridad,
+        fuente: query.fuente,
+        ...(query.categoriaId ? { activo: { categoriaId: query.categoriaId } } : {}),
+        ...(query.responsable ? { responsable: { contains: query.responsable } } : {}),
       },
     ];
+    if (query.confirmada === true) filtros.push({ confirmadaEn: { not: null } });
+    if (query.confirmada === false) filtros.push({ confirmadaEn: null });
+    if (query.q) {
+      filtros.push({
+        OR: [
+          { descripcion: { contains: query.q } },
+          { activo: { codigo: { contains: query.q } } },
+          { activo: { nombre: { contains: query.q } } },
+        ],
+      });
+    }
     if (query.cve) filtros.push({ cve: { contains: query.cve } });
     if (query.abiertas === true) {
       filtros.push({ estado: { in: ESTADOS_ABIERTOS } });
@@ -115,8 +130,28 @@ export class VulnerabilidadesService {
     return conVencida(vulnerabilidad);
   }
 
-  /** Registra la vulnerabilidad en estado ABIERTA. El activo debe estar vigente. */
-  async registrar(dto: RegistrarVulnerabilidadDto): Promise<VulnerabilidadDto> {
+  /** Registra la vulnerabilidad en estado ABIERTA (detectada). El activo debe estar operativo. */
+  async registrar(dto: RegistrarVulnerabilidadDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {
+    await this.validarRegistro(dto);
+    return this.prisma.$transaction(async (tx) => {
+      const v = await tx.vulnerabilidad.create({ data: dto, include: INCLUDE });
+      if (v.nivelRiesgo === 'CRITICO') {
+        await this.avisos.avisar(
+          {
+            tipo: 'VULNERABILIDAD_CRITICA',
+            titulo: `Vulnerabilidad crítica en ${v.activo.codigo} · ${v.activo.nombre}`,
+            mensaje: `${v.cve ?? 'Sin CVE'}: ${v.descripcion.slice(0, 300)} (registrada por ${usuario?.username ?? 'la API'}).`,
+            activoId: v.activoId,
+          },
+          tx,
+        );
+      }
+      return conVencida(v);
+    });
+  }
+
+  /** Reglas del registro, sin escribir nada (también para el registro en lote). */
+  async validarRegistro(dto: RegistrarVulnerabilidadDto): Promise<void> {
     // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos,
     // pero la regla no depende de ella.
     await this.activos.exigirOperativo(dto.activoId);
@@ -140,31 +175,24 @@ export class VulnerabilidadesService {
         );
       }
     }
-    const vulnerabilidad = await this.prisma.vulnerabilidad.create({
-      data: dto,
-      include: INCLUDE,
-    });
-    return conVencida(vulnerabilidad);
   }
 
-  iniciarMitigacion(id: number): Promise<VulnerabilidadDto> {
+  /** Inicia el tratamiento: exige la evaluación (prioridad, responsable y plan). */
+  async iniciarMitigacion(id: number): Promise<VulnerabilidadDto> {
+    const actual = await this.findOne(id);
+    if (!actual.prioridad || !actual.responsable || !actual.planRemediacion) {
+      throw new ConflictException(
+        'Registre la evaluación (prioridad, responsable y plan de remediación) antes de iniciar el tratamiento.',
+      );
+    }
     return this.transicionar(id, 'iniciar-mitigacion', {});
   }
 
-  mitigar(
-    id: number,
-    dto: MitigarVulnerabilidadDto,
-  ): Promise<VulnerabilidadDto> {
-    return this.transicionar(id, 'mitigar', {
-      mitigacion: dto.mitigacion,
-      fechaCierre: new Date(),
-    });
-  }
-
-  aceptarRiesgo(id: number, dto: AceptarRiesgoDto): Promise<VulnerabilidadDto> {
+  aceptarRiesgo(id: number, dto: AceptarRiesgoDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {
     return this.transicionar(id, 'aceptar-riesgo', {
       mitigacion: dto.justificacion,
       fechaCierre: new Date(),
+      cerradaPor: usuario?.username ?? null,
     });
   }
 
@@ -280,5 +308,9 @@ function conVencida(
   vulnerabilidad: VulnerabilidadConActivo,
   ahora = new Date(),
 ): VulnerabilidadDto {
-  return { ...vulnerabilidad, vencida: estaVencida(vulnerabilidad, ahora) };
+  return {
+    ...vulnerabilidad,
+    activo: activoBreve(vulnerabilidad.activo),
+    vencida: estaVencida(vulnerabilidad, ahora),
+  };
 }

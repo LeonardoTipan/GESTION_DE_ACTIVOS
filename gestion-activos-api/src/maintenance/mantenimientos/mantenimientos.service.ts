@@ -31,9 +31,14 @@ import {
   type AccionMantenimiento,
 } from './transiciones.js';
 import { indicadoresMantenimiento } from './indicadores.js';
+import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
+import { BitacoraService } from '../../inventory/bitacora/bitacora.service.js';
+import { calcularCambios } from '../../inventory/bitacora/cambios.js';
+import { cierreDe } from '../planes/frecuencia.js';
 
 const INCLUDE = {
-  activo: { select: { id: true, codigo: true, nombre: true } },
+  activo: SELECT_ACTIVO,
+  verificaciones: { select: { resultado: true, anuladoEn: true }, orderBy: { id: 'asc' } },
 } as const;
 
 /**
@@ -54,6 +59,7 @@ export class MantenimientosService {
     private readonly prisma: PrismaService,
     private readonly activos: ActivosService,
     private readonly trazas: TrazasService,
+    private readonly bitacora: BitacoraService,
   ) {}
 
   async findAll(
@@ -67,6 +73,9 @@ export class MantenimientosService {
     const filtros: Prisma.MantenimientoWhereInput[] = [
       {
         activoId: query.activoId,
+        planId: query.planId,
+        ...(query.tecnico ? { tecnico: { contains: query.tecnico } } : {}),
+        ...(query.categoriaId ? { activo: { categoriaId: query.categoriaId } } : {}),
         tipo: query.tipo,
         fase: query.fase,
         estadoEquipo: query.estadoEquipo,
@@ -81,6 +90,21 @@ export class MantenimientosService {
       filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     }
     if (!query.incluirAnulados) filtros.push({ anuladoEn: null });
+    if (query.q) {
+      filtros.push({
+        OR: [
+          { actividad: { contains: query.q } },
+          { activo: { codigo: { contains: query.q } } },
+          { activo: { nombre: { contains: query.q } } },
+        ],
+      });
+    }
+    if (query.cierre === 'PENDIENTE_VERIFICACION') {
+      filtros.push({ fase: 'FINALIZADO', verificaciones: { none: { anuladoEn: null } } });
+    }
+    if (query.cierre === 'CERRADO') {
+      filtros.push({ verificaciones: { some: { anuladoEn: null, resultado: 'OPERATIVO' } } });
+    }
     const where: Prisma.MantenimientoWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
     const [total, filas] = await this.prisma.$transaction([
@@ -131,12 +155,14 @@ export class MantenimientosService {
     this.validarTransicion(actual, 'iniciar');
     return this.aplicar(id, 'iniciar', {
       fechaInicio: dto.fechaInicio ?? new Date(),
+      ...(dto.tecnico ? { tecnico: dto.tecnico } : {}),
     });
   }
 
   async finalizar(
     id: number,
     dto: FinalizarMantenimientoDto,
+    usuario?: AuthUser,
   ): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     this.validarTransicion(actual, 'finalizar');
@@ -146,11 +172,35 @@ export class MantenimientosService {
         'La fecha de fin no puede ser anterior a la de inicio.',
       );
     }
-    return this.aplicar(id, 'finalizar', {
+    const tecnico = dto.tecnico ?? actual.tecnico;
+    if (!tecnico) {
+      throw new BadRequestException('Indique el técnico que realizó el mantenimiento.');
+    }
+    const resultado = await this.aplicar(id, 'finalizar', {
       resultado: dto.resultado,
       estadoEquipo: dto.estadoEquipo,
       fechaFin,
+      tecnico,
+      diagnostico: dto.diagnostico,
+      duracionMin: dto.duracionMin,
+      costo: dto.costo,
+      repuestos: dto.repuestos,
+      observaciones: dto.observaciones,
+      evidencia: dto.evidencia,
     });
+    // Se refleja en el activo: su última revisión es la del mantenimiento.
+    await this.prisma.$transaction(async (tx) => {
+      const activo = await tx.activo.findUniqueOrThrow({ where: { id: actual.activoId } });
+      if (activo.ultimaRevision.getTime() >= fechaFin.getTime()) return;
+      await tx.activo.update({ where: { id: activo.id }, data: { ultimaRevision: fechaFin } });
+      await this.bitacora.registrar(tx, {
+        activoId: activo.id,
+        accion: 'ACTUALIZAR',
+        responsable: usuario?.username ?? tecnico,
+        cambios: calcularCambios(activo, { ultimaRevision: fechaFin }),
+      });
+    });
+    return resultado;
   }
 
   async cancelar(
@@ -252,5 +302,12 @@ function conVencido(
   mantenimiento: MantenimientoConActivo,
   ahora = new Date(),
 ): MantenimientoDto {
-  return { ...mantenimiento, vencido: estaVencido(mantenimiento, ahora) };
+  const { verificaciones, ...m } = mantenimiento;
+  return {
+    ...m,
+    activo: activoBreve(m.activo),
+    costo: m.costo === null ? null : Number(m.costo),
+    vencido: estaVencido(m, ahora),
+    cierre: cierreDe(m.fase, verificaciones),
+  };
 }

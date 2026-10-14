@@ -32,7 +32,6 @@ import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
   AceptarRiesgoDto,
   EditarVulnerabilidadDto,
-  MitigarVulnerabilidadDto,
   RegistrarVulnerabilidadDto,
 } from './dto/acciones.dto.js';
 import { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
@@ -104,8 +103,9 @@ export class VulnerabilidadesController {
   @Post()
   registrar(
     @Body() dto: RegistrarVulnerabilidadDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.registrar(dto);
+    return this.vulnerabilidades.registrar(dto, usuario);
   }
 
   @ApiOperation({
@@ -127,27 +127,6 @@ export class VulnerabilidadesController {
   }
 
   @ApiOperation({
-    summary: 'Mitigar (admin, analista)',
-    description:
-      'EN_MITIGACION → MITIGADA. Registra la acción aplicada y la fecha de cierre.',
-  })
-  @ApiOkResponse({ type: VulnerabilidadDto })
-  @ApiBadRequestResponse({ type: ApiErrorDto })
-  @ApiNotFoundResponse({ type: ApiErrorDto })
-  @ApiConflictResponse({
-    type: ApiErrorDto,
-    description: 'Estado no permitido.',
-  })
-  @Roles('admin', 'analista')
-  @Patch(':id/mitigar')
-  mitigar(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: MitigarVulnerabilidadDto,
-  ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.mitigar(id, dto);
-  }
-
-  @ApiOperation({
     summary: 'Aceptar el riesgo (solo admin)',
     description:
       'ABIERTA o EN_MITIGACION → ACEPTADA. Decisión de gestión: exige justificación.',
@@ -164,8 +143,9 @@ export class VulnerabilidadesController {
   aceptarRiesgo(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: AceptarRiesgoDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.aceptarRiesgo(id, dto);
+    return this.vulnerabilidades.aceptarRiesgo(id, dto, usuario);
   }
 
   @ApiOperation({

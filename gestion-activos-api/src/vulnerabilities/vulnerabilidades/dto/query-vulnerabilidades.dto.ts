@@ -13,7 +13,9 @@ import {
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto.js';
 import {
   EstadoVulnerabilidad,
+  FuenteVulnerabilidad,
   NivelRiesgo,
+  PrioridadVulnerabilidad,
 } from '../../../generated/prisma/enums.js';
 
 /** En la query string todo llega como texto: "true"/"false" → boolean. */
@@ -34,6 +36,41 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @IsOptional()
   @IsEnum(NivelRiesgo)
   nivelRiesgo?: NivelRiesgo;
+
+  @ApiPropertyOptional({ example: 7, description: 'Categoría del activo.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoriaId?: number;
+
+  @ApiPropertyOptional({ description: 'Busca en el código y nombre del activo y en la descripción.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Responsable del tratamiento (contiene el texto).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  responsable?: string;
+
+  @ApiPropertyOptional({ enum: PrioridadVulnerabilidad })
+  @IsOptional()
+  @IsEnum(PrioridadVulnerabilidad)
+  prioridad?: PrioridadVulnerabilidad;
+
+  @ApiPropertyOptional({ enum: FuenteVulnerabilidad })
+  @IsOptional()
+  @IsEnum(FuenteVulnerabilidad)
+  fuente?: FuenteVulnerabilidad;
+
+  @ApiPropertyOptional({ description: 'true = confirmadas; false = solo detectadas.' })
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value))
+  @IsBoolean()
+  confirmada?: boolean;
 
   @ApiPropertyOptional({ enum: EstadoVulnerabilidad })
   @IsOptional()

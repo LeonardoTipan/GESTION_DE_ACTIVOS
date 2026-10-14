@@ -135,8 +135,9 @@ export class MantenimientosController {
   finalizar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: FinalizarMantenimientoDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<MantenimientoDto> {
-    return this.mantenimientos.finalizar(id, dto);
+    return this.mantenimientos.finalizar(id, dto, usuario);
   }
 
   @ApiOperation({

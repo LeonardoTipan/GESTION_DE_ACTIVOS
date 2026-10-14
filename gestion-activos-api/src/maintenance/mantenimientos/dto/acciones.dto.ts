@@ -10,11 +10,14 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
+  IsNumber,
   IsOptional,
   IsString,
+  Max,
   MaxDate,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
 import {
@@ -78,6 +81,13 @@ export class IniciarMantenimientoDto {
     message: 'fechaInicio no puede estar en el futuro',
   })
   fechaInicio?: Date;
+
+  @ApiPropertyOptional({ example: 'jperez', description: 'Técnico que realiza el trabajo.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  tecnico?: string;
 }
 
 /** Finalizar: EN_EJECUCION → FINALIZADO. */
@@ -112,6 +122,59 @@ export class FinalizarMantenimientoDto {
     message: 'fechaFin no puede estar en el futuro',
   })
   fechaFin?: Date;
+
+  @ApiPropertyOptional({
+    example: 'jperez',
+    description: 'Técnico. Obligatorio si no se indicó al iniciar.',
+  })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  tecnico?: string;
+
+  @ApiProperty({ example: 'Ventilador del procesador obstruido; temperatura elevada.' })
+  @Trim()
+  @IsString()
+  @MinLength(5)
+  @MaxLength(2000)
+  diagnostico: string;
+
+  @ApiProperty({ example: 90, description: 'Duración del trabajo, en minutos.' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(100_000)
+  duracionMin: number;
+
+  @ApiPropertyOptional({ example: 45.5, description: 'Costo del trabajo y repuestos.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(9_999_999_999)
+  costo?: number;
+
+  @ApiPropertyOptional({ example: 'Pasta térmica; ventilador 80 mm.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  repuestos?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  observaciones?: string;
+
+  @ApiPropertyOptional({ example: 'Informe técnico MT-031', description: 'Referencia a la evidencia.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  evidencia?: string;
 }
 
 /** Cancelar: PROGRAMADO o EN_EJECUCION → CANCELADO. */

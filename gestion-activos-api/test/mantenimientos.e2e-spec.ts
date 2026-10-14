@@ -95,6 +95,9 @@ describe('Mantenimientos (e2e)', () => {
   const FINALIZAR_OK = {
     resultado: 'Firmware actualizado; sin incidencias.',
     estadoEquipo: 'OPERATIVO',
+    tecnico: 'jperez',
+    diagnostico: 'Firmware desactualizado.',
+    duracionMin: 45,
   };
 
   describe('ciclo completo: programar → iniciar → finalizar', () => {

@@ -246,11 +246,16 @@ describe('Editar con motivo y anular (e2e)', () => {
       await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(409);
       await api(tokens.admin).delete(`/api/vulnerabilidades/${id}`).expect(404);
       await api(tokens.admin).post(`/api/vulnerabilidades/${id}/reversar`, { motivo: MOTIVO }).expect(200);
+      // Tras revertir sigue el flujo normal: confirmar y evaluar antes del tratamiento.
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/confirmar`).expect(200);
+      await api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/evaluar`, { prioridad: 'P3', responsable: 'TIC', planRemediacion: 'Parche en la próxima ventana.' })
+        .expect(200);
       await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(200);
       const trazas = await api(tokens.auditor)
         .get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${id}`)
         .expect(200);
-      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['REVERSAR', 'ANULAR']);
+      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['MODIFICAR', 'MODIFICAR', 'REVERSAR', 'ANULAR']);
     });
 
     it('indicadores (A.8.8): una anulada deja de contar como abierta', async () => {

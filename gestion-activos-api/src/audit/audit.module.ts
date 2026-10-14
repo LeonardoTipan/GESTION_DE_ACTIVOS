@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AvisosService } from './avisos.service.js';
 import { TrazasController } from './trazas.controller.js';
 import { TrazasService } from './trazas.service.js';
 
@@ -9,7 +10,7 @@ import { TrazasService } from './trazas.service.js';
  */
 @Module({
   controllers: [TrazasController],
-  providers: [TrazasService],
-  exports: [TrazasService],
+  providers: [TrazasService, AvisosService],
+  exports: [TrazasService, AvisosService],
 })
 export class AuditModule {}
