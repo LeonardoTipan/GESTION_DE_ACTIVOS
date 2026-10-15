@@ -8,6 +8,9 @@ services:
       context: ./gestion-activos-api
       dockerfile: Dockerfile
     container_name: gestion-activos-backend
+    # Vuelve a arrancar tras reiniciar el equipo o Docker. Si MySQL aún no está
+    # listo, la API espera (PrismaService reintenta unos 30 s) antes de fallar.
+    restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
@@ -118,6 +121,7 @@ services:
   frontend:
     image: nginx:alpine
     container_name: gestion-activos-frontend
+    restart: unless-stopped
     ports:
       - "80:80"
     depends_on:

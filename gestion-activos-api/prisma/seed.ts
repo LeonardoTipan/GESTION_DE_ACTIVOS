@@ -3,8 +3,8 @@
  * Ejecutar con: npx prisma db seed
  */
 import 'dotenv/config';
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../src/generated/prisma/client.js';
+import { adaptadorMySql } from '../src/prisma/conexion.js';
 
 const CRITICIDADES = ['Baja', 'Media', 'Alta', 'Crítica'];
 
@@ -37,7 +37,7 @@ const url = process.env.DATABASE_URL;
 if (!url) {
   throw new Error('Falta DATABASE_URL en el entorno.');
 }
-const prisma = new PrismaClient({ adapter: new PrismaMariaDb(url) });
+const prisma = new PrismaClient({ adapter: adaptadorMySql(url) });
 
 try {
   for (const nivel of CRITICIDADES) {

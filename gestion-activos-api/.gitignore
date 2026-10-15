@@ -3,3 +3,6 @@ node_modules
 .env
 
 /src/generated/prisma
+
+# Clave pública RSA de MySQL de esta instalación (npm run db:clave-mysql)
+certs/

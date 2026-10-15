@@ -14,6 +14,7 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
+    "db:clave-mysql": "node scripts/clave-mysql.mjs",
     "glpi:simular": "tsx src/glpi-sync/cli.ts --simular --max=10 --bloque=10",
     "glpi:sync": "tsx src/glpi-sync/cli.ts",
     "glpi:worker": "tsx src/glpi-sync/worker.ts",

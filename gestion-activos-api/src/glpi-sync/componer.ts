@@ -1,6 +1,6 @@
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from '../generated/prisma/client.js';
 import { BitacoraService } from '../inventory/bitacora/bitacora.service.js';
+import { adaptadorMySql } from '../prisma/conexion.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import type { GlpiSyncConfig } from './config.js';
 import { fetchSinVerificarTls } from './fetch-sin-verificar.js';
@@ -47,7 +47,7 @@ export function componerMotor(
  */
 export function componer(config: GlpiSyncConfig) {
   const prisma = new PrismaClient({
-    adapter: new PrismaMariaDb(config.databaseUrl),
+    adapter: adaptadorMySql(config.databaseUrl),
   });
   const motor = componerMotor(config, prisma);
 

@@ -3,7 +3,6 @@
  * (base gestion_activos_test, que se vacía al empezar). GLPI es simulado: la
  * lógica de identidad no depende de ningún servidor de producción.
  */
-import { PrismaMariaDb } from '@prisma/adapter-mariadb';
 import { PrismaClient } from './../src/generated/prisma/client.js';
 import type { GlpiSyncConfig } from './../src/glpi-sync/config.js';
 import { GlpiClient } from './../src/glpi-sync/glpi-client.js';
@@ -23,6 +22,7 @@ import {
 } from './../src/glpi-sync/testing/inventario-ejemplo.js';
 import { CONFIG_PRUEBA } from './../src/glpi-sync/testing/inventario-en-memoria.js';
 import { BitacoraService } from './../src/inventory/bitacora/bitacora.service.js';
+import { adaptadorMySql } from './../src/prisma/conexion.js';
 import type { PrismaService } from './../src/prisma/prisma.service.js';
 import { limpiarBaseDeDatos } from './utils/database.js';
 
@@ -85,7 +85,7 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
 
   beforeAll(async () => {
     prisma = new PrismaClient({
-      adapter: new PrismaMariaDb(process.env.DATABASE_URL!),
+      adapter: adaptadorMySql(process.env.DATABASE_URL!),
     });
     await limpiarBaseDeDatos(prisma as PrismaService);
     categoriaId = (
@@ -239,7 +239,7 @@ describe('Sincronización con GLPI (integración con MySQL)', () => {
     it(
       'dos sincronizaciones simultáneas (conexiones distintas): la base solo deja pasar una',
       async () => {
-        const otra = new PrismaClient({ adapter: new PrismaMariaDb(process.env.DATABASE_URL!) });
+        const otra = new PrismaClient({ adapter: adaptadorMySql(process.env.DATABASE_URL!) });
         try {
           const [a, b] = await Promise.all([
             motor(INVENTARIO()).ejecutar(),

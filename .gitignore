@@ -19,3 +19,6 @@ glpi-informes/
 
 # Copias de seguridad de la base (contienen datos reales)
 respaldo*.sql
+
+# Capturas de las revisiones en navegador (contienen datos del inventario real)
+evidencias/
