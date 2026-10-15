@@ -2,11 +2,9 @@ import {
   Alert,
   Badge,
   Button,
-  Checkbox,
   Grid,
   Group,
   NumberInput,
-  ScrollArea,
   Select,
   SimpleGrid,
   Stack,
@@ -17,12 +15,12 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
-import { useActivos } from '../../inventario/api/activos.ts'
 import { BadgeCriticidad } from '../../inventario/componentes/BadgeCriticidad.tsx'
+import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
   useCrearPlanes,
   useModificarPlan,
@@ -30,7 +28,6 @@ import {
   type Tablero,
 } from '../api/respaldos.ts'
 import {
-  CRITICIDADES_CRITICAS,
   ESTADO_PLAN,
   FRECUENCIA,
   FRECUENCIA_PRUEBA,
@@ -117,19 +114,9 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
   const acciones = useAccionesRegistro('planes')
   const [editando, setEditando] = useState<Plan | null>(null)
   const [seleccion, setSeleccion] = useState<number[]>([])
-  const [filtro, setFiltro] = useState('')
 
-  // Activos operativos sin plan vigente: los únicos que se pueden incorporar.
-  const operativos = useActivos({ operativos: true, limit: 100, page: 1, sort: 'codigo', order: 'asc' })
+  // Activos con plan vigente: no se pueden incorporar otra vez.
   const conPlan = new Set(planes.filter((p) => !p.anuladoEn && p.estado === 'VIGENTE').map((p) => p.activoId))
-  const sinPlan = useMemo(
-    () =>
-      (operativos.data?.data ?? [])
-        .filter((a) => !conPlan.has(a.id))
-        .filter((a) => `${a.codigo} ${a.nombre}`.toLowerCase().includes(filtro.toLowerCase())),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- conPlan se deriva de planes
-    [operativos.data, planes, filtro],
-  )
 
   const form = useForm<Valores>({
     initialValues: VACIO,
@@ -317,56 +304,14 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
                     description="El activo del plan no se sustituye: anule este plan y cree uno nuevo."
                   />
                 ) : (
-                  <Stack gap={6}>
-                    <Text size="sm" fw={500}>
-                      Activos a respaldar <Text span c="red">*</Text>
-                    </Text>
-                    <Group gap="xs">
-                      <Button
-                        size="compact-xs"
-                        variant="light"
-                        onClick={() =>
-                          setSeleccion(sinPlan.filter((a) => CRITICIDADES_CRITICAS.includes(a.criticidad.nivel)).map((a) => a.id))
-                        }
-                      >
-                        Seleccionar todos los críticos
-                      </Button>
-                      <Button size="compact-xs" variant="default" onClick={() => setSeleccion([])}>
-                        Limpiar
-                      </Button>
-                      <Text size="xs" c="dimmed">{seleccion.length} seleccionado(s)</Text>
-                    </Group>
-                    <TextInput size="xs" placeholder="Filtrar por código o nombre…" value={filtro} onChange={(e) => setFiltro(e.currentTarget.value)} />
-                    {sinPlan.length === 0 ? (
-                      <Text size="sm" c="dimmed">Todos los activos operativos ya cuentan con un plan de respaldo.</Text>
-                    ) : (
-                      <ScrollArea.Autosize mah={220} type="auto">
-                        <Stack gap={4}>
-                          {sinPlan.map((a) => (
-                            <Checkbox
-                              key={a.id}
-                              checked={seleccion.includes(a.id)}
-                              onChange={(e) => {
-                                // Se lee ya: dentro del actualizador diferido currentTarget es null.
-                                const marcado = e.currentTarget.checked
-                                setSeleccion((s) => (marcado ? [...s, a.id] : s.filter((x) => x !== a.id)))
-                              }}
-                              label={
-                                <Group gap={6} wrap="nowrap">
-                                  <Text size="sm">{a.nombre}</Text>
-                                  <BadgeCriticidad nivel={a.criticidad.nivel} />
-                                </Group>
-                              }
-                              description={`${a.codigo}${a.tipo ? ` · ${a.tipo}` : ''} · ${a.custodio}`}
-                            />
-                          ))}
-                        </Stack>
-                      </ScrollArea.Autosize>
-                    )}
-                    <Text size="xs" c="dimmed">
-                      Solo se listan los activos operativos que aún no tienen plan. Los parámetros siguientes se aplican a todos los seleccionados.
-                    </Text>
-                  </Stack>
+                  <SeleccionActivos
+                    etiqueta="Activos a respaldar"
+                    value={seleccion}
+                    onChange={setSeleccion}
+                    // Regla del módulo: un activo tiene como mucho un plan vigente.
+                    noElegible={(a) => (conPlan.has(a.id) ? 'Ya tiene un plan de respaldo vigente.' : null)}
+                    ayuda="Solo se ofrecen activos operativos; los que ya tienen plan aparecen deshabilitados. Los parámetros siguientes se aplican a todos los seleccionados."
+                  />
                 )}
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
                   <Select label="Frecuencia" required data={opciones(FRECUENCIA)} {...form.getInputProps('frecuencia')} />

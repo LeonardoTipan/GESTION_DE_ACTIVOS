@@ -90,6 +90,19 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       expect(porReferencia.body.data[0].codigo).toBe('PC-0002');
     });
 
+    it('categorías con activos y su recuento: solo las que tienen alguno; con operativos=true, sin bajas', async () => {
+      await prisma.categoria.create({ data: { nombre: 'Racks', descripcion: 'Tipo de activo de GLPI: Rack' } });
+      await api('').get('/api/activos/categorias').expect(401);
+      const operativas = await api(tokens.auditor).get('/api/activos/categorias?operativos=true').expect(200);
+      expect(operativas.body).toEqual([
+        { categoriaId: ids.computadoras, nombre: 'Computadoras', total: 2 },
+        { categoriaId: ids.monitores, nombre: 'Monitores', total: 1 },
+      ]);
+      const todas = await api(tokens.auditor).get('/api/activos/categorias').expect(200);
+      expect(todas.body.find((c: { nombre: string }) => c.nombre === 'Computadoras').total).toBe(3);
+      expect(todas.body.some((c: { nombre: string }) => c.nombre === 'Racks')).toBe(false);
+    });
+
     it('filtros combinados: categoría + condición física + solo operativos', async () => {
       const res = await api(tokens.auditor)
         .get(`/api/activos?categoriaId=${ids.computadoras}&estado=Malo&operativos=true`)

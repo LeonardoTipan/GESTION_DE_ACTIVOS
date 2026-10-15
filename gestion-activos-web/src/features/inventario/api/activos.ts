@@ -78,3 +78,35 @@ export function useDarDeBajaActivo() {
     onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.activos }),
   })
 }
+
+/** Categorías que tienen activos, con su recuento (selectores de activos de los módulos). */
+export function useCategoriasConActivos({ operativos }: { operativos: boolean }) {
+  return useQuery({
+    queryKey: [...claves.activos, 'categorias', operativos],
+    queryFn: () =>
+      ejecutar(api.GET('/api/activos/categorias', { params: { query: { operativos } } })),
+  })
+}
+
+/**
+ * Todos los activos operativos de unos niveles de criticidad (y, si se indica,
+ * de una categoría), recorriendo las páginas de la API.
+ */
+export async function activosOperativosPorCriticidad(
+  criticidadIds: number[],
+  categoriaId?: number,
+): Promise<Activo[]> {
+  const todos: Activo[] = []
+  for (const criticidadId of criticidadIds) {
+    for (let page = 1; ; page++) {
+      const r = await ejecutar(
+        api.GET('/api/activos', {
+          params: { query: { operativos: true, criticidadId, categoriaId, page, limit: 100, sort: 'codigo', order: 'asc' } },
+        }),
+      )
+      todos.push(...r.data)
+      if (page >= r.meta.totalPages) break
+    }
+  }
+  return todos
+}

@@ -3,7 +3,7 @@ import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { fechaHoraLocalAIso } from '../../../shared/formato.ts'
-import { SelectorActivo } from '../../inventario/componentes/SelectorActivo.tsx'
+import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
   useProgramarMantenimiento,
   type Mantenimiento,
@@ -82,13 +82,14 @@ function FormProgramar({ onClose, activoInicial, onProgramado }: Omit<Props, 'op
   return (
     <form onSubmit={enviar}>
       <Stack gap="sm">
-        <SelectorActivo
-          label="Activo"
-          placeholder="Busca por código o nombre"
-          withAsterisk
-          value={form.values.activoId}
-          onChange={(id) => form.setFieldValue('activoId', id)}
+        <SeleccionActivos
+          titulo="Seleccionar activo para mantenimiento"
+          etiqueta="Activo"
+          multiple={false}
+          value={form.values.activoId ? [form.values.activoId] : []}
+          onChange={(ids) => form.setFieldValue('activoId', ids[0] ?? null)}
           error={form.errors.activoId}
+          ayuda="Solo se ofrecen activos operativos (también en condición «Malo»)."
         />
         <div>
           <Text size="sm" fw={500} mb={4}>

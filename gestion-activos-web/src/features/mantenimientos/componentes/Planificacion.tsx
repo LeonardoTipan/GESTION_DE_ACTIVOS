@@ -5,7 +5,6 @@ import {
   Button,
   Card,
   Center,
-  Checkbox,
   Group,
   Loader,
   Modal,
@@ -39,7 +38,7 @@ import {
 } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
-import { useActivos } from '../../inventario/api/activos.ts'
+import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import { useCategorias } from '../../inventario/api/catalogos.ts'
 import {
   useAnulacionPlanMantenimiento,
@@ -199,12 +198,8 @@ function PlanModal({ abierto, plan, onCerrar }: { abierto: boolean; plan: PlanMa
 function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar: () => void }) {
   const crear = useCrearPlanesMantenimiento()
   const modificar = useModificarPlanMantenimiento()
-  const categorias = useCategorias()
   const [seleccion, setSeleccion] = useState<number[]>([])
-  const [busqueda, setBusqueda] = useState('')
-  const [q] = useDebouncedValue(busqueda, 300)
-  const [categoriaId, setCategoriaId] = useState<number | undefined>()
-  const candidatos = useActivos({ operativos: true, q: q || undefined, categoriaId, limit: 100, page: 1, sort: 'codigo', order: 'asc' })
+  const vigentes = usePlanesMantenimiento({ estado: 'VIGENTE', page: 1, limit: 100 })
 
   const form = useForm<ValoresPlan>({
     initialValues: plan
@@ -264,69 +259,26 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
     )
   })
 
-  const activos = candidatos.data?.data ?? []
+  const conPlanDelTipo = new Set(
+    (vigentes.data?.data ?? []).filter((p) => !p.anuladoEn && p.tipo === form.values.tipo).map((p) => p.activoId),
+  )
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
         {plan ? (
           <TextInput label="Activo" value={`${plan.activo.codigo} · ${plan.activo.nombre}`} disabled description="El activo no se sustituye: anule el plan y cree otro." />
         ) : (
-          <Stack gap={6}>
-            <Text size="sm" fw={500}>
-              Activos <Text span c="red">*</Text>{' '}
-              <Text span size="xs" c="dimmed">
-                ({seleccion.length} seleccionado(s); solo operativos)
-              </Text>
-            </Text>
-            <Group gap="xs" grow>
-              <TextInput
-                size="xs"
-                leftSection={<IconSearch size={14} />}
-                placeholder="Código, nombre, categoría…"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.currentTarget.value)}
-              />
-              <Select
-                size="xs"
-                placeholder="Todas las categorías"
-                clearable
-                searchable
-                data={(categorias.data ?? []).map((c) => ({ value: String(c.id), label: c.nombre }))}
-                value={categoriaId ? String(categoriaId) : null}
-                onChange={(v) => setCategoriaId(v ? Number(v) : undefined)}
-              />
-            </Group>
-            <Group gap="xs">
-              <Button size="compact-xs" variant="light" onClick={() => setSeleccion((s) => [...new Set([...s, ...activos.map((a) => a.id)])])}>
-                Marcar los {activos.length} listados
-              </Button>
-              <Button size="compact-xs" variant="default" onClick={() => setSeleccion([])}>
-                Limpiar
-              </Button>
-            </Group>
-            <ScrollArea.Autosize mah={200} type="auto">
-              <Stack gap={4}>
-                {candidatos.isPending && <Loader size="xs" />}
-                {!candidatos.isPending && activos.length === 0 && (
-                  <Text size="sm" c="dimmed">
-                    Ningún activo operativo coincide.
-                  </Text>
-                )}
-                {activos.map((a) => (
-                  <Checkbox
-                    key={a.id}
-                    checked={seleccion.includes(a.id)}
-                    onChange={(e) => {
-                      const marcado = e.currentTarget.checked
-                      setSeleccion((s) => (marcado ? [...s, a.id] : s.filter((x) => x !== a.id)))
-                    }}
-                    label={`${a.codigo} · ${a.nombre}`}
-                    description={`${a.categoria.nombre}${a.estado ? ` · ${a.estado}` : ''}`}
-                  />
-                ))}
-              </Stack>
-            </ScrollArea.Autosize>
-          </Stack>
+          <SeleccionActivos
+            titulo="Seleccionar activos para mantenimiento"
+            etiqueta="Activos"
+            value={seleccion}
+            onChange={setSeleccion}
+            // Regla del módulo: un plan vigente por activo y tipo. La condición "Malo" no excluye.
+            noElegible={(a) =>
+              conPlanDelTipo.has(a.id) ? `Ya tiene un plan ${INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()} vigente.` : null
+            }
+            ayuda="Solo se ofrecen activos operativos (también en condición «Malo»). Se crea un plan por activo con los parámetros siguientes."
+          />
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <Select label="Tipo" withAsterisk data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))} allowDeselect={false} {...form.getInputProps('tipo')} />

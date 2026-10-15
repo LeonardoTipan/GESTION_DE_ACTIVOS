@@ -15,7 +15,7 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
-import { SelectorActivos } from '../../inventario/componentes/SelectorActivos.tsx'
+import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
   useRegistrarLote,
   useRegistrarVulnerabilidad,
@@ -127,14 +127,13 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
   return (
     <form onSubmit={enviar}>
       <Stack gap="sm">
-        <SelectorActivos
-          label="Activos afectados"
-          description="Uno o varios: se crea un registro por activo, todos o ninguno."
-          placeholder="Busca por código, nombre o categoría"
-          withAsterisk
+        <SeleccionActivos
+          titulo="Seleccionar activos afectados"
+          etiqueta="Activos afectados"
           value={form.values.activoIds}
           onChange={(ids) => form.setFieldValue('activoIds', ids)}
           error={form.errors.activoIds}
+          ayuda="Uno o varios: se crea un registro por activo, todos o ninguno. Solo se ofrecen activos operativos."
         />
         <TextInput
           label="CVE"

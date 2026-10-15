@@ -78,8 +78,6 @@ export const MOTIVO_RESTAURACION: Record<Restauracion['motivo'], string> = {
 export const opciones = <K extends string>(catalogo: Record<K, string>) =>
   (Object.entries(catalogo) as [K, string][]).map(([value, label]) => ({ value, label }))
 
-/** Niveles de criticidad que cuentan como críticos (igual que la API por defecto). */
-export const CRITICIDADES_CRITICAS = ['Alta', 'Crítica']
 
 /** Nombres de los campos, para las trazas. */
 export const ETIQUETAS_RESPALDO: Record<string, string> = {

@@ -20,6 +20,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
+  ApiQuery,
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
@@ -36,6 +37,7 @@ import {
 import { ActivosService } from './activos.service.js';
 import {
   ActivoDto,
+  CategoriaActivoDto,
   EstadoActivoDto,
   PaginatedActivoDto,
 } from './dto/activo.dto.js';
@@ -76,6 +78,18 @@ export class ActivosController {
   @Get('estados')
   estados(): Promise<EstadoActivoDto[]> {
     return this.activos.estados();
+  }
+
+  @ApiOperation({
+    summary: 'Categorías presentes en el inventario',
+    description:
+      'Las categorías (tipos de GLPI) que tienen activos, con su recuento: alimenta los selectores de activos de los módulos. Una categoría sin activos no aparece.',
+  })
+  @ApiQuery({ name: 'operativos', required: false, type: Boolean, description: 'true = cuenta solo los activos operativos (los que admiten operaciones nuevas).' })
+  @ApiOkResponse({ type: [CategoriaActivoDto] })
+  @Get('categorias')
+  categorias(@Query('operativos') operativos?: string): Promise<CategoriaActivoDto[]> {
+    return this.activos.categorias(operativos === 'true');
   }
 
   @ApiOperation({ summary: 'Detalle de un activo (también si está dado de baja)' })

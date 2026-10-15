@@ -175,4 +175,16 @@ export class EstadoActivoDto {
   operativo: boolean;
 }
 
+/** Una categoría con cuántos activos tiene (solo las que tienen alguno). */
+export class CategoriaActivoDto {
+  @ApiProperty({ example: 3, description: 'Valor para el parámetro "categoriaId" de GET /activos.' })
+  categoriaId: number;
+
+  @ApiProperty({ example: 'Computadoras' })
+  nombre: string;
+
+  @ApiProperty({ example: 26, description: 'Activos de la categoría (con operativos=true, solo los operativos).' })
+  total: number;
+}
+
 export class PaginatedActivoDto extends PaginatedResponseDto(ActivoDto) {}

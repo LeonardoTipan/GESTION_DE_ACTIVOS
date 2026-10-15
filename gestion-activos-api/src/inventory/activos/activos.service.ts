@@ -16,7 +16,7 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { BitacoraService } from '../bitacora/bitacora.service.js';
 import { calcularCambios, cambiosDeCreacion } from '../bitacora/cambios.js';
 import type { BitacoraDto } from '../bitacora/dto/bitacora.dto.js';
-import type { ActivoDto, EstadoActivoDto } from './dto/activo.dto.js';
+import type { ActivoDto, CategoriaActivoDto, EstadoActivoDto } from './dto/activo.dto.js';
 import type {
   CreateActivoDto,
   UpdateActivoDto,
@@ -111,6 +111,23 @@ export class ActivosService {
       });
     }
     return estados;
+  }
+
+  /** Categorías con activos (opcionalmente solo operativos), por nombre. */
+  async categorias(soloOperativos: boolean): Promise<CategoriaActivoDto[]> {
+    const grupos = await this.prisma.activo.groupBy({
+      by: ['categoriaId'],
+      where: soloOperativos ? this.filtroOperativo() : {},
+      _count: { _all: true },
+    });
+    const nombres = await this.prisma.categoria.findMany({
+      where: { id: { in: grupos.map((g) => g.categoriaId) } },
+      select: { id: true, nombre: true },
+    });
+    const nombre = new Map(nombres.map((c) => [c.id, c.nombre]));
+    return grupos
+      .map((g) => ({ categoriaId: g.categoriaId, nombre: nombre.get(g.categoriaId) ?? '', total: g._count._all }))
+      .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'));
   }
 
   async findAll(query: QueryActivosDto): Promise<Paginated<ActivoDto>> {

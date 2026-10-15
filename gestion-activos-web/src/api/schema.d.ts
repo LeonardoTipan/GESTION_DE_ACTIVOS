@@ -85,6 +85,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/activos/categorias": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Categorías presentes en el inventario
+         * @description Las categorías (tipos de GLPI) que tienen activos, con su recuento: alimenta los selectores de activos de los módulos. Una categoría sin activos no aparece.
+         */
+        get: operations["ActivosController_categorias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/activos/{id}": {
         parameters: {
             query?: never;
@@ -1360,6 +1380,20 @@ export interface components {
             total: number;
             /** @description false = los equipos en este estado no admiten respaldos, mantenimientos ni vulnerabilidades nuevos. */
             operativo: boolean;
+        };
+        CategoriaActivoDto: {
+            /**
+             * @description Valor para el parámetro "categoriaId" de GET /activos.
+             * @example 3
+             */
+            categoriaId: number;
+            /** @example Computadoras */
+            nombre: string;
+            /**
+             * @description Activos de la categoría (con operativos=true, solo los operativos).
+             * @example 26
+             */
+            total: number;
         };
         BitacoraDto: {
             /** @example 12 */
@@ -3183,6 +3217,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EstadoActivoDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ActivosController_categorias: {
+        parameters: {
+            query?: {
+                /** @description true = cuenta solo los activos operativos (los que admiten operaciones nuevas). */
+                operativos?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoriaActivoDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
