@@ -2,9 +2,11 @@ import { enteroPositivo, valorPermitido } from '../../shared/hooks/use-filtros-u
 import type {
   EstadoVulnerabilidad,
   FiltrosApiVulnerabilidades,
+  Fuente,
   NivelRiesgo,
+  Prioridad,
 } from './api/vulnerabilidades.ts'
-import { ESTADOS, ESTADOS_CERRADOS, ESTADOS_PENDIENTES, NIVELES } from './riesgo.ts'
+import { ESTADOS, ESTADOS_CERRADOS, ESTADOS_PENDIENTES, FUENTES, NIVELES, PRIORIDADES } from './riesgo.ts'
 
 export const TAMANO_PAGINA = 20
 
@@ -18,6 +20,12 @@ export interface FiltrosVulnerabilidades {
   nivelRiesgo?: NivelRiesgo
   estado?: EstadoVulnerabilidad
   activoId?: number
+  categoriaId?: number
+  prioridad?: Prioridad
+  fuente?: Fuente
+  /** true: confirmadas · false: solo detectadas, sin confirmar. */
+  confirmada?: boolean
+  /** Búsqueda libre: CVE, descripción o activo. */
   cve: string
   /** Solo pendientes con el plazo (SLA) ya vencido. */
   vencidas?: boolean
@@ -34,6 +42,7 @@ export function estadosDeVista(vista: Vista): EstadoVulnerabilidad[] {
 
 export function leerFiltros(params: URLSearchParams): FiltrosVulnerabilidades {
   const vista = valorPermitido(params.get('vista'), VISTAS) ?? 'pendientes'
+  const confirmada = params.get('confirmada')
   return {
     page: enteroPositivo(params.get('page')) ?? 1,
     vista,
@@ -41,6 +50,10 @@ export function leerFiltros(params: URLSearchParams): FiltrosVulnerabilidades {
     // Un estado que no encaja con la vista (p. ej. MITIGADA en "pendientes") se ignora.
     estado: valorPermitido(params.get('estado'), estadosDeVista(vista)),
     activoId: enteroPositivo(params.get('activoId')),
+    categoriaId: enteroPositivo(params.get('categoriaId')),
+    prioridad: valorPermitido(params.get('prioridad'), PRIORIDADES),
+    fuente: valorPermitido(params.get('fuente'), FUENTES),
+    confirmada: confirmada === '1' ? true : confirmada === '0' ? false : undefined,
     cve: params.get('cve') ?? '',
     // "Vencidas" solo existe entre las pendientes.
     vencidas: vista !== 'cerradas' && params.get('vencidas') === '1' ? true : undefined,
@@ -53,6 +66,10 @@ export function escribirFiltros(filtros: FiltrosVulnerabilidades): URLSearchPara
   if (filtros.nivelRiesgo) params.set('nivel', filtros.nivelRiesgo)
   if (filtros.estado) params.set('estado', filtros.estado)
   if (filtros.activoId) params.set('activoId', String(filtros.activoId))
+  if (filtros.categoriaId) params.set('categoriaId', String(filtros.categoriaId))
+  if (filtros.prioridad) params.set('prioridad', filtros.prioridad)
+  if (filtros.fuente) params.set('fuente', filtros.fuente)
+  if (filtros.confirmada !== undefined) params.set('confirmada', filtros.confirmada ? '1' : '0')
   if (filtros.cve) params.set('cve', filtros.cve)
   if (filtros.vencidas) params.set('vencidas', '1')
   if (filtros.page > 1) params.set('page', String(filtros.page))
@@ -68,7 +85,12 @@ export function aConsultaApi(filtros: FiltrosVulnerabilidades): FiltrosApiVulner
     nivelRiesgo: filtros.nivelRiesgo,
     estado: filtros.estado,
     activoId: filtros.activoId,
-    cve: filtros.cve || undefined,
+    categoriaId: filtros.categoriaId,
+    prioridad: filtros.prioridad,
+    fuente: filtros.fuente,
+    confirmada: filtros.confirmada,
+    // El cuadro de búsqueda busca en CVE, descripción y activo.
+    q: filtros.cve || undefined,
     vencidas: filtros.vencidas,
   }
 }

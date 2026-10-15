@@ -11,8 +11,12 @@ import { ejecutar } from '../../../shared/api/errores.ts'
 export type Vulnerabilidad = components['schemas']['VulnerabilidadDto']
 export type NivelRiesgo = Vulnerabilidad['nivelRiesgo']
 export type EstadoVulnerabilidad = Vulnerabilidad['estado']
+export type Fuente = Vulnerabilidad['fuente']
+export type Prioridad = NonNullable<Vulnerabilidad['prioridad']>
+export type AccionRemediacion = components['schemas']['AccionRemediacionDto']
+export type VerificacionVulnerabilidad = components['schemas']['VerificacionVulnerabilidadDto']
+export type ResultadoVerificacion = VerificacionVulnerabilidad['resultado']
 type DatosRegistrar = components['schemas']['RegistrarVulnerabilidadDto']
-type DatosMitigar = components['schemas']['MitigarVulnerabilidadDto']
 type DatosAceptarRiesgo = components['schemas']['AceptarRiesgoDto']
 export type FiltrosApiVulnerabilidades = NonNullable<
   paths['/api/vulnerabilidades']['get']['parameters']['query']
@@ -60,7 +64,7 @@ export function useRegistrarVulnerabilidad() {
   })
 }
 
-/** ABIERTA → EN_MITIGACION. */
+/** ABIERTA → EN_MITIGACION (exige confirmación y evaluación). */
 export function useIniciarMitigacion() {
   const invalidar = useInvalidarVulnerabilidades()
   return useMutation({
@@ -68,21 +72,6 @@ export function useIniciarMitigacion() {
       ejecutar(
         api.PATCH('/api/vulnerabilidades/{id}/iniciar-mitigacion', {
           params: { path: { id } },
-        }),
-      ),
-    onSuccess: invalidar,
-  })
-}
-
-/** EN_MITIGACION → MITIGADA. */
-export function useMitigarVulnerabilidad() {
-  const invalidar = useInvalidarVulnerabilidades()
-  return useMutation({
-    mutationFn: ({ id, datos }: { id: number; datos: DatosMitigar }) =>
-      ejecutar(
-        api.PATCH('/api/vulnerabilidades/{id}/mitigar', {
-          params: { path: { id } },
-          body: datos,
         }),
       ),
     onSuccess: invalidar,
@@ -141,5 +130,100 @@ export function useIndicadoresVulnerabilidad(desde: string, hasta: string) {
     queryFn: () =>
       ejecutar(api.GET('/api/vulnerabilidades/indicadores', { params: { query: { desde, hasta } } })),
     placeholderData: keepPreviousData,
+  })
+}
+
+// ── Capa 1 · Identificación ─────────────────────────────────────────────────
+
+/** La misma vulnerabilidad en varios activos: una por activo (todas o ninguna). */
+export function useRegistrarLote() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: (datos: components['schemas']['RegistrarLoteDto']) =>
+      ejecutar(api.POST('/api/vulnerabilidades/lote', { body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+/** Detectada → confirmada (alguien la comprobó). */
+export function useConfirmarVulnerabilidad() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) =>
+      ejecutar(api.PATCH('/api/vulnerabilidades/{id}/confirmar', { params: { path: { id } } })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+// ── Capa 2 · Evaluación y tratamiento ───────────────────────────────────────
+
+export function useEvaluarVulnerabilidad() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EvaluarVulnerabilidadDto'] }) =>
+      ejecutar(api.PATCH('/api/vulnerabilidades/{id}/evaluar', { params: { path: { id } }, body: datos })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+export function useAccionesRemediacion(id: number) {
+  return useQuery({
+    queryKey: [...claves.detalle(id), 'acciones'],
+    queryFn: () => ejecutar(api.GET('/api/vulnerabilidades/{id}/acciones', { params: { path: { id } } })),
+  })
+}
+
+export function useRegistrarAccion() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['RegistrarAccionDto'] }) =>
+      ejecutar(api.POST('/api/vulnerabilidades/{id}/acciones', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useAnularAccion() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+      ejecutar(api.POST('/api/vulnerabilidades/acciones/{id}/anular', { params: { path: { id } }, body: { motivo } })),
+    onSuccess: invalidar,
+  })
+}
+
+// ── Capa 3 · Verificación y cierre ──────────────────────────────────────────
+
+export function useVerificacionesVulnerabilidad(id: number) {
+  return useQuery({
+    queryKey: [...claves.detalle(id), 'verificaciones'],
+    queryFn: () => ejecutar(api.GET('/api/vulnerabilidades/{id}/verificaciones', { params: { path: { id } } })),
+  })
+}
+
+/** CORREGIDA cierra (MITIGADA); PERSISTE la mantiene en tratamiento o la reabre. */
+export function useVerificarVulnerabilidad() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['RegistrarVerificacionVulnerabilidadDto'] }) =>
+      ejecutar(api.POST('/api/vulnerabilidades/{id}/verificaciones', { params: { path: { id } }, body: datos })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+export function useAnularVerificacionVulnerabilidad() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+      ejecutar(api.POST('/api/vulnerabilidades/verificaciones/{id}/anular', { params: { path: { id } }, body: { motivo } })),
+    onSuccess: invalidar,
   })
 }

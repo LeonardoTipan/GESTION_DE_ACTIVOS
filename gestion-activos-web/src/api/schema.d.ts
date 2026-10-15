@@ -519,6 +519,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mantenimientos/tablero": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tablero: próximas intervenciones, vencidas, activos sin plan y pendientes de verificar */
+        get: operations["PlanesMantenimientoController_tablero"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/planes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capa 1 · Planes de mantenimiento */
+        get: operations["PlanesMantenimientoController_listar"];
+        put?: never;
+        /**
+         * Crear planes (admin, analista)
+         * @description Un plan por activo; solo activos operativos y sin otro plan vigente del mismo tipo.
+         */
+        post: operations["PlanesMantenimientoController_crear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/planes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de un plan de mantenimiento */
+        get: operations["PlanesMantenimientoController_ver"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Modificar un plan con motivo (admin, analista) */
+        patch: operations["PlanesMantenimientoController_modificar"];
+        trace?: never;
+    };
+    "/api/mantenimientos/planes/{id}/programar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Programar la intervención prevista del plan (admin, analista)
+         * @description Crea el mantenimiento (capa 2) y adelanta la próxima fecha.
+         */
+        post: operations["PlanesMantenimientoController_programar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/planes/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular un plan (eliminación lógica, admin) */
+        post: operations["PlanesMantenimientoController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/planes/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación de un plan (admin) */
+        post: operations["PlanesMantenimientoController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/{id}/verificaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capa 3 · Verificaciones de un mantenimiento */
+        get: operations["PlanesMantenimientoController_verificacionesDe"];
+        put?: never;
+        /**
+         * Registrar la verificación posterior (admin, analista)
+         * @description Solo sobre un mantenimiento FINALIZADO. OPERATIVO lo cierra y exige técnico, diagnóstico, duración, actividades y evidencia.
+         */
+        post: operations["PlanesMantenimientoController_verificar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/verificaciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular una verificación (admin) */
+        post: operations["PlanesMantenimientoController_anularVerificacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mantenimientos": {
         parameters: {
             query?: never;
@@ -681,6 +829,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/vulnerabilidades/lote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Capa 1 · Registrar la misma vulnerabilidad en varios activos (admin, analista) */
+        post: operations["TratamientoVulnerabilidadController_lote"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/confirmar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Capa 1 · Confirmar una vulnerabilidad detectada (admin, analista) */
+        patch: operations["TratamientoVulnerabilidadController_confirmar"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/evaluar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Capa 2 · Evaluar: prioridad, responsable y plan de remediación (admin, analista) */
+        patch: operations["TratamientoVulnerabilidadController_evaluar"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/acciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capa 2 · Acciones correctivas */
+        get: operations["TratamientoVulnerabilidadController_acciones"];
+        put?: never;
+        /**
+         * Registrar una acción correctiva (admin, analista)
+         * @description Con la vulnerabilidad EN_MITIGACION.
+         */
+        post: operations["TratamientoVulnerabilidadController_registrarAccion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/acciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular una acción correctiva (admin) */
+        post: operations["TratamientoVulnerabilidadController_anularAccion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/verificaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Capa 3 · Verificaciones */
+        get: operations["TratamientoVulnerabilidadController_verificaciones"];
+        put?: never;
+        /**
+         * Registrar la verificación posterior (admin, analista)
+         * @description CORREGIDA cierra la vulnerabilidad (exige al menos una acción correctiva) y registra quién la cerró. PERSISTE la mantiene en tratamiento o, si estaba cerrada, la reabre.
+         */
+        post: operations["TratamientoVulnerabilidadController_verificar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/verificaciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular una verificación (admin) */
+        post: operations["TratamientoVulnerabilidadController_anularVerificacion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vulnerabilidades": {
         parameters: {
             query?: never;
@@ -764,26 +1039,6 @@ export interface paths {
          * @description ABIERTA → EN_MITIGACION.
          */
         patch: operations["VulnerabilidadesController_iniciarMitigacion"];
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/mitigar": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Mitigar (admin, analista)
-         * @description EN_MITIGACION → MITIGADA. Registra la acción aplicada y la fecha de cierre.
-         */
-        patch: operations["VulnerabilidadesController_mitigar"];
         trace?: never;
     };
     "/api/vulnerabilidades/{id}/aceptar-riesgo": {
@@ -1458,6 +1713,12 @@ export interface components {
              * @example Alta
              */
             criticidad: string;
+            /**
+             * @description Categoría (tipo de activo de GLPI).
+             * @example Computadoras
+             */
+            categoria: string;
+            categoriaId: number;
         };
         PlanRespaldoDto: {
             /** @enum {string} */
@@ -1661,6 +1922,8 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            evidencia: string | null;
+            observaciones: string | null;
             id: number;
             activoId: number;
             activo: components["schemas"]["ActivoBreveDto"];
@@ -1702,6 +1965,12 @@ export interface components {
             inmutable: boolean;
             /** @description Integridad verificada. */
             integridad: boolean;
+            /**
+             * @description Referencia a lo generado (ruta, etiqueta de cinta, id del trabajo). Se DOCUMENTA: la aplicación no comprueba que el archivo exista.
+             * @example NAS02/respaldos/BD-CORE/2026-07-05.bak
+             */
+            evidencia?: string | null;
+            observaciones?: string | null;
         };
         ModificarEjecucionDto: {
             /**
@@ -1731,6 +2000,12 @@ export interface components {
             inmutable?: boolean;
             /** @description Integridad verificada. */
             integridad?: boolean;
+            /**
+             * @description Referencia a lo generado (ruta, etiqueta de cinta, id del trabajo). Se DOCUMENTA: la aplicación no comprueba que el archivo exista.
+             * @example NAS02/respaldos/BD-CORE/2026-07-05.bak
+             */
+            evidencia?: string | null;
+            observaciones?: string | null;
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
         };
@@ -1781,6 +2056,7 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            observaciones: string | null;
             id: number;
             activoId: number;
             activo: components["schemas"]["ActivoBreveDto"];
@@ -1820,6 +2096,7 @@ export interface components {
             evidencia: string;
             /** @example Coordinación de Infraestructura */
             responsable: string;
+            observaciones?: string | null;
         };
         ModificarRestauracionDto: {
             /** Format: date */
@@ -1847,6 +2124,7 @@ export interface components {
             evidencia?: string;
             /** @example Coordinación de Infraestructura */
             responsable?: string;
+            observaciones?: string | null;
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
         };
@@ -1904,7 +2182,7 @@ export interface components {
         TrazaDto: {
             id: number;
             /** @enum {string} */
-            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD";
+            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
             registroId: number;
             /** @description Versión del registro ANTES del cambio. */
             version: number;
@@ -1917,20 +2195,190 @@ export interface components {
             /** Format: date-time */
             fecha: string;
         };
-        ActivoMantenidoDto: {
-            /** @example 5 */
+        ProximaIntervencionDto: {
+            /** @enum {string} */
+            origen: "PLAN" | "PROGRAMADO";
             id: number;
-            /** @example SRV-001 */
-            codigo: string;
-            /** @example Servidor de base de datos */
-            nombre: string;
+            /** Format: date-time */
+            fecha: string;
+            /** @enum {string} */
+            tipo: "PREVENTIVO" | "CORRECTIVO";
+            activo: components["schemas"]["ActivoBreveDto"];
+            vencido: boolean;
+        };
+        TableroMantenimientosDto: {
+            /** @description Próximas intervenciones (60 días) y las vencidas. */
+            proximas: components["schemas"]["ProximaIntervencionDto"][];
+            /** @description Activos operativos sin plan preventivo vigente. */
+            activosSinPlan: number;
+            /** @description Hasta 20 de ellos. */
+            ejemplosSinPlan: components["schemas"]["ActivoBreveDto"][];
+            planesVencidos: number;
+            /** @description Finalizados que esperan su verificación. */
+            pendientesVerificacion: number;
+        };
+        PlanMantenimientoDto: {
+            /** @enum {string} */
+            tipo: "PREVENTIVO" | "CORRECTIVO";
+            /**
+             * @description UNICA = una sola intervención.
+             * @enum {string}
+             */
+            frecuencia: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * Format: date-time
+             * @description null = sin más intervenciones previstas.
+             */
+            proximaFecha: string | null;
+            /** @example Mesa de Servicios */
+            responsable: string;
+            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            actividades: string;
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            activoId: number;
+            activo: components["schemas"]["ActivoBreveDto"];
+            /** @enum {string} */
+            estado: "VIGENTE" | "SUSPENDIDO";
+            /** @description Vigente y con la próxima intervención ya vencida. */
+            vencido: boolean;
+            /** @description Intervenciones generadas desde el plan. */
+            intervenciones: number;
+        };
+        PaginatedPlanMantenimientoDto: {
+            data: components["schemas"]["PlanMantenimientoDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        CrearPlanesMantenimientoDto: {
+            /** @enum {string} */
+            tipo: "PREVENTIVO" | "CORRECTIVO";
+            /**
+             * @description UNICA = una sola intervención.
+             * @enum {string}
+             */
+            frecuencia: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * Format: date-time
+             * @description Primera (o próxima) intervención prevista.
+             */
+            proximaFecha: string;
+            /** @example Mesa de Servicios */
+            responsable: string;
+            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            actividades: string;
+            /**
+             * @description Activos operativos sin plan vigente de ese tipo.
+             * @example [
+             *       5,
+             *       8
+             *     ]
+             */
+            activoIds: number[];
+        };
+        ModificarPlanMantenimientoDto: {
+            /** @enum {string} */
+            tipo?: "PREVENTIVO" | "CORRECTIVO";
+            /**
+             * @description UNICA = una sola intervención.
+             * @enum {string}
+             */
+            frecuencia?: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * Format: date-time
+             * @description Primera (o próxima) intervención prevista.
+             */
+            proximaFecha?: string;
+            /** @example Mesa de Servicios */
+            responsable?: string;
+            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            actividades?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+            /** @enum {string} */
+            estado?: "VIGENTE" | "SUSPENDIDO";
+        };
+        ProgramarDesdePlanDto: {
+            /**
+             * Format: date-time
+             * @description Por defecto, la próxima fecha del plan.
+             */
+            fecha?: string;
+        };
+        ProgramacionDesdePlanDto: {
+            /** @description Mantenimiento creado (fase PROGRAMADO). */
+            mantenimientoId: number;
+            /** @description El plan, con la próxima fecha ya adelantada. */
+            plan: components["schemas"]["PlanMantenimientoDto"];
+        };
+        VerificacionMantenimientoDto: {
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            mantenimientoId: number;
+            /** Format: date-time */
+            fecha: string;
+            /** @enum {string} */
+            resultado: "OPERATIVO" | "REQUIERE_SEGUIMIENTO" | "NO_SATISFACTORIO";
+            observaciones: string;
+            evidencia: string | null;
+            responsable: string;
+            registradoPor: string;
+        };
+        RegistrarVerificacionMantenimientoDto: {
+            /** Format: date-time */
+            fecha: string;
+            /**
+             * @description OPERATIVO cierra el mantenimiento; REQUIERE_SEGUIMIENTO lo deja abierto; NO_SATISFACTORIO avisa.
+             * @enum {string}
+             */
+            resultado: "OPERATIVO" | "REQUIERE_SEGUIMIENTO" | "NO_SATISFACTORIO";
+            /** @example Equipo encendido 2 h sin incidencias; temperatura normal. */
+            observaciones: string;
+            /**
+             * @description Obligatoria para cerrar como OPERATIVO.
+             * @example Acta MT-2026-031
+             */
+            evidencia?: string;
+            /** @example Mesa de Servicios */
+            responsable: string;
         };
         MantenimientoDto: {
             /** @example 1 */
             id: number;
             /** @example 5 */
             activoId: number;
-            activo: components["schemas"]["ActivoMantenidoDto"];
+            activo: components["schemas"]["ActivoBreveDto"];
+            /** @description Plan del que procede (capa 1). */
+            planId: number | null;
             /** @enum {string} */
             tipo: "PREVENTIVO" | "CORRECTIVO";
             /** @enum {string} */
@@ -1967,6 +2415,19 @@ export interface components {
              * @example 1
              */
             version: number;
+            tecnico: string | null;
+            diagnostico: string | null;
+            /** @description Minutos. */
+            duracionMin: number | null;
+            costo: number | null;
+            repuestos: string | null;
+            observaciones: string | null;
+            evidencia: string | null;
+            /**
+             * @description Capa 3: según la última verificación vigente (solo en los FINALIZADOS).
+             * @enum {string}
+             */
+            cierre: "NO_APLICA" | "PENDIENTE_VERIFICACION" | "CERRADO" | "EN_SEGUIMIENTO" | "NO_SATISFACTORIO";
             /**
              * Format: date-time
              * @description Anulado (eliminación lógica); null = vigente.
@@ -2005,6 +2466,11 @@ export interface components {
              * @description Si no se envía, se usa la hora actual del servidor.
              */
             fechaInicio?: string;
+            /**
+             * @description Técnico que realiza el trabajo.
+             * @example jperez
+             */
+            tecnico?: string;
         };
         FinalizarMantenimientoDto: {
             /** @example Firmware actualizado a v2.4; sin incidencias. */
@@ -2020,6 +2486,31 @@ export interface components {
              * @description Si no se envía, se usa la hora actual del servidor.
              */
             fechaFin?: string;
+            /**
+             * @description Técnico. Obligatorio si no se indicó al iniciar.
+             * @example jperez
+             */
+            tecnico?: string;
+            /** @example Ventilador del procesador obstruido; temperatura elevada. */
+            diagnostico: string;
+            /**
+             * @description Duración del trabajo, en minutos.
+             * @example 90
+             */
+            duracionMin: number;
+            /**
+             * @description Costo del trabajo y repuestos.
+             * @example 45.5
+             */
+            costo?: number;
+            /** @example Pasta térmica; ventilador 80 mm. */
+            repuestos?: string;
+            observaciones?: string;
+            /**
+             * @description Referencia a la evidencia.
+             * @example Informe técnico MT-031
+             */
+            evidencia?: string;
         };
         CancelarMantenimientoDto: {
             /**
@@ -2045,20 +2536,53 @@ export interface components {
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
         };
-        ActivoAfectadoDto: {
-            /** @example 5 */
-            id: number;
-            /** @example SRV-001 */
-            codigo: string;
-            /** @example Servidor de base de datos */
-            nombre: string;
+        RegistrarLoteDto: {
+            /**
+             * @description Identificador público (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
+            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
+            descripcion: string;
+            /**
+             * @example ALTO
+             * @enum {string}
+             */
+            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /**
+             * Format: date-time
+             * @description Fecha de detección (no puede ser futura).
+             * @example 2026-09-30T09:00:00.000Z
+             */
+            fecha: string;
+            /**
+             * Format: date-time
+             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
+             * @example 2026-10-15T23:59:59.000Z
+             */
+            fechaLimite?: string;
+            /**
+             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
+             * @enum {string}
+             */
+            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
+            evidencia?: string;
+            /**
+             * @description Activos operativos afectados.
+             * @example [
+             *       5,
+             *       8
+             *     ]
+             */
+            activoIds: number[];
         };
         VulnerabilidadDto: {
             /** @example 1 */
             id: number;
             /** @example 5 */
             activoId: number;
-            activo: components["schemas"]["ActivoAfectadoDto"];
+            activo: components["schemas"]["ActivoBreveDto"];
             /** @example CVE-2026-12345 */
             cve: string | null;
             descripcion: string;
@@ -2073,6 +2597,27 @@ export interface components {
             vencida: boolean;
             /** @description Acción aplicada al mitigar, o justificación al aceptar el riesgo. */
             mitigacion: string | null;
+            /** @enum {string} */
+            fuente: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+            evidencia: string | null;
+            /**
+             * Format: date-time
+             * @description Capa 1: confirmada tras comprobarla.
+             */
+            confirmadaEn: string | null;
+            confirmadaPor: string | null;
+            /**
+             * @description Capa 2: evaluación.
+             * @enum {string|null}
+             */
+            prioridad: "P1" | "P2" | "P3" | "P4" | null;
+            responsable: string | null;
+            planRemediacion: string | null;
+            /** Format: date-time */
+            evaluadaEn: string | null;
+            evaluadaPor: string | null;
+            /** @description Quién la cerró (verificación) o aceptó el riesgo. */
+            cerradaPor: string | null;
             /**
              * Format: date-time
              * @description Fecha de detección.
@@ -2101,6 +2646,106 @@ export interface components {
             anuladoEn: string | null;
             anuladoPor: string | null;
             motivoAnulacion: string | null;
+        };
+        EvaluarVulnerabilidadDto: {
+            /**
+             * @description P1 = atender de inmediato.
+             * @enum {string}
+             */
+            prioridad: "P1" | "P2" | "P3" | "P4";
+            /** @example Coordinación de Infraestructura */
+            responsable: string;
+            /** @example Actualizar OpenSSL a 3.0.15 en la próxima ventana de mantenimiento. */
+            planRemediacion: string;
+            /**
+             * @description Si la evaluación cambia el nivel de riesgo.
+             * @enum {string}
+             */
+            nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /**
+             * Format: date-time
+             * @description Plazo (SLA) acordado.
+             */
+            fechaLimite?: string;
+        };
+        AccionRemediacionDto: {
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            vulnerabilidadId: number;
+            /** Format: date-time */
+            fecha: string;
+            descripcion: string;
+            responsable: string;
+            evidencia: string | null;
+            registradoPor: string;
+        };
+        RegistrarAccionDto: {
+            /** Format: date-time */
+            fecha: string;
+            /** @example Aplicado el parche KB5031234 en el servidor. */
+            descripcion: string;
+            /** @example jperez */
+            responsable: string;
+            /** @example Ticket CHG-2026-118 */
+            evidencia?: string;
+        };
+        VerificacionVulnerabilidadDto: {
+            /**
+             * @description Sube con cada modificación.
+             * @example 1
+             */
+            version: number;
+            /**
+             * Format: date-time
+             * @description null = vigente.
+             */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            id: number;
+            vulnerabilidadId: number;
+            /** Format: date-time */
+            fecha: string;
+            /** @enum {string} */
+            resultado: "CORREGIDA" | "PERSISTE";
+            observaciones: string;
+            evidencia: string;
+            responsable: string;
+            registradoPor: string;
+        };
+        RegistrarVerificacionVulnerabilidadDto: {
+            /** Format: date-time */
+            fecha: string;
+            /**
+             * @description CORREGIDA cierra la vulnerabilidad; PERSISTE la mantiene en tratamiento (o la reabre si estaba cerrada).
+             * @enum {string}
+             */
+            resultado: "CORREGIDA" | "PERSISTE";
+            /** @example Escaneo posterior sin hallazgos para CVE-2026-12345. */
+            observaciones: string;
+            /** @example Informe de escaneo 2026-10-15 */
+            evidencia: string;
+            /** @example Oficial de Seguridad */
+            responsable: string;
         };
         PaginatedVulnerabilidadDto: {
             data: components["schemas"]["VulnerabilidadDto"][];
@@ -2136,10 +2781,13 @@ export interface components {
              * @example 2026-10-15T23:59:59.000Z
              */
             fechaLimite?: string;
-        };
-        MitigarVulnerabilidadDto: {
-            /** @example Actualizado OpenSSL a 3.0.15 y reiniciado el servicio; verificado con escaneo. */
-            mitigacion: string;
+            /**
+             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
+             * @enum {string}
+             */
+            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
+            evidencia?: string;
         };
         AceptarRiesgoDto: {
             /**
@@ -2173,6 +2821,13 @@ export interface components {
              * @example 2026-10-15T23:59:59.000Z
              */
             fechaLimite?: string;
+            /**
+             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
+             * @enum {string}
+             */
+            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
+            evidencia?: string;
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
         };
@@ -2305,7 +2960,7 @@ export interface components {
             /** @example 31 */
             id: number;
             /** @enum {string} */
-            tipo: "ALTA" | "MODIFICACION" | "CAMBIO_ESTADO" | "BAJA_DETECTADA" | "REACTIVACION" | "ERROR_SINCRONIZACION";
+            tipo: "ALTA" | "MODIFICACION" | "CAMBIO_ESTADO" | "BAJA_DETECTADA" | "REACTIVACION" | "ERROR_SINCRONIZACION" | "RESPALDO_FALLIDO" | "MANTENIMIENTO_NO_SATISFACTORIO" | "VULNERABILIDAD_CRITICA" | "VULNERABILIDAD_REABIERTA";
             /** @example GLPI-PC-5 · LP-CONTABILIDAD: estado Bueno → Malo */
             titulo: string;
             /**
@@ -3226,8 +3881,15 @@ export interface operations {
                 page?: number;
                 limit?: number;
                 activoId?: number;
+                /** @description Categoría del activo (tipo de activo de GLPI). */
+                categoriaId?: number;
+                /** @description Busca en el código y el nombre del activo. */
+                q?: string;
+                /** @description Responsable (contiene el texto). */
+                responsable?: string;
                 /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
                 incluirAnulados?: boolean;
+                frecuencia?: "DIARIO" | "SEMANAL" | "QUINCENAL" | "MENSUAL" | "TRIMESTRAL";
                 estado?: "VIGENTE" | "SUSPENDIDO";
             };
             header?: never;
@@ -3514,6 +4176,12 @@ export interface operations {
                 page?: number;
                 limit?: number;
                 activoId?: number;
+                /** @description Categoría del activo (tipo de activo de GLPI). */
+                categoriaId?: number;
+                /** @description Busca en el código y el nombre del activo. */
+                q?: string;
+                /** @description Responsable (contiene el texto). */
+                responsable?: string;
                 /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
                 incluirAnulados?: boolean;
                 desde?: string;
@@ -3786,10 +4454,18 @@ export interface operations {
                 page?: number;
                 limit?: number;
                 activoId?: number;
+                /** @description Categoría del activo (tipo de activo de GLPI). */
+                categoriaId?: number;
+                /** @description Busca en el código y el nombre del activo. */
+                q?: string;
+                /** @description Responsable (contiene el texto). */
+                responsable?: string;
                 /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
                 incluirAnulados?: boolean;
                 desde?: string;
                 hasta?: string;
+                resultado?: "EXITOSO" | "PARCIAL" | "FALLIDO";
+                motivo?: "PRUEBA_PROGRAMADA" | "INCIDENTE_DISPONIBILIDAD" | "SOLICITUD_PROPIETARIO" | "VERIFICACION_INTEGRIDAD";
                 ejecucionId?: number;
             };
             header?: never;
@@ -4157,7 +4833,7 @@ export interface operations {
     TrazasController_listar: {
         parameters: {
             query: {
-                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD";
+                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
                 registroId: number;
             };
             header?: never;
@@ -4194,12 +4870,496 @@ export interface operations {
             };
         };
     };
+    PlanesMantenimientoController_tablero: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TableroMantenimientosDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_listar: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                activoId?: number;
+                /** @description Categoría del activo (tipo de activo de GLPI). */
+                categoriaId?: number;
+                /** @description Busca en el código y el nombre del activo. */
+                q?: string;
+                /** @description Responsable (contiene el texto). */
+                responsable?: string;
+                /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
+                incluirAnulados?: boolean;
+                tipo?: "PREVENTIVO" | "CORRECTIVO";
+                estado?: "VIGENTE" | "SUSPENDIDO";
+                /** @description true = solo los vigentes cuya próxima intervención ya pasó. */
+                vencidos?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedPlanMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_crear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearPlanesMantenimientoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanMantenimientoDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_ver: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_modificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ModificarPlanMantenimientoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_programar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgramarDesdePlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProgramacionDesdePlanDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_verificacionesDe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionMantenimientoDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_verificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarVerificacionMantenimientoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_anularVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionMantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     MantenimientosController_findAll: {
         parameters: {
             query?: {
                 page?: number;
                 limit?: number;
                 activoId?: number;
+                /** @description Categoría del activo. */
+                categoriaId?: number;
+                /** @description Busca en el código y nombre del activo y en la actividad. */
+                q?: string;
+                /** @description Técnico (contiene el texto). */
+                tecnico?: string;
+                planId?: number;
+                /** @description Finalizados sin verificar, o cerrados como operativos. */
+                cierre?: "PENDIENTE_VERIFICACION" | "CERRADO";
                 tipo?: "PREVENTIVO" | "CORRECTIVO";
                 fase?: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO";
                 estadoEquipo?: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO";
@@ -4758,6 +5918,460 @@ export interface operations {
             };
         };
     };
+    TratamientoVulnerabilidadController_lote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarLoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_confirmar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_evaluar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvaluarVulnerabilidadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_acciones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccionRemediacionDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_registrarAccion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarAccionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccionRemediacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_anularAccion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccionRemediacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_verificaciones: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_verificar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarVerificacionVulnerabilidadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_anularVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     VulnerabilidadesController_findAll: {
         parameters: {
             query?: {
@@ -4765,6 +6379,16 @@ export interface operations {
                 limit?: number;
                 activoId?: number;
                 nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+                /** @description Categoría del activo. */
+                categoriaId?: number;
+                /** @description Busca en el código y nombre del activo y en la descripción. */
+                q?: string;
+                /** @description Responsable del tratamiento (contiene el texto). */
+                responsable?: string;
+                prioridad?: "P1" | "P2" | "P3" | "P4";
+                fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+                /** @description true = confirmadas; false = solo detectadas. */
+                confirmada?: boolean;
                 estado?: "ABIERTA" | "EN_MITIGACION" | "MITIGADA" | "ACEPTADA";
                 /** @description Busca por CVE (coincidencia parcial). */
                 cve?: string;
@@ -5052,74 +6676,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado no permitido. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    VulnerabilidadesController_mitigar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MitigarVulnerabilidadDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
             /** @description Token ausente o inválido. */

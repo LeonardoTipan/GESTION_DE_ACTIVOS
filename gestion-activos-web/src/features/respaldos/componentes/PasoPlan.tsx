@@ -106,7 +106,11 @@ function Cobertura({ plan, tablero }: { plan: Plan; tablero?: Tablero }) {
 }
 
 /** Paso 1 · Alcance: qué activos se respaldan y con qué parámetros. */
-export function PasoPlan({ planes, tablero }: { planes: Plan[]; tablero?: Tablero }) {
+/**
+ * planes: todos (para saber qué activos ya tienen plan); listado: la página
+ * filtrada que se muestra en la tabla.
+ */
+export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado: Plan[]; tablero?: Tablero }) {
   const puedeOperar = usePuedeOperar()
   const crear = useCrearPlanes()
   const modificar = useModificarPlan()
@@ -246,19 +250,19 @@ export function PasoPlan({ planes, tablero }: { planes: Plan[]; tablero?: Tabler
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {planes.length === 0 && (
+                {listado.length === 0 && (
                   <Table.Tr>
                     <Table.Td colSpan={13}>
-                      <Text c="dimmed" ta="center" py="md">Ningún activo incorporado al plan de respaldo.</Text>
+                      <Text c="dimmed" ta="center" py="md">{planes.length === 0 ? 'Ningún activo incorporado al plan de respaldo.' : 'Ningún plan coincide con los filtros.'}</Text>
                     </Table.Td>
                   </Table.Tr>
                 )}
-                {planes.map((p) => (
+                {listado.map((p) => (
                   <Table.Tr key={p.id} style={{ opacity: p.anuladoEn ? 0.55 : 1, textDecoration: p.anuladoEn ? 'line-through' : undefined }}>
                     <Table.Td ff="monospace">{folio('PLN', p.id)}</Table.Td>
                     <Table.Td>
                       <Text size="sm" fw={600}>{p.activo.nombre}</Text>
-                      <Text size="xs" c="dimmed">{p.activo.codigo}{p.activo.tipo ? ` · ${p.activo.tipo}` : ''}</Text>
+                      <Text size="xs" c="dimmed">{p.activo.codigo} · {p.activo.categoria}</Text>
                     </Table.Td>
                     <Table.Td><BadgeCriticidad nivel={p.activo.criticidad} /></Table.Td>
                     <Table.Td>
@@ -342,9 +346,11 @@ export function PasoPlan({ planes, tablero }: { planes: Plan[]; tablero?: Tabler
                             <Checkbox
                               key={a.id}
                               checked={seleccion.includes(a.id)}
-                              onChange={(e) =>
-                                setSeleccion((s) => (e.currentTarget.checked ? [...s, a.id] : s.filter((x) => x !== a.id)))
-                              }
+                              onChange={(e) => {
+                                // Se lee ya: dentro del actualizador diferido currentTarget es null.
+                                const marcado = e.currentTarget.checked
+                                setSeleccion((s) => (marcado ? [...s, a.id] : s.filter((x) => x !== a.id)))
+                              }}
                               label={
                                 <Group gap={6} wrap="nowrap">
                                   <Text size="sm">{a.nombre}</Text>

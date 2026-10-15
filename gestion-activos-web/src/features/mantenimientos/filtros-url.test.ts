@@ -31,4 +31,16 @@ describe('filtros de mantenimientos en la URL', () => {
       vencidos: true,
     })
   })
+
+  it('capa, categoría, búsqueda, técnico y cierre', () => {
+    const filtros = leerFiltros(new URLSearchParams('capa=verificacion&categoriaId=3&q=%20pc%20&tecnico=jperez&cierre=CERRADO'))
+    expect(filtros).toMatchObject({ capa: 'verificacion', categoriaId: 3, q: 'pc', tecnico: 'jperez', cierre: 'CERRADO' })
+    expect(leerFiltros(escribirFiltros(filtros))).toEqual(filtros)
+    expect(leerFiltros(new URLSearchParams('capa=otra&cierre=X'))).toMatchObject({ capa: undefined, cierre: undefined })
+  })
+
+  it('la pestaña de verificación muestra, por defecto, lo pendiente de verificar', () => {
+    expect(aConsultaApi({ page: 1, capa: 'verificacion' }).cierre).toBe('PENDIENTE_VERIFICACION')
+    expect(aConsultaApi({ page: 1 }).cierre).toBeUndefined()
+  })
 })

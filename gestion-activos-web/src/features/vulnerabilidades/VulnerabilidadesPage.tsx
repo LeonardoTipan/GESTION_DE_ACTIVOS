@@ -1,5 +1,6 @@
 import {
   Anchor,
+  Badge,
   Button,
   Group,
   SegmentedControl,
@@ -21,11 +22,14 @@ import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
 import { BadgeRegistro, FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
 import { periodoPorId } from '../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
+import { useCategorias } from '../inventario/api/catalogos.ts'
 import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import {
   useVulnerabilidades,
   type EstadoVulnerabilidad,
+  type Fuente,
   type NivelRiesgo,
+  type Prioridad,
   type Vulnerabilidad,
   useIndicadoresVulnerabilidad,
 } from './api/vulnerabilidades.ts'
@@ -38,12 +42,12 @@ import {
   leerFiltros,
   type Vista,
 } from './filtros-url.ts'
-import { INFO_ESTADO, INFO_NIVEL, NIVELES } from './riesgo.ts'
+import { FUENTES, INFO_ESTADO, INFO_FUENTE, INFO_NIVEL, INFO_PRIORIDAD, NIVELES, PRIORIDADES } from './riesgo.ts'
 
 function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnerabilidad[] }) {
   const navigate = useNavigate()
   return (
-    <Table.ScrollContainer minWidth={960}>
+    <Table.ScrollContainer minWidth={1250}>
       <Table striped highlightOnHover verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
@@ -89,7 +93,7 @@ function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnera
                   {v.activo.codigo}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {v.activo.nombre}
+                  {v.activo.nombre} · {v.activo.categoria}
                 </Text>
               </Table.Td>
               <Table.Td maw={300}>
@@ -98,7 +102,19 @@ function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnera
                 </Text>
               </Table.Td>
               <Table.Td>
-                <BadgeEstado estado={v.estado} />
+                <Group gap={4}>
+                  <BadgeEstado estado={v.estado} />
+                  {v.estado === 'ABIERTA' && !v.confirmadaEn && (
+                    <Badge size="xs" color="gray" variant="light">
+                      sin confirmar
+                    </Badge>
+                  )}
+                </Group>
+                {v.prioridad && (
+                  <Text size="xs" c={INFO_PRIORIDAD[v.prioridad].color} fw={600}>
+                    {INFO_PRIORIDAD[v.prioridad].etiqueta}
+                  </Text>
+                )}
               </Table.Td>
               <Table.Td>
                 <BadgeSla vulnerabilidad={v} />
@@ -146,6 +162,7 @@ export function VulnerabilidadesPage() {
   const { filtros, actualizar, limpiar } = useFiltrosUrl(leerFiltros, escribirFiltros)
   const consulta = useVulnerabilidades(aConsultaApi(filtros))
   const puedeOperar = usePuedeOperar()
+  const categorias = useCategorias()
   const [modalAbierto, modal] = useDisclosure()
 
   // La búsqueda por CVE espera 400 ms sin teclear antes de consultar la API.
@@ -162,6 +179,10 @@ export function VulnerabilidadesPage() {
     filtros.nivelRiesgo !== undefined ||
     filtros.estado !== undefined ||
     filtros.activoId !== undefined ||
+    filtros.categoriaId !== undefined ||
+    filtros.prioridad !== undefined ||
+    filtros.fuente !== undefined ||
+    filtros.confirmada !== undefined ||
     filtros.cve !== '' ||
     filtros.vencidas !== undefined
 
@@ -205,12 +226,52 @@ export function VulnerabilidadesPage() {
 
       <Group gap="sm" align="flex-end" wrap="wrap">
         <TextInput
-          label="CVE"
-          placeholder="CVE-2026"
+          label="Buscar"
+          placeholder="CVE, descripción o activo"
           leftSection={<IconSearch size={16} />}
           value={cve}
           onChange={(e) => setCve(e.currentTarget.value)}
-          w={{ base: '100%', sm: 180 }}
+          w={{ base: '100%', sm: 220 }}
+        />
+        <Select
+          label="Categoría"
+          placeholder="Todas"
+          clearable
+          searchable
+          data={(categorias.data ?? []).map((c) => ({ value: String(c.id), label: c.nombre }))}
+          value={filtros.categoriaId ? String(filtros.categoriaId) : null}
+          onChange={(v) => actualizar({ categoriaId: v ? Number(v) : undefined, page: 1 })}
+          w={{ base: '100%', sm: 190 }}
+        />
+        <Select
+          label="Etapa"
+          placeholder="Todas"
+          clearable
+          data={[
+            { value: '0', label: 'Detectadas, sin confirmar' },
+            { value: '1', label: 'Confirmadas' },
+          ]}
+          value={filtros.confirmada === undefined ? null : filtros.confirmada ? '1' : '0'}
+          onChange={(v) => actualizar({ confirmada: v === null ? undefined : v === '1', page: 1 })}
+          w={{ base: '100%', sm: 200 }}
+        />
+        <Select
+          label="Prioridad"
+          placeholder="Todas"
+          clearable
+          data={PRIORIDADES.map((p) => ({ value: p, label: INFO_PRIORIDAD[p].etiqueta }))}
+          value={filtros.prioridad ?? null}
+          onChange={(v) => actualizar({ prioridad: (v as Prioridad | null) ?? undefined, page: 1 })}
+          w={{ base: '100%', sm: 150 }}
+        />
+        <Select
+          label="Fuente"
+          placeholder="Todas"
+          clearable
+          data={FUENTES.map((f) => ({ value: f, label: INFO_FUENTE[f] }))}
+          value={filtros.fuente ?? null}
+          onChange={(v) => actualizar({ fuente: (v as Fuente | null) ?? undefined, page: 1 })}
+          w={{ base: '100%', sm: 200 }}
         />
         <Select
           label="Riesgo"
@@ -295,7 +356,8 @@ export function VulnerabilidadesPage() {
           opened={modalAbierto}
           onClose={modal.close}
           activoInicial={filtros.activoId}
-          onRegistrada={(v) => navigate(`/vulnerabilidades/${v.id}`)}
+          // Con varias, se queda en el listado (que ya las muestra); con una, abre su ficha.
+          onRegistrada={(v, total) => total === 1 && navigate(`/vulnerabilidades/${v.id}`)}
         />
       )}
     </Stack>

@@ -58,6 +58,8 @@ interface Valores {
   fueraSitio: boolean
   inmutable: boolean
   integridad: boolean
+  evidencia: string
+  observaciones: string
   motivoCambio: string
 }
 
@@ -75,6 +77,8 @@ const VACIO: Valores = {
   fueraSitio: true,
   inmutable: false,
   integridad: true,
+  evidencia: '',
+  observaciones: '',
   motivoCambio: '',
 }
 
@@ -114,6 +118,8 @@ export function PasoEjecucion({
       duracionMin: entero(0),
       rpoHoras: entero(1),
       responsable: (v) => (v.trim() ? null : 'Obligatorio.'),
+      evidencia: (v) => (v.length > 191 ? 'Máximo 191 caracteres.' : null),
+      observaciones: (v) => (v.length > 2000 ? 'Máximo 2000 caracteres.' : null),
       motivoCambio: (v) => (editando ? errorMotivo(v) : null),
     },
   })
@@ -152,6 +158,8 @@ export function PasoEjecucion({
       fueraSitio: e.fueraSitio,
       inmutable: e.inmutable,
       integridad: e.integridad,
+      evidencia: e.evidencia ?? '',
+      observaciones: e.observaciones ?? '',
     })
   }
   const limpiar = () => {
@@ -174,6 +182,8 @@ export function PasoEjecucion({
       fueraSitio: v.fueraSitio,
       inmutable: v.inmutable,
       integridad: v.integridad,
+      evidencia: v.evidencia.trim() || undefined,
+      observaciones: v.observaciones.trim() || undefined,
     }
     const error = (e: Error) => notifications.show({ color: 'red', title: 'No se pudo guardar', message: e.message })
     if (editando) {
@@ -247,7 +257,10 @@ export function PasoEjecucion({
                       <Table.Tr key={e.id} style={{ opacity: e.anuladoEn ? 0.55 : 1 }}>
                         <Table.Td ff="monospace" td={e.anuladoEn ? 'line-through' : undefined}>{folio('RES', e.id)}</Table.Td>
                         <Table.Td>{formatearFecha(e.fecha)}</Table.Td>
-                        <Table.Td>{e.activo.nombre}</Table.Td>
+                        <Table.Td>
+                          {e.activo.nombre}
+                          <Text size="xs" c="dimmed">{e.activo.categoria}</Text>
+                        </Table.Td>
                         <Table.Td ff="monospace">{folio('PLN', e.planId)}</Table.Td>
                         <Table.Td>{TIPO[e.tipo]}</Table.Td>
                         <Table.Td>{MEDIO[e.medio]}</Table.Td>
@@ -263,7 +276,11 @@ export function PasoEjecucion({
                             <Badge size="xs" color="red">sin controles</Badge>
                           )}
                         </Table.Td>
-                        <Table.Td><Badge size="sm" color={COLOR_RESULTADO[e.resultado]} variant="light">{RESULTADO[e.resultado]}</Badge></Table.Td>
+                        <Table.Td>
+                          <Badge size="sm" color={COLOR_RESULTADO[e.resultado]} variant="light">{RESULTADO[e.resultado]}</Badge>
+                          {e.evidencia && <Text size="xs" c="dimmed">evid.: {e.evidencia}</Text>}
+                          {e.observaciones && <Text size="xs" c="dimmed" lineClamp={2}>{e.observaciones}</Text>}
+                        </Table.Td>
                         <Table.Td><BadgeRegistro registro={e} /></Table.Td>
                         <Table.Td>
                           <AccionesRegistro
@@ -335,6 +352,13 @@ export function PasoEjecucion({
                     <Checkbox label="Retención inmutable" {...form.getInputProps('inmutable', { type: 'checkbox' })} />
                     <Checkbox label="Integridad verificada" {...form.getInputProps('integridad', { type: 'checkbox' })} />
                   </Group>
+                  <TextInput
+                    label="Evidencia"
+                    placeholder="Registro del software de respaldo, ticket o acta"
+                    description="Referencia documental: la aplicación registra el respaldo; no lo ejecuta ni almacena copias."
+                    {...form.getInputProps('evidencia')}
+                  />
+                  <Textarea label="Observaciones" autosize minRows={1} placeholder="Incidencias, causa de un fallo…" {...form.getInputProps('observaciones')} />
                   {editando && (
                     <Textarea
                       label="Motivo del cambio"

@@ -3,6 +3,7 @@ import {
   Group,
   Modal,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -18,10 +19,11 @@ import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import {
   useEditarVulnerabilidad,
+  type Fuente,
   type NivelRiesgo,
   type Vulnerabilidad,
 } from '../api/vulnerabilidades.ts'
-import { FORMATO_CVE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
+import { FORMATO_CVE, FUENTES, INFO_FUENTE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
 
 /** Tope de los campos de texto largo (el mismo que aplica la API). */
 const MAX_TEXTO_LARGO = 5000
@@ -55,6 +57,8 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
     nivelRiesgo: NivelRiesgo
     fecha: string | null
     fechaLimite: string | null
+    fuente: Fuente
+    evidencia: string
     motivoCambio: string
   }>({
     initialValues: {
@@ -63,10 +67,13 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
       nivelRiesgo: v0.nivelRiesgo,
       fecha: isoAFechaHoraLocal(v0.fecha),
       fechaLimite: v0.fechaLimite ? isoAFechaHoraLocal(v0.fechaLimite) : null,
+      fuente: v0.fuente,
+      evidencia: v0.evidencia ?? '',
       motivoCambio: '',
     },
     validate: {
       motivoCambio: errorMotivo,
+      evidencia: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
       cve: (v) =>
         v.trim() && !FORMATO_CVE.test(v.trim().toUpperCase())
           ? 'Formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)'
@@ -96,6 +103,8 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
           nivelRiesgo: v.nivelRiesgo,
           fecha: fechaHoraLocalAIso(v.fecha!),
           fechaLimite: v.fechaLimite ? fechaHoraLocalAIso(v.fechaLimite) : undefined,
+          fuente: v.fuente,
+          evidencia: v.evidencia.trim() || undefined,
           motivoCambio: v.motivoCambio.trim(),
         },
       },
@@ -146,6 +155,13 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
           {...form.getInputProps('descripcion')}
         />
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <Select
+            label="Fuente del hallazgo"
+            data={FUENTES.map((f) => ({ value: f, label: INFO_FUENTE[f] }))}
+            allowDeselect={false}
+            {...form.getInputProps('fuente')}
+          />
+          <TextInput label="Evidencia" placeholder="Referencia al informe o captura" {...form.getInputProps('evidencia')} />
           <DateTimePicker
             label="Fecha de detección"
             valueFormat="DD MMM YYYY HH:mm"

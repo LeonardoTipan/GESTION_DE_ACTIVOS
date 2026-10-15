@@ -47,6 +47,7 @@ interface Valores {
   evidencia: string
   responsable: string
   integridad: boolean
+  observaciones: string
   motivoCambio: string
 }
 
@@ -60,6 +61,7 @@ const VACIO: Valores = {
   evidencia: '',
   responsable: '',
   integridad: true,
+  observaciones: '',
   motivoCambio: '',
 }
 
@@ -103,6 +105,7 @@ export function PasoRestauracion({
       rtoMinutos: entero(1),
       evidencia: (v) => (v.trim().length < 3 ? 'Mínimo 3 caracteres.' : v.length > 60 ? 'Máximo 60 caracteres.' : null),
       responsable: (v) => (v.trim() ? null : 'Obligatorio.'),
+      observaciones: (v) => (v.length > 2000 ? 'Máximo 2000 caracteres.' : null),
       motivoCambio: (v) => (editando ? errorMotivo(v) : null),
     },
   })
@@ -143,6 +146,7 @@ export function PasoRestauracion({
       evidencia: r.evidencia,
       responsable: r.responsable,
       integridad: r.integridad,
+      observaciones: r.observaciones ?? '',
     })
   }
   const limpiar = () => {
@@ -161,6 +165,7 @@ export function PasoRestauracion({
       evidencia: v.evidencia.trim(),
       responsable: v.responsable.trim(),
       integridad: v.integridad,
+      observaciones: v.observaciones.trim() || undefined,
     }
     const error = (e: Error) => notifications.show({ color: 'red', title: 'No se pudo guardar', message: e.message })
     if (editando) {
@@ -248,7 +253,10 @@ export function PasoRestauracion({
                           {r.integridad ? 'Íntegro' : 'No verificado'}
                         </Badge>
                       </Table.Td>
-                      <Table.Td>{r.evidencia}</Table.Td>
+                      <Table.Td>
+                        {r.evidencia}
+                        {r.observaciones && <Text size="xs" c="dimmed" lineClamp={2}>{r.observaciones}</Text>}
+                      </Table.Td>
                       <Table.Td><Badge size="sm" color={COLOR_RESULTADO[r.resultado]} variant="light">{RESULTADO[r.resultado]}</Badge></Table.Td>
                       <Table.Td><BadgeRegistro registro={r} /></Table.Td>
                       <Table.Td>
@@ -315,6 +323,7 @@ export function PasoRestauracion({
                     <TextInput label="Responsable" required {...form.getInputProps('responsable')} />
                   </SimpleGrid>
                   <Checkbox label="Integridad de los datos verificada (A.8.13)" {...form.getInputProps('integridad', { type: 'checkbox' })} />
+                  <Textarea label="Observaciones" autosize minRows={1} placeholder="Diferencias entre la prueba prevista y lo ejecutado, incidencias…" {...form.getInputProps('observaciones')} />
                   {editando && (
                     <Textarea
                       label="Motivo del cambio"

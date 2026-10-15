@@ -24,6 +24,17 @@ export type DatosModificarRestauracion = S['ModificarRestauracionDto']
 
 const RAIZ = ['respaldos'] as const
 const PAGINA = { page: 1, limit: 100 } as const
+export const TAMANO_PAGINA = 20
+
+/** Filtros comunes a los tres listados (en la URL): valores reales de la API. */
+export interface FiltrosRespaldo {
+  page: number
+  categoriaId?: number
+  q?: string
+  responsable?: string
+  resultado?: Ejecucion['resultado']
+}
+const consulta = ({ page, ...f }: FiltrosRespaldo) => ({ ...f, page, limit: TAMANO_PAGINA })
 
 /** Tras cualquier cambio se recalculan listados, tablero e inventario de operaciones. */
 function useInvalidar() {
@@ -49,11 +60,21 @@ export function usePlanes() {
   })
 }
 
-export function useEjecuciones(desde: string, hasta: string) {
+/** Planes para el listado (filtrado y paginado); el formulario usa usePlanes(). */
+export function usePlanesFiltrados(filtros: FiltrosRespaldo) {
+  const { resultado: _, ...resto } = filtros
   return useQuery({
-    queryKey: [...RAIZ, 'ejecuciones', desde, hasta],
+    queryKey: [...RAIZ, 'planes', 'listado', resto],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/planes', { params: { query: consulta(resto) } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useEjecuciones(desde: string, hasta: string, filtros: FiltrosRespaldo) {
+  return useQuery({
+    queryKey: [...RAIZ, 'ejecuciones', desde, hasta, filtros],
     queryFn: () =>
-      ejecutar(api.GET('/api/respaldos/ejecuciones', { params: { query: { ...PAGINA, desde, hasta } } })),
+      ejecutar(api.GET('/api/respaldos/ejecuciones', { params: { query: { ...consulta(filtros), desde, hasta } } })),
     placeholderData: keepPreviousData,
   })
 }
@@ -71,11 +92,11 @@ export function useEjecucionesRestaurables() {
   })
 }
 
-export function useRestauraciones(desde: string, hasta: string) {
+export function useRestauraciones(desde: string, hasta: string, filtros: FiltrosRespaldo) {
   return useQuery({
-    queryKey: [...RAIZ, 'restauraciones', desde, hasta],
+    queryKey: [...RAIZ, 'restauraciones', desde, hasta, filtros],
     queryFn: () =>
-      ejecutar(api.GET('/api/respaldos/restauraciones', { params: { query: { ...PAGINA, desde, hasta } } })),
+      ejecutar(api.GET('/api/respaldos/restauraciones', { params: { query: { ...consulta(filtros), desde, hasta } } })),
     placeholderData: keepPreviousData,
   })
 }

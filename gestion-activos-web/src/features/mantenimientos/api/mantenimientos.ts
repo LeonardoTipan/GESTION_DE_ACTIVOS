@@ -140,3 +140,105 @@ export function useIndicadoresMantenimiento(desde: string, hasta: string) {
     placeholderData: keepPreviousData,
   })
 }
+
+// ── Capa 1 · Planificación ──────────────────────────────────────────────────
+
+export type PlanMantenimiento = components['schemas']['PlanMantenimientoDto']
+export type FrecuenciaMantenimiento = PlanMantenimiento['frecuencia']
+export type TableroMantenimientos = components['schemas']['TableroMantenimientosDto']
+export type FiltrosApiPlanes = NonNullable<
+  paths['/api/mantenimientos/planes']['get']['parameters']['query']
+>
+
+export function usePlanesMantenimiento(filtros: FiltrosApiPlanes) {
+  return useQuery({
+    queryKey: [...claves.todo, 'planes', filtros],
+    queryFn: () => ejecutar(api.GET('/api/mantenimientos/planes', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Próximas intervenciones, activos sin plan, planes vencidos y pendientes de verificar. */
+export function useTableroMantenimientos() {
+  return useQuery({
+    queryKey: [...claves.todo, 'tablero'],
+    queryFn: () => ejecutar(api.GET('/api/mantenimientos/tablero')),
+  })
+}
+
+/** Un plan por cada activo seleccionado (todos o ninguno). */
+export function useCrearPlanesMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: (datos: components['schemas']['CrearPlanesMantenimientoDto']) =>
+      ejecutar(api.POST('/api/mantenimientos/planes', { body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useModificarPlanMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['ModificarPlanMantenimientoDto'] }) =>
+      ejecutar(api.PATCH('/api/mantenimientos/planes/{id}', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+/** Crea el mantenimiento de la próxima fecha y adelanta el plan según su frecuencia. */
+export function useProgramarDesdePlan() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: (id: number) =>
+      ejecutar(api.POST('/api/mantenimientos/planes/{id}/programar', { params: { path: { id } }, body: {} })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useAnulacionPlanMantenimiento() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, modo, motivo }: { id: number; modo: 'anular' | 'reversar'; motivo: string }) => {
+      const opciones = { params: { path: { id } }, body: { motivo } }
+      return modo === 'anular'
+        ? ejecutar(api.POST('/api/mantenimientos/planes/{id}/anular', opciones))
+        : ejecutar(api.POST('/api/mantenimientos/planes/{id}/reversar', opciones))
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+// ── Capa 3 · Verificación y cierre ──────────────────────────────────────────
+
+export type VerificacionMantenimiento = components['schemas']['VerificacionMantenimientoDto']
+export type ResultadoVerificacion = VerificacionMantenimiento['resultado']
+export type Cierre = Mantenimiento['cierre']
+
+export function useVerificacionesMantenimiento(id: number) {
+  return useQuery({
+    queryKey: [...claves.detalle(id), 'verificaciones'],
+    queryFn: () =>
+      ejecutar(api.GET('/api/mantenimientos/{id}/verificaciones', { params: { path: { id } } })),
+  })
+}
+
+export function useVerificarMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['RegistrarVerificacionMantenimientoDto'] }) =>
+      ejecutar(api.POST('/api/mantenimientos/{id}/verificaciones', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useAnularVerificacionMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
+      ejecutar(api.POST('/api/mantenimientos/verificaciones/{id}/anular', { params: { path: { id } }, body: { motivo } })),
+    onSuccess: invalidar,
+  })
+}

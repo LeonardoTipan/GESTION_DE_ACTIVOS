@@ -1,6 +1,7 @@
-import { Anchor, Button, Group, Select, Stack, Switch, Table, Text, Title } from '@mantine/core'
+import { Anchor, Badge, Button, Group, Select, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconPlus } from '@tabler/icons-react'
+import { IconCalendarStats, IconChecklist, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
@@ -8,6 +9,7 @@ import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
 import { BadgeRegistro, FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
 import { periodoPorId } from '../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
+import { useCategorias } from '../inventario/api/catalogos.ts'
 import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import {
   useMantenimientos,
@@ -16,15 +18,17 @@ import {
   type TipoMantenimiento,
   useIndicadoresMantenimiento,
 } from './api/mantenimientos.ts'
-import { BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
+import { BadgeCierre, BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
+import { Planificacion } from './componentes/Planificacion.tsx'
 import { ProgramarModal } from './componentes/ProgramarModal.tsx'
-import { FASES, INFO_FASE, INFO_TIPO, TIPOS } from './fases.ts'
-import { aConsultaApi, escribirFiltros, leerFiltros } from './filtros-url.ts'
+import { FASES, INFO_CIERRE, INFO_FASE, INFO_TIPO, TIPOS } from './fases.ts'
+import { aConsultaApi, CIERRES, escribirFiltros, leerFiltros, type Capa, type FiltroCierre } from './filtros-url.ts'
 
-function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento[] }) {
+function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Mantenimiento[]; capa: Capa }) {
   const navigate = useNavigate()
+  const verificacion = capa === 'verificacion'
   return (
-    <Table.ScrollContainer minWidth={900}>
+    <Table.ScrollContainer minWidth={1000}>
       <Table striped highlightOnHover verticalSpacing="sm">
         <Table.Thead>
           <Table.Tr>
@@ -32,9 +36,10 @@ function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento
             <Table.Th>Activo</Table.Th>
             <Table.Th>Tipo</Table.Th>
             <Table.Th>Actividad</Table.Th>
-            <Table.Th>Fecha programada</Table.Th>
+            <Table.Th>{verificacion ? 'Finalizado' : 'Fecha programada'}</Table.Th>
+            <Table.Th>Técnico</Table.Th>
             <Table.Th>Fase</Table.Th>
-            <Table.Th>Estado del equipo</Table.Th>
+            <Table.Th>{verificacion ? 'Verificación' : 'Estado del equipo'}</Table.Th>
             <Table.Th>Reg.</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -47,35 +52,38 @@ function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento
               onClick={() => navigate(`/mantenimientos/${m.id}`)}
             >
               <Table.Td>
-                <Anchor
-                  component={Link}
-                  to={`/mantenimientos/${m.id}`}
-                  fw={600}
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <Anchor component={Link} to={`/mantenimientos/${m.id}`} fw={600} onClick={(e) => e.stopPropagation()}>
                   #{m.id}
                 </Anchor>
+                {m.planId && (
+                  <Text size="xs" c="dimmed">
+                    plan PLM-{String(m.planId).padStart(4, '0')}
+                  </Text>
+                )}
               </Table.Td>
               <Table.Td>
                 <Text size="sm" fw={500}>
                   {m.activo.codigo}
                 </Text>
                 <Text size="xs" c="dimmed">
-                  {m.activo.nombre}
+                  {m.activo.nombre} · {m.activo.categoria}
                 </Text>
               </Table.Td>
               <Table.Td>
                 <BadgeTipo tipo={m.tipo} />
               </Table.Td>
-              <Table.Td maw={280}>
+              <Table.Td maw={260}>
                 <Text size="sm" lineClamp={2}>
                   {m.actividad}
                 </Text>
               </Table.Td>
               <Table.Td>
                 <Text size="sm" c={m.vencido ? 'red' : 'dimmed'} fw={m.vencido ? 600 : undefined}>
-                  {formatearFechaHora(m.fecha)}
+                  {formatearFechaHora(verificacion ? m.fechaFin : m.fecha)}
                 </Text>
+              </Table.Td>
+              <Table.Td>
+                <Text size="sm">{m.tecnico ?? '—'}</Text>
               </Table.Td>
               <Table.Td>
                 <Group gap={4}>
@@ -84,7 +92,7 @@ function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento
                 </Group>
               </Table.Td>
               <Table.Td>
-                <BadgeEstadoEquipo estado={m.estadoEquipo} />
+                {verificacion ? <BadgeCierre cierre={m.cierre} /> : <BadgeEstadoEquipo estado={m.estadoEquipo} />}
               </Table.Td>
               <Table.Td>
                 <BadgeRegistro registro={m} />
@@ -119,17 +127,51 @@ function IndicadoresDelPeriodo() {
   )
 }
 
+/** Texto libre con espera: no consulta la API en cada tecla. */
+function CampoTexto({ valor, onCambio, ...props }: { valor?: string; onCambio: (v: string | undefined) => void; label: string; placeholder: string; w?: object }) {
+  const [texto, setTexto] = useState(valor ?? '')
+  useEffect(() => setTexto(valor ?? ''), [valor])
+  useEffect(() => {
+    const t = setTimeout(() => {
+      if ((texto.trim() || undefined) !== valor) onCambio(texto.trim() || undefined)
+    }, 400)
+    return () => clearTimeout(t)
+  }, [texto]) // eslint-disable-line react-hooks/exhaustive-deps -- solo al escribir
+  return <TextInput leftSection={<IconSearch size={14} />} value={texto} onChange={(e) => setTexto(e.currentTarget.value)} {...props} />
+}
+
 export function MantenimientosPage() {
   const navigate = useNavigate()
-  const { filtros, actualizar, limpiar } = useFiltrosUrl(leerFiltros, escribirFiltros)
+  const { filtros, actualizar } = useFiltrosUrl(leerFiltros, escribirFiltros)
+  const capa: Capa = filtros.capa ?? 'ejecucion'
   const consulta = useMantenimientos(aConsultaApi(filtros))
+  const categorias = useCategorias()
   const puedeOperar = usePuedeOperar()
   const [modalAbierto, modal] = useDisclosure()
   const hayFiltros =
     filtros.fase !== undefined ||
     filtros.tipo !== undefined ||
     filtros.activoId !== undefined ||
+    filtros.planId !== undefined ||
+    filtros.categoriaId !== undefined ||
+    filtros.q !== undefined ||
+    filtros.tecnico !== undefined ||
+    filtros.cierre !== undefined ||
     filtros.vencidos !== undefined
+  // Quitar filtros conserva la pestaña.
+  const quitarFiltros = () =>
+    actualizar({
+      page: 1,
+      fase: undefined,
+      tipo: undefined,
+      activoId: undefined,
+      planId: undefined,
+      categoriaId: undefined,
+      q: undefined,
+      tecnico: undefined,
+      cierre: undefined,
+      vencidos: undefined,
+    })
 
   return (
     <Stack gap="md">
@@ -138,80 +180,149 @@ export function MantenimientosPage() {
         <div>
           <Title order={2}>Mantenimientos</Title>
           <Text c="dimmed" size="sm">
-            Programado → en ejecución → finalizado
+            Planificación → ejecución → verificación y cierre
           </Text>
-          <Text c="dimmed" size="xs">ISO/IEC 27001:2022 · A.7.13 Mantenimiento de los equipos</Text>
+          <Text c="dimmed" size="xs">
+            ISO/IEC 27001:2022 · A.7.13 Mantenimiento de los equipos
+          </Text>
         </div>
-        {puedeOperar && (
+        {puedeOperar && capa !== 'planificacion' && (
           <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
             Programar mantenimiento
           </Button>
         )}
       </Group>
 
-      <Group gap="sm" align="flex-end" wrap="wrap">
-        <Select
-          label="Fase"
-          placeholder="Todas"
-          clearable
-          data={FASES.map((f) => ({ value: f, label: INFO_FASE[f].etiqueta }))}
-          value={filtros.fase ?? null}
-          onChange={(v) => actualizar({ fase: (v as Fase | null) ?? undefined, page: 1 })}
-          w={{ base: '100%', sm: 180 }}
-        />
-        <Select
-          label="Tipo"
-          placeholder="Todos"
-          clearable
-          data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
-          value={filtros.tipo ?? null}
-          onChange={(v) =>
-            actualizar({ tipo: (v as TipoMantenimiento | null) ?? undefined, page: 1 })
-          }
-          w={{ base: '100%', sm: 160 }}
-        />
-        <SelectorActivo
-          label="Activo"
-          placeholder="Todos"
-          value={filtros.activoId ?? null}
-          onChange={(id) => actualizar({ activoId: id ?? undefined, page: 1 })}
-          w={{ base: '100%', sm: 300 }}
-        />
-        <Switch
-          label="Solo vencidos"
-          color="red"
-          checked={filtros.vencidos ?? false}
-          onChange={(e) =>
-            actualizar({ vencidos: e.currentTarget.checked || undefined, page: 1 })
-          }
-          mb={8}
-        />
-      </Group>
+      <Tabs value={capa} onChange={(v) => actualizar({ capa: v === 'ejecucion' ? undefined : (v as Capa), cierre: undefined, page: 1 })}>
+        <Tabs.List>
+          <Tabs.Tab value="planificacion" leftSection={<IconCalendarStats size={16} />}>
+            1 · Planificación
+          </Tabs.Tab>
+          <Tabs.Tab value="ejecucion" leftSection={<IconTool size={16} />}>
+            2 · Ejecución
+          </Tabs.Tab>
+          <Tabs.Tab value="verificacion" leftSection={<IconChecklist size={16} />}>
+            3 · Verificación y cierre
+          </Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
 
-      <TarjetaListado
-        consulta={consulta}
-        pagina={filtros.page}
-        onPagina={(page) => actualizar({ page })}
-        tituloError="No se pudieron cargar los mantenimientos"
-        vacio={
-          <>
-            <Text c="dimmed">
-              {filtros.vencidos
-                ? 'No hay mantenimientos vencidos. ¡Todo al día!'
-                : hayFiltros
-                  ? 'Ningún mantenimiento coincide con los filtros.'
-                  : 'Todavía no hay mantenimientos programados.'}
-            </Text>
-            {hayFiltros && (
-              <Button variant="subtle" onClick={limpiar}>
-                Quitar filtros
-              </Button>
+      {capa === 'planificacion' ? (
+        <Planificacion />
+      ) : (
+        <>
+          <Group gap="sm" align="flex-end" wrap="wrap">
+            <CampoTexto
+              label="Buscar"
+              placeholder="Activo, actividad, técnico…"
+              valor={filtros.q}
+              onCambio={(q) => actualizar({ q, page: 1 })}
+              w={{ base: '100%', sm: 220 }}
+            />
+            <Select
+              label="Categoría"
+              placeholder="Todas"
+              clearable
+              searchable
+              data={(categorias.data ?? []).map((c) => ({ value: String(c.id), label: c.nombre }))}
+              value={filtros.categoriaId ? String(filtros.categoriaId) : null}
+              onChange={(v) => actualizar({ categoriaId: v ? Number(v) : undefined, page: 1 })}
+              w={{ base: '100%', sm: 190 }}
+            />
+            {capa === 'ejecucion' ? (
+              <Select
+                label="Fase"
+                placeholder="Todas"
+                clearable
+                data={FASES.map((f) => ({ value: f, label: INFO_FASE[f].etiqueta }))}
+                value={filtros.fase ?? null}
+                onChange={(v) => actualizar({ fase: (v as Fase | null) ?? undefined, page: 1 })}
+                w={{ base: '100%', sm: 160 }}
+              />
+            ) : (
+              <Select
+                label="Cierre"
+                allowDeselect={false}
+                data={CIERRES.map((c) => ({ value: c, label: INFO_CIERRE[c].etiqueta }))}
+                value={filtros.cierre ?? 'PENDIENTE_VERIFICACION'}
+                onChange={(v) => actualizar({ cierre: (v as FiltroCierre | null) ?? undefined, page: 1 })}
+                w={{ base: '100%', sm: 200 }}
+              />
             )}
-          </>
-        }
-      >
-        {(mantenimientos) => <TablaMantenimientos mantenimientos={mantenimientos} />}
-      </TarjetaListado>
+            <Select
+              label="Tipo"
+              placeholder="Todos"
+              clearable
+              data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
+              value={filtros.tipo ?? null}
+              onChange={(v) => actualizar({ tipo: (v as TipoMantenimiento | null) ?? undefined, page: 1 })}
+              w={{ base: '100%', sm: 140 }}
+            />
+            <CampoTexto
+              label="Técnico"
+              placeholder="Usuario o nombre"
+              valor={filtros.tecnico}
+              onCambio={(tecnico) => actualizar({ tecnico, page: 1 })}
+              w={{ base: '100%', sm: 160 }}
+            />
+            <SelectorActivo
+              label="Activo"
+              placeholder="Todos"
+              value={filtros.activoId ?? null}
+              onChange={(id) => actualizar({ activoId: id ?? undefined, page: 1 })}
+              w={{ base: '100%', sm: 260 }}
+            />
+            {capa === 'ejecucion' && (
+              <Switch
+                label="Solo vencidos"
+                color="red"
+                checked={filtros.vencidos ?? false}
+                onChange={(e) => actualizar({ vencidos: e.currentTarget.checked || undefined, page: 1 })}
+                mb={8}
+              />
+            )}
+          </Group>
+          {filtros.planId && (
+            <Group gap="xs">
+              <Badge variant="light" size="lg">
+                Intervenciones del plan PLM-{String(filtros.planId).padStart(4, '0')}
+              </Badge>
+              <Button size="compact-xs" variant="subtle" onClick={() => actualizar({ planId: undefined, page: 1 })}>
+                Quitar
+              </Button>
+            </Group>
+          )}
+
+          <TarjetaListado
+            consulta={consulta}
+            pagina={filtros.page}
+            onPagina={(page) => actualizar({ page })}
+            tituloError="No se pudieron cargar los mantenimientos"
+            vacio={
+              <>
+                <Text c="dimmed">
+                  {capa === 'verificacion'
+                    ? (filtros.cierre ?? 'PENDIENTE_VERIFICACION') === 'PENDIENTE_VERIFICACION'
+                      ? 'No hay mantenimientos finalizados pendientes de verificar.'
+                      : 'Ningún mantenimiento cerrado coincide.'
+                    : filtros.vencidos
+                      ? 'No hay mantenimientos vencidos. ¡Todo al día!'
+                      : hayFiltros
+                        ? 'Ningún mantenimiento coincide con los filtros.'
+                        : 'Todavía no hay mantenimientos programados.'}
+                </Text>
+                {hayFiltros && (
+                  <Button variant="subtle" onClick={quitarFiltros}>
+                    Quitar filtros
+                  </Button>
+                )}
+              </>
+            }
+          >
+            {(mantenimientos) => <TablaMantenimientos mantenimientos={mantenimientos} capa={capa} />}
+          </TarjetaListado>
+        </>
+      )}
 
       {puedeOperar && (
         <ProgramarModal

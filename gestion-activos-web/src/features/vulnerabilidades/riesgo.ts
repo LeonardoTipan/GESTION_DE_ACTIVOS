@@ -1,6 +1,8 @@
 import type {
   EstadoVulnerabilidad,
+  Fuente,
   NivelRiesgo,
+  Prioridad,
   Vulnerabilidad,
 } from './api/vulnerabilidades.ts'
 
@@ -16,7 +18,7 @@ export const INFO_NIVEL: Record<NivelRiesgo, Info> = {
 
 export const INFO_ESTADO: Record<EstadoVulnerabilidad, Info> = {
   ABIERTA: { etiqueta: 'Abierta', color: 'red' },
-  EN_MITIGACION: { etiqueta: 'En mitigación', color: 'yellow' },
+  EN_MITIGACION: { etiqueta: 'En tratamiento', color: 'yellow' },
   MITIGADA: { etiqueta: 'Mitigada', color: 'green' },
   ACEPTADA: { etiqueta: 'Riesgo aceptado', color: 'grape' },
 }
@@ -27,22 +29,63 @@ export const ESTADOS = Object.keys(INFO_ESTADO) as EstadoVulnerabilidad[]
 export const ESTADOS_PENDIENTES: EstadoVulnerabilidad[] = ['ABIERTA', 'EN_MITIGACION']
 export const ESTADOS_CERRADOS: EstadoVulnerabilidad[] = ['MITIGADA', 'ACEPTADA']
 
+/** De dónde viene el hallazgo. Se registra a mano: no hay escáner conectado. */
+export const INFO_FUENTE: Record<Fuente, string> = {
+  MANUAL: 'Registro manual',
+  ESCANEO: 'Escaneo (informe externo)',
+  AUDITORIA: 'Auditoría',
+  BOLETIN_PROVEEDOR: 'Boletín del proveedor',
+  PRUEBA_PENETRACION: 'Prueba de penetración',
+  REPORTE_USUARIO: 'Reporte de usuario',
+}
+export const FUENTES = Object.keys(INFO_FUENTE) as Fuente[]
+
+export const INFO_PRIORIDAD: Record<Prioridad, Info> = {
+  P1: { etiqueta: 'P1 · inmediata', color: 'red' },
+  P2: { etiqueta: 'P2 · alta', color: 'orange' },
+  P3: { etiqueta: 'P3 · media', color: 'yellow' },
+  P4: { etiqueta: 'P4 · baja', color: 'gray' },
+}
+export const PRIORIDADES = Object.keys(INFO_PRIORIDAD) as Prioridad[]
+
 /** Formato oficial (el mismo que valida la API). */
 export const FORMATO_CVE = /^CVE-\d{4}-\d{4,}$/
 
-export type Accion = 'iniciar-mitigacion' | 'mitigar' | 'aceptar-riesgo'
+export type Accion =
+  | 'confirmar'
+  | 'evaluar'
+  | 'iniciar-mitigacion'
+  | 'registrar-accion'
+  | 'verificar'
+  | 'aceptar-riesgo'
 
-/** Transiciones que permite cada estado (las mismas que valida la API). */
-export function accionesPermitidas(estado: EstadoVulnerabilidad): Accion[] {
-  switch (estado) {
+type Ciclo = Pick<Vulnerabilidad, 'estado' | 'confirmadaEn' | 'evaluadaEn'>
+
+/**
+ * Lo que admite cada etapa (las mismas reglas que valida la API):
+ * detectada → confirmar · confirmada → evaluar · evaluada → iniciar el tratamiento ·
+ * en tratamiento → acciones, reevaluar y verificar · cerrada (mitigada) → solo
+ * una verificación que detecte que persiste, que la reabre.
+ */
+export function accionesPermitidas(v: Ciclo): Accion[] {
+  switch (v.estado) {
     case 'ABIERTA':
-      return ['iniciar-mitigacion', 'aceptar-riesgo']
+      return [
+        !v.confirmadaEn ? 'confirmar' : 'evaluar',
+        ...(v.evaluadaEn ? (['iniciar-mitigacion'] as const) : []),
+        'aceptar-riesgo',
+      ]
     case 'EN_MITIGACION':
-      return ['mitigar', 'aceptar-riesgo']
+      return ['registrar-accion', 'verificar', 'evaluar', 'aceptar-riesgo']
+    case 'MITIGADA':
+      return ['verificar']
     default:
       return []
   }
 }
+
+/** Se corrigen los datos de identificación mientras está pendiente. */
+export const admiteEdicion = (estado: EstadoVulnerabilidad) => ESTADOS_PENDIENTES.includes(estado)
 
 // ── Semáforo del plazo (SLA) ────────────────────────────────────────────────
 
@@ -91,26 +134,34 @@ export function semaforoSla(
 
 // ── Pasos del Stepper ───────────────────────────────────────────────────────
 
-export type Paso = { clave: 'abierta' | 'mitigacion' | 'mitigada' | 'aceptada'; hecho: boolean }
+export type Paso = {
+  clave: 'detectada' | 'confirmada' | 'evaluada' | 'tratamiento' | 'cerrada' | 'aceptada'
+  hecho: boolean
+}
 
 /**
- * Ciclo ABIERTA → EN_MITIGACION → MITIGADA. Si se aceptó el riesgo, el ciclo
- * termina en "Riesgo aceptado" (la BD no guarda si pasó antes por mitigación,
- * así que no se inventa ese paso).
+ * Ciclo de tres capas: detectada → confirmada → evaluada → en tratamiento →
+ * cerrada por verificación. Si se aceptó el riesgo, termina en "Riesgo aceptado"
+ * con los pasos que realmente se dieron (no se inventan).
  */
-export function pasosCiclo(estado: EstadoVulnerabilidad): Paso[] {
-  if (estado === 'ACEPTADA') {
+export function pasosCiclo(v: Ciclo): Paso[] {
+  const confirmada = v.confirmadaEn !== null
+  const evaluada = v.evaluadaEn !== null
+  if (v.estado === 'ACEPTADA') {
     return [
-      { clave: 'abierta', hecho: true },
+      { clave: 'detectada', hecho: true },
+      ...(confirmada ? [{ clave: 'confirmada' as const, hecho: true }] : []),
+      ...(evaluada ? [{ clave: 'evaluada' as const, hecho: true }] : []),
       { clave: 'aceptada', hecho: true },
     ]
   }
-  const orden: EstadoVulnerabilidad[] = ['ABIERTA', 'EN_MITIGACION', 'MITIGADA']
-  const alcanzado = orden.indexOf(estado)
+  const enTratamiento = v.estado === 'EN_MITIGACION' || v.estado === 'MITIGADA'
   return [
-    { clave: 'abierta', hecho: true },
-    { clave: 'mitigacion', hecho: alcanzado >= 1 },
-    { clave: 'mitigada', hecho: alcanzado >= 2 },
+    { clave: 'detectada', hecho: true },
+    { clave: 'confirmada', hecho: confirmada },
+    { clave: 'evaluada', hecho: evaluada },
+    { clave: 'tratamiento', hecho: enTratamiento },
+    { clave: 'cerrada', hecho: v.estado === 'MITIGADA' },
   ]
 }
 

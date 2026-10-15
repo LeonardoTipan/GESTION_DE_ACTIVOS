@@ -59,7 +59,7 @@ export function CampanaNotificaciones() {
       </Popover.Target>
       <Popover.Dropdown p="sm">
         <Group justify="space-between" mb="xs">
-          <Text fw={600}>Cambios desde GLPI</Text>
+          <Text fw={600}>Avisos: GLPI y módulos</Text>
           <Switch
             size="xs"
             label="Solo sin leer"

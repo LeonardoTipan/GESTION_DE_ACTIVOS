@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accionesPermitidas, estadoPasos, pasoActivo } from './fases.ts'
+import { accionesPermitidas, estadoPasos, pasoActivo, faltantesParaCerrar } from './fases.ts'
 
 describe('acciones por fase', () => {
   it('programado: iniciar o cancelar', () => {
@@ -38,5 +38,16 @@ describe('pasos del Stepper de mantenimientos', () => {
     const pasos = estadoPasos({ fase: 'CANCELADO', fechaInicio: '2026-10-01T10:00:00.000Z' })
     expect(pasos).toEqual(['completado', 'completado', 'cancelado'])
     expect(pasoActivo(pasos)).toBe(2)
+  })
+})
+
+describe('cierre como operativo', () => {
+  const completo = { tecnico: 'jperez', diagnostico: 'Fuente dañada', duracionMin: 30, resultado: 'Fuente reemplazada' }
+  it('con la ejecución completa no falta nada', () => {
+    expect(faltantesParaCerrar(completo)).toEqual([])
+  })
+  it('enumera lo que falta (una duración de 0 minutos sí cuenta)', () => {
+    expect(faltantesParaCerrar({ ...completo, tecnico: null, duracionMin: null })).toEqual(['técnico', 'duración'])
+    expect(faltantesParaCerrar({ ...completo, duracionMin: 0 })).toEqual([])
   })
 })

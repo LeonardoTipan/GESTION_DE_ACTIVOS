@@ -152,6 +152,9 @@ describe('avisos', () => {
       mensajeDeAviso({ tipo: 'ERROR_SINCRONIZACION', detalle: { mensaje: 'GLPI respondió 500' } }),
     ).toBe('GLPI respondió 500')
     expect(
+      mensajeDeAviso({ tipo: 'RESPALDO_FALLIDO', detalle: { mensaje: 'Disco lleno' } }),
+    ).toBe('Disco lleno')
+    expect(
       mensajeDeAviso({ tipo: 'CAMBIO_ESTADO', detalle: { estado: { antes: 'Bueno', despues: 'Malo' } } }),
     ).toBeNull()
   })

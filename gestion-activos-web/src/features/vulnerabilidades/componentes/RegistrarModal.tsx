@@ -3,6 +3,7 @@ import {
   Group,
   Modal,
   SegmentedControl,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -14,13 +15,15 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
-import { SelectorActivo } from '../../inventario/componentes/SelectorActivo.tsx'
+import { SelectorActivos } from '../../inventario/componentes/SelectorActivos.tsx'
 import {
+  useRegistrarLote,
   useRegistrarVulnerabilidad,
+  type Fuente,
   type NivelRiesgo,
   type Vulnerabilidad,
 } from '../api/vulnerabilidades.ts'
-import { FORMATO_CVE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
+import { FORMATO_CVE, FUENTES, INFO_FUENTE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
 
 /** Tope de los campos de texto largo (el mismo que aplica la API). */
 const MAX_TEXTO_LARGO = 5000
@@ -30,10 +33,15 @@ interface Props {
   onClose: () => void
   /** Activo preseleccionado (p. ej. si el listado está filtrado por activo). */
   activoInicial?: number
-  onRegistrada: (vulnerabilidad: Vulnerabilidad) => void
+  /** Con varios activos se recibe la primera y el total creado. */
+  onRegistrada: (vulnerabilidad: Vulnerabilidad, total: number) => void
 }
 
-/** Registra la vulnerabilidad en estado ABIERTA. */
+/**
+ * Capa 1 · Identificación: registra la vulnerabilidad (detectada, pendiente de
+ * confirmar) en uno o varios activos. No hay escáner conectado: se registra a
+ * mano, indicando la fuente y la evidencia del hallazgo.
+ */
 export function RegistrarModal({ opened, onClose, ...resto }: Props) {
   return (
     <Modal opened={opened} onClose={onClose} title="Registrar vulnerabilidad" size="lg">
@@ -45,25 +53,30 @@ export function RegistrarModal({ opened, onClose, ...resto }: Props) {
 
 function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'opened'>) {
   const registrar = useRegistrarVulnerabilidad()
+  const lote = useRegistrarLote()
   const form = useForm<{
-    activoId: number | null
+    activoIds: number[]
     cve: string
     descripcion: string
     nivelRiesgo: NivelRiesgo
     fecha: string | null
     fechaLimite: string | null
+    fuente: Fuente
+    evidencia: string
   }>({
     initialValues: {
-      activoId: activoInicial ?? null,
+      activoIds: activoInicial ? [activoInicial] : [],
       cve: '',
       descripcion: '',
       nivelRiesgo: 'ALTO',
       fecha: ahoraLocal(),
       fechaLimite: null,
+      fuente: 'MANUAL',
+      evidencia: '',
     },
     transformValues: (v) => ({ ...v, cve: v.cve.trim().toUpperCase() }),
     validate: {
-      activoId: (v) => (v ? null : 'Elige el activo afectado'),
+      activoIds: (v) => (v.length > 0 ? null : 'Elige al menos un activo afectado'),
       cve: (v) =>
         v.trim() && !FORMATO_CVE.test(v.trim().toUpperCase())
           ? 'Formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)'
@@ -79,45 +92,49 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
         v && valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
           ? 'No puede ser anterior a la detección'
           : null,
+      evidencia: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
     },
   })
 
-  const enviar = form.onSubmit((v) =>
-    registrar.mutate(
-      {
-        activoId: v.activoId!,
-        cve: v.cve || undefined,
-        descripcion: v.descripcion.trim(),
-        nivelRiesgo: v.nivelRiesgo,
-        fecha: fechaHoraLocalAIso(v.fecha!),
-        fechaLimite: v.fechaLimite ? fechaHoraLocalAIso(v.fechaLimite) : undefined,
-      },
-      {
-        onSuccess: (vuln) => {
-          notifications.show({
-            color: 'green',
-            title: 'Vulnerabilidad registrada',
-            message: `${vuln.cve ?? `#${vuln.id}`} en ${vuln.activo.codigo} · riesgo ${INFO_NIVEL[vuln.nivelRiesgo].etiqueta.toLowerCase()}.`,
-          })
-          onClose()
-          onRegistrada(vuln)
-        },
-        onError: (e) =>
-          notifications.show({ color: 'red', title: 'No se pudo registrar', message: e.message }),
-      },
-    ),
-  )
+  const enviar = form.onSubmit((v) => {
+    const datos = {
+      cve: v.cve || undefined,
+      descripcion: v.descripcion.trim(),
+      nivelRiesgo: v.nivelRiesgo,
+      fecha: fechaHoraLocalAIso(v.fecha!),
+      fechaLimite: v.fechaLimite ? fechaHoraLocalAIso(v.fechaLimite) : undefined,
+      fuente: v.fuente,
+      evidencia: v.evidencia.trim() || undefined,
+    }
+    const listo = (creadas: Vulnerabilidad[]) => {
+      const [primera] = creadas
+      notifications.show({
+        color: 'green',
+        title: creadas.length > 1 ? `${creadas.length} vulnerabilidades registradas` : 'Vulnerabilidad registrada',
+        message: `${primera.cve ?? `#${primera.id}`} en ${creadas.map((c) => c.activo.codigo).join(', ')} · riesgo ${INFO_NIVEL[primera.nivelRiesgo].etiqueta.toLowerCase()}. Pendiente de confirmar.`,
+      })
+      onClose()
+      onRegistrada(primera, creadas.length)
+    }
+    const error = (e: Error) => notifications.show({ color: 'red', title: 'No se pudo registrar', message: e.message })
+    if (v.activoIds.length === 1) {
+      registrar.mutate({ ...datos, activoId: v.activoIds[0] }, { onSuccess: (x) => listo([x]), onError: error })
+    } else {
+      lote.mutate({ ...datos, activoIds: v.activoIds }, { onSuccess: listo, onError: error })
+    }
+  })
 
   return (
     <form onSubmit={enviar}>
       <Stack gap="sm">
-        <SelectorActivo
-          label="Activo afectado"
-          placeholder="Busca por código o nombre"
+        <SelectorActivos
+          label="Activos afectados"
+          description="Uno o varios: se crea un registro por activo, todos o ninguno."
+          placeholder="Busca por código, nombre o categoría"
           withAsterisk
-          value={form.values.activoId}
-          onChange={(id) => form.setFieldValue('activoId', id)}
-          error={form.errors.activoId}
+          value={form.values.activoIds}
+          onChange={(ids) => form.setFieldValue('activoIds', ids)}
+          error={form.errors.activoIds}
         />
         <TextInput
           label="CVE"
@@ -161,12 +178,25 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
             clearable
             {...form.getInputProps('fechaLimite')}
           />
+          <Select
+            label="Fuente del hallazgo"
+            description="No hay escáner conectado: se registra a mano."
+            data={FUENTES.map((f) => ({ value: f, label: INFO_FUENTE[f] }))}
+            allowDeselect={false}
+            {...form.getInputProps('fuente')}
+          />
+          <TextInput
+            label="Evidencia"
+            description="Referencia al informe, boletín o captura."
+            placeholder="Informe de escaneo 2026-10, hallazgo 45"
+            {...form.getInputProps('evidencia')}
+          />
         </SimpleGrid>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" loading={registrar.isPending}>
+          <Button type="submit" loading={registrar.isPending || lote.isPending}>
             Registrar
           </Button>
         </Group>

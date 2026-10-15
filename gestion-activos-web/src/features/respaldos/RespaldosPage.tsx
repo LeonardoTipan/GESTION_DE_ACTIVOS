@@ -1,15 +1,54 @@
-import { Alert, Card, Center, Group, Loader, Stack, Stepper, Table, Text, Title } from '@mantine/core'
-import { IconAlertTriangle } from '@tabler/icons-react'
+import { Alert, Button, Card, Center, Group, Loader, Pagination, Select, Stack, Stepper, Table, Text, TextInput, Title } from '@mantine/core'
+import { useDebouncedValue } from '@mantine/hooks'
+import { IconAlertTriangle, IconSearch } from '@tabler/icons-react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { formatearFecha } from '../../shared/formato.ts'
 import { FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
 import { periodoPorId } from '../../shared/registro/registro.ts'
-import { useAnteriores, useEjecuciones, usePlanes, useRestauraciones, useTablero } from './api/respaldos.ts'
+import { enteroPositivo, valorPermitido } from '../../shared/hooks/use-filtros-url.ts'
+import { useCategorias } from '../inventario/api/catalogos.ts'
+import {
+  useAnteriores,
+  useEjecuciones,
+  usePlanes,
+  usePlanesFiltrados,
+  useRestauraciones,
+  useTablero,
+  type Ejecucion,
+  type FiltrosRespaldo,
+} from './api/respaldos.ts'
+import { opciones, RESULTADO } from './catalogos.ts'
 import { PasoEjecucion } from './componentes/PasoEjecucion.tsx'
 import { PasoPlan } from './componentes/PasoPlan.tsx'
 import { PasoRestauracion } from './componentes/PasoRestauracion.tsx'
 
 const PASOS = ['plan', 'ejecucion', 'restauracion', 'anteriores'] as const
+const RESULTADOS = Object.keys(RESULTADO) as Ejecucion['resultado'][]
+const CLAVES_FILTRO = ['page', 'categoriaId', 'q', 'responsable', 'resultado'] as const
+
+function leerFiltros(params: URLSearchParams): FiltrosRespaldo {
+  return {
+    page: enteroPositivo(params.get('page')) ?? 1,
+    categoriaId: enteroPositivo(params.get('categoriaId')),
+    q: params.get('q')?.trim() || undefined,
+    responsable: params.get('responsable')?.trim() || undefined,
+    resultado: valorPermitido(params.get('resultado'), RESULTADOS),
+  }
+}
+
+/** Texto con espera antes de consultar la API. */
+function CampoTexto({ valor, onCambio, label, placeholder }: { valor?: string; onCambio: (v?: string) => void; label: string; placeholder: string }) {
+  const [texto, setTexto] = useState(valor ?? '')
+  const [estable] = useDebouncedValue(texto, 400)
+  useEffect(() => setTexto(valor ?? ''), [valor])
+  useEffect(() => {
+    if ((estable.trim() || undefined) !== valor) onCambio(estable.trim() || undefined)
+  }, [estable]) // eslint-disable-line react-hooks/exhaustive-deps -- solo al escribir
+  return (
+    <TextInput label={label} placeholder={placeholder} leftSection={<IconSearch size={14} />} value={texto} onChange={(e) => setTexto(e.currentTarget.value)} w={{ base: '100%', sm: 220 }} />
+  )
+}
 type Paso = (typeof PASOS)[number]
 
 /** Registros del modelo anterior al plan: se conservan intactos y solo se consultan. */
@@ -67,16 +106,34 @@ export function RespaldosPage() {
   const cambiar = (clave: string, valor: string) => {
     const nuevos = new URLSearchParams(params)
     nuevos.set(clave, valor)
+    // Al cambiar de paso se vuelve a la primera página.
+    if (clave === 'paso') nuevos.delete('page')
     setParams(nuevos, { replace: true })
   }
+  const filtros = leerFiltros(params)
+  const filtrar = (cambios: Partial<FiltrosRespaldo>) => {
+    const nuevos = new URLSearchParams(params)
+    const valores = { ...filtros, page: 1, ...cambios }
+    for (const clave of CLAVES_FILTRO) {
+      const v = valores[clave]
+      if (v === undefined || (clave === 'page' && v === 1)) nuevos.delete(clave)
+      else nuevos.set(clave, String(v))
+    }
+    setParams(nuevos, { replace: cambios.page === undefined })
+  }
+  const hayFiltros = Boolean(filtros.categoriaId || filtros.q || filtros.responsable || filtros.resultado)
+  const categorias = useCategorias()
 
   const tablero = useTablero(periodo.desde, periodo.hasta)
   const planes = usePlanes()
-  const ejecuciones = useEjecuciones(periodo.desde, periodo.hasta)
-  const restauraciones = useRestauraciones(periodo.desde, periodo.hasta)
+  const listadoPlanes = usePlanesFiltrados(filtros)
+  const ejecuciones = useEjecuciones(periodo.desde, periodo.hasta, filtros)
+  const restauraciones = useRestauraciones(periodo.desde, periodo.hasta, filtros)
   const anteriores = useAnteriores()
 
-  const error = planes.error ?? ejecuciones.error ?? restauraciones.error
+  const error = planes.error ?? listadoPlanes.error ?? ejecuciones.error ?? restauraciones.error
+  const meta =
+    paso === 'plan' ? listadoPlanes.data?.meta : paso === 'ejecucion' ? ejecuciones.data?.meta : paso === 'restauracion' ? restauraciones.data?.meta : undefined
   const vigentes = planes.data?.data.filter((p) => !p.anuladoEn && p.estado === 'VIGENTE').length ?? 0
   const pendientes = tablero.data?.pendientes
 
@@ -114,6 +171,39 @@ export function RespaldosPage() {
         </Stepper>
       </Card>
 
+      {paso !== 'anteriores' && (
+        <Group gap="sm" align="flex-end" wrap="wrap">
+          <CampoTexto label="Buscar" placeholder="Activo (código o nombre)…" valor={filtros.q} onCambio={(q) => filtrar({ q })} />
+          <Select
+            label="Categoría"
+            placeholder="Todas"
+            clearable
+            searchable
+            data={(categorias.data ?? []).map((c) => ({ value: String(c.id), label: c.nombre }))}
+            value={filtros.categoriaId ? String(filtros.categoriaId) : null}
+            onChange={(v) => filtrar({ categoriaId: v ? Number(v) : undefined })}
+            w={{ base: '100%', sm: 200 }}
+          />
+          <CampoTexto label="Responsable" placeholder="Infraestructura" valor={filtros.responsable} onCambio={(responsable) => filtrar({ responsable })} />
+          {paso !== 'plan' && (
+            <Select
+              label="Resultado"
+              placeholder="Todos"
+              clearable
+              data={opciones(RESULTADO)}
+              value={filtros.resultado ?? null}
+              onChange={(v) => filtrar({ resultado: (v as Ejecucion['resultado'] | null) ?? undefined })}
+              w={{ base: '100%', sm: 150 }}
+            />
+          )}
+          {hayFiltros && (
+            <Button variant="subtle" onClick={() => filtrar({ categoriaId: undefined, q: undefined, responsable: undefined, resultado: undefined })}>
+              Quitar filtros
+            </Button>
+          )}
+        </Group>
+      )}
+
       {error && (
         <Alert color="red" icon={<IconAlertTriangle />} title="No se pudieron cargar los respaldos">
           {error.message}
@@ -122,7 +212,9 @@ export function RespaldosPage() {
       {(planes.isPending || ejecuciones.isPending || restauraciones.isPending) && (
         <Center py="xl"><Loader /></Center>
       )}
-      {planes.data && paso === 'plan' && <PasoPlan planes={planes.data.data} tablero={tablero.data} />}
+      {planes.data && listadoPlanes.data && paso === 'plan' && (
+        <PasoPlan planes={planes.data.data} listado={listadoPlanes.data.data} tablero={tablero.data} />
+      )}
       {planes.data && ejecuciones.data && paso === 'ejecucion' && (
         <PasoEjecucion planes={planes.data.data} ejecuciones={ejecuciones.data.data} tablero={tablero.data} etiquetaPeriodo={periodo.etiqueta} />
       )}
@@ -130,6 +222,12 @@ export function RespaldosPage() {
         <PasoRestauracion planes={planes.data.data} restauraciones={restauraciones.data.data} tablero={tablero.data} etiquetaPeriodo={periodo.etiqueta} />
       )}
       {paso === 'anteriores' && <RegistrosAnteriores />}
+      {meta && meta.totalPages > 1 && (
+        <Group justify="center">
+          <Text size="sm" c="dimmed">{meta.total} registro(s)</Text>
+          <Pagination total={meta.totalPages} value={filtros.page} onChange={(page) => filtrar({ page })} />
+        </Group>
+      )}
     </Stack>
   )
 }

@@ -10,18 +10,26 @@ import {
 const AHORA = new Date('2026-10-01T12:00:00.000Z')
 const enDias = (d: number) => new Date(AHORA.getTime() + d * 24 * 60 * 60 * 1000).toISOString()
 
-describe('acciones por estado', () => {
-  it('abierta: iniciar mitigación o aceptar riesgo', () => {
-    expect(accionesPermitidas('ABIERTA')).toEqual(['iniciar-mitigacion', 'aceptar-riesgo'])
+describe('acciones por etapa', () => {
+  const v = (estado: 'ABIERTA' | 'EN_MITIGACION' | 'MITIGADA' | 'ACEPTADA', confirmada = false, evaluada = false) => ({
+    estado,
+    confirmadaEn: confirmada ? '2026-10-01T00:00:00Z' : null,
+    evaluadaEn: evaluada ? '2026-10-02T00:00:00Z' : null,
   })
 
-  it('en mitigación: mitigar o aceptar riesgo', () => {
-    expect(accionesPermitidas('EN_MITIGACION')).toEqual(['mitigar', 'aceptar-riesgo'])
+  it('detectada: confirmar (o aceptar el riesgo); sin evaluación no hay tratamiento', () => {
+    expect(accionesPermitidas(v('ABIERTA'))).toEqual(['confirmar', 'aceptar-riesgo'])
+    expect(accionesPermitidas(v('ABIERTA', true))).toEqual(['evaluar', 'aceptar-riesgo'])
+    expect(accionesPermitidas(v('ABIERTA', true, true))).toEqual(['evaluar', 'iniciar-mitigacion', 'aceptar-riesgo'])
   })
 
-  it('mitigada y aceptada son finales', () => {
-    expect(accionesPermitidas('MITIGADA')).toEqual([])
-    expect(accionesPermitidas('ACEPTADA')).toEqual([])
+  it('en tratamiento: acciones, verificación, reevaluar o aceptar riesgo; nunca cerrar a mano', () => {
+    expect(accionesPermitidas(v('EN_MITIGACION', true, true))).toEqual(['registrar-accion', 'verificar', 'evaluar', 'aceptar-riesgo'])
+  })
+
+  it('mitigada: solo una verificación (que puede reabrirla); aceptada es final', () => {
+    expect(accionesPermitidas(v('MITIGADA', true, true))).toEqual(['verificar'])
+    expect(accionesPermitidas(v('ACEPTADA'))).toEqual([])
   })
 })
 
@@ -66,16 +74,19 @@ describe('semáforo SLA', () => {
 })
 
 describe('pasos del ciclo', () => {
-  it('abierta → en mitigación → mitigada', () => {
-    expect(pasoActivo(pasosCiclo('ABIERTA'))).toBe(1)
-    expect(pasoActivo(pasosCiclo('EN_MITIGACION'))).toBe(2)
-    expect(pasoActivo(pasosCiclo('MITIGADA'))).toBe(3)
+  const base = { confirmadaEn: '2026-10-01T00:00:00Z', evaluadaEn: '2026-10-02T00:00:00Z' }
+  it('detectada → confirmada → evaluada → tratamiento → cerrada', () => {
+    expect(pasoActivo(pasosCiclo({ estado: 'ABIERTA', confirmadaEn: null, evaluadaEn: null }))).toBe(1)
+    expect(pasoActivo(pasosCiclo({ estado: 'ABIERTA', confirmadaEn: base.confirmadaEn, evaluadaEn: null }))).toBe(2)
+    expect(pasoActivo(pasosCiclo({ estado: 'ABIERTA', ...base }))).toBe(3)
+    expect(pasoActivo(pasosCiclo({ estado: 'EN_MITIGACION', ...base }))).toBe(4)
+    expect(pasoActivo(pasosCiclo({ estado: 'MITIGADA', ...base }))).toBe(5)
   })
 
-  it('riesgo aceptado: dos pasos, ambos cerrados', () => {
-    const pasos = pasosCiclo('ACEPTADA')
-    expect(pasos.map((p) => p.clave)).toEqual(['abierta', 'aceptada'])
-    expect(pasoActivo(pasos)).toBe(2)
+  it('riesgo aceptado: solo los pasos que se dieron', () => {
+    const pasos = pasosCiclo({ estado: 'ACEPTADA', confirmadaEn: base.confirmadaEn, evaluadaEn: null })
+    expect(pasos.map((p) => p.clave)).toEqual(['detectada', 'confirmada', 'aceptada'])
+    expect(pasoActivo(pasos)).toBe(3)
   })
 })
 

@@ -1,4 +1,4 @@
-import { Button, Group, Modal, Stack, Text } from '@mantine/core'
+import { Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
@@ -23,13 +23,16 @@ export function IniciarModal({ opened, onClose, mantenimientoId }: Props) {
 function FormIniciar({ onClose, mantenimientoId }: Omit<Props, 'opened'>) {
   const iniciar = useIniciarMantenimiento()
   const form = useForm({
-    initialValues: { fechaInicio: ahoraLocal() as string | null },
-    validate: { fechaInicio: (v) => (v ? null : 'Indica cuándo empezó') },
+    initialValues: { fechaInicio: ahoraLocal() as string | null, tecnico: '' },
+    validate: {
+      fechaInicio: (v) => (v ? null : 'Indica cuándo empezó'),
+      tecnico: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
+    },
   })
 
   const enviar = form.onSubmit((v) =>
     iniciar.mutate(
-      { id: mantenimientoId, datos: { fechaInicio: fechaHoraLocalAIso(v.fechaInicio!) } },
+      { id: mantenimientoId, datos: { fechaInicio: fechaHoraLocalAIso(v.fechaInicio!), tecnico: v.tecnico.trim() || undefined } },
       {
         onSuccess: () => {
           notifications.show({
@@ -57,6 +60,12 @@ function FormIniciar({ onClose, mantenimientoId }: Omit<Props, 'opened'>) {
           maxDate={new Date()}
           withAsterisk
           {...form.getInputProps('fechaInicio')}
+        />
+        <TextInput
+          label="Técnico asignado"
+          placeholder="Usuario o nombre de quien ejecuta"
+          description="Se puede indicar también al finalizar; es obligatorio para cerrarlo."
+          {...form.getInputProps('tecnico')}
         />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>

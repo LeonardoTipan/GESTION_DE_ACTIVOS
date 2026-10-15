@@ -106,10 +106,24 @@ export const ASPECTO_NOTIFICACION: Record<Notificacion['tipo'], { etiqueta: stri
   BAJA_DETECTADA: { etiqueta: 'Baja detectada', color: 'gray' },
   REACTIVACION: { etiqueta: 'Reactivación', color: 'teal' },
   ERROR_SINCRONIZACION: { etiqueta: 'Error', color: 'red' },
+  // Avisos de los módulos (no de GLPI): llevan un mensaje, no cambios de campos.
+  RESPALDO_FALLIDO: { etiqueta: 'Respaldo fallido', color: 'red' },
+  MANTENIMIENTO_NO_SATISFACTORIO: { etiqueta: 'Mantenimiento no satisfactorio', color: 'orange' },
+  VULNERABILIDAD_CRITICA: { etiqueta: 'Vulnerabilidad crítica', color: 'red' },
+  VULNERABILIDAD_REABIERTA: { etiqueta: 'Vulnerabilidad reabierta', color: 'orange' },
 }
 
-/** Mensaje de un aviso de error ({ mensaje }); null en los avisos de cambios. */
+/** Avisos cuyo detalle es { mensaje } en lugar de cambios de campos. */
+const CON_MENSAJE = new Set<Notificacion['tipo']>([
+  'ERROR_SINCRONIZACION',
+  'RESPALDO_FALLIDO',
+  'MANTENIMIENTO_NO_SATISFACTORIO',
+  'VULNERABILIDAD_CRITICA',
+  'VULNERABILIDAD_REABIERTA',
+])
+
+/** Mensaje de un aviso de error o de un módulo ({ mensaje }); null en los avisos de cambios. */
 export function mensajeDeAviso(aviso: Pick<Notificacion, 'tipo' | 'detalle'>): string | null {
   const { mensaje } = aviso.detalle as { mensaje?: unknown }
-  return aviso.tipo === 'ERROR_SINCRONIZACION' && typeof mensaje === 'string' ? mensaje : null
+  return CON_MENSAJE.has(aviso.tipo) && typeof mensaje === 'string' ? mensaje : null
 }
