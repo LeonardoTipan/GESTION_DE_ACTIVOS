@@ -15,10 +15,10 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 | **Activos** | admin, analista | todos | admin, analista | admin: **baja lógica**: queda *Dado de baja* y conserva ficha, historial y registros |
 | **Categorías** y **criticidades** | admin | todos | admin | admin; **bloqueado** si algún activo las usa |
 | **Respaldos** · plan, ejecución y restauración | admin, analista | todos | admin, analista, **con motivo** (versión nueva) | admin: **anular** (eliminación lógica, con motivo) y **revertir** |
-| **Mantenimientos** | admin, analista | todos | admin, analista, con motivo: tipo, actividad y fecha, solo en fase Programado | admin: anular y revertir |
-| **Vulnerabilidades** | admin, analista | todos | admin, analista, con motivo: CVE, descripción, riesgo y fechas, solo mientras está pendiente | admin: anular y revertir |
+| **Mantenimientos** · plan, mantenimiento y verificación | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad y fecha, solo en fase Programado) | admin: anular y revertir (planes y mantenimientos); anular verificaciones |
+| **Vulnerabilidades** · registro, acciones y verificaciones | admin, analista | todos | admin, analista, con motivo: CVE, descripción, riesgo, fechas, fuente y evidencia, solo mientras está pendiente | admin: anular y revertir; anular acciones y verificaciones |
 
-Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (iniciar, finalizar y cancelar; iniciar mitigación, mitigar y aceptar riesgo). Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
+Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (programar desde el plan, iniciar, finalizar, cancelar y verificar; confirmar, evaluar, iniciar el tratamiento, registrar acciones, verificar y, solo admin, aceptar el riesgo). Todas las reglas se validan en la API: ocultar un botón en la interfaz no sustituye esa validación. Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
 
 ## Respaldos y restauración (A.8.13, A.5.30)
 
@@ -26,7 +26,9 @@ Diseñado según el prototipo de referencia, en tres pasos:
 
 1. **Alcance (plan de respaldo).** Se seleccionan los activos operativos que aún no tienen plan (con un atajo para todos los críticos) y se fijan sus parámetros: frecuencia, tipo, medio, ventana, retención, frecuencia de prueba, RPO, RTO, responsable y justificación. Se crea un plan por activo. Un activo tiene como mucho un plan vigente. El activo de un plan no se cambia: se anula y se crea otro.
 2. **Ejecución.** Cada corrida del respaldo sobre un plan vigente: fecha (no futura), tipo, medio, volumen, duración, RPO, resultado, responsable y controles (cifrado, copia fuera de sitio, retención inmutable, integridad verificada).
-3. **Restauración o prueba.** Sobre una ejecución no fallida ni anulada, con fecha posterior a ella: motivo, resultado, tiempo real frente al RTO, integridad y evidencia (acta o ticket).
+3. **Restauración o prueba.** Sobre una ejecución no fallida ni anulada, con fecha posterior a ella: motivo, resultado, tiempo real frente al RTO, integridad, evidencia (acta o ticket) y observaciones. El motivo distingue la *prueba programada* (la que exige la frecuencia de prueba del plan) de las restauraciones reales por incidente o solicitud.
+
+Las ejecuciones guardan además una **evidencia** (referencia documental) y **observaciones**; una ejecución fallida genera un aviso. Los tres listados se filtran por búsqueda, **categoría del activo**, responsable y, en ejecuciones y restauraciones, resultado y período, y se paginan.
 
 Los **calendarios** despliegan las ventanas que corresponden a cada plan según su frecuencia (y su frecuencia de prueba). Cada ventana queda cumplida, vencida, en curso o programada; pulsarla carga el formulario con el plan y la fecha.
 
@@ -47,6 +49,38 @@ Los **indicadores** RES-00 a RES-07 se calculan para el período elegido, solo c
 Son **críticos** los activos operativos con criticidad *Alta* o *Crítica* (variable `CRITICIDADES_CRITICAS`). Hoy los 27 equipos tienen criticidad *Media*, así que RES-00 y RES-03 salen "sin datos" hasta que se asigne la criticidad real.
 
 Los **registros anteriores** (modelo de un solo registro con alcance, ejecución y prueba) se conservan intactos y solo se consultan (`/respaldos/anteriores`): les faltan datos obligatorios del plan y convertirlos obligaría a inventarlos.
+
+## Mantenimientos en tres capas (A.7.13)
+
+La página tiene una pestaña por capa.
+
+1. **Planificación.** Planes por activo (se crean varios a la vez): tipo preventivo o correctivo, frecuencia (única, mensual, trimestral, semestral, anual), próxima fecha, responsable y actividades. Un activo tiene como mucho **un plan vigente por tipo**. *Programar* crea el mantenimiento de la próxima fecha y adelanta el plan según su frecuencia, en una sola transacción con actualización condicional (dos clics simultáneos no duplican). El tablero muestra las intervenciones de los próximos 60 días, los activos operativos sin plan preventivo, los planes vencidos y los mantenimientos pendientes de verificar.
+2. **Ejecución.** Programado → en ejecución → finalizado (o cancelado). Al finalizar se exigen el **técnico**, el **diagnóstico**, las actividades realizadas y la **duración**; el costo, los repuestos, las observaciones y la evidencia son opcionales. Finalizar actualiza la *última revisión* del activo, con su entrada en la bitácora.
+3. **Verificación y cierre.** Sobre un mantenimiento finalizado se registran comprobaciones: **Operativo** lo cierra y exige que la ejecución esté completa y que haya **evidencia**; **Requiere seguimiento** lo deja abierto; **No satisfactorio** lo deja abierto y genera un aviso. Ya cerrado, no admite más verificaciones.
+
+La **condición física** que trae GLPI (Bueno, Regular, Malo) no es un estado administrativo: un equipo en condición *Malo* sigue en el inventario y puede recibir planes y mantenimientos. Solo bloquean las operaciones nuevas la baja y los estados de `ESTADOS_NO_OPERATIVOS`.
+
+## Vulnerabilidades en tres capas (A.8.8)
+
+La aplicación **no tiene un escáner de vulnerabilidades conectado**: todo hallazgo se registra a mano, indicando su fuente (registro manual, escaneo externo, auditoría, boletín del proveedor, prueba de penetración, reporte de usuario) y su evidencia.
+
+1. **Identificación.** Se registra en uno o varios activos (uno por activo; todos o ninguno). Queda *detectada*; alguien la **confirma** (se guarda quién y cuándo). Una crítica genera un aviso.
+2. **Evaluación y tratamiento.** Tras confirmarla se **evalúa**: prioridad (P1–P4), responsable y plan de remediación, con reajuste opcional del riesgo y del plazo. Sin evaluación no se puede iniciar el tratamiento. Durante el tratamiento se registran las **acciones correctivas** (fecha, descripción, responsable, evidencia).
+3. **Verificación y cierre.** Nadie la marca como resuelta a mano: la cierra una **verificación «Corregida»** con evidencia, que exige al menos una acción vigente y registra quién la cerró. Una verificación **«Persiste»** la mantiene en tratamiento o, si ya estaba cerrada, la **reabre** y genera un aviso. *Aceptar el riesgo* (solo admin, con justificación) es el único cierre sin remediación.
+
+Cada paso queda en las trazas (confirmación, evaluación, inicio del tratamiento, cierre, reapertura, aceptación), con el usuario, la fecha y los valores anteriores y nuevos.
+
+## Avisos
+
+Además de los cambios de GLPI, la campana muestra los avisos de los módulos: respaldo fallido, mantenimiento no satisfactorio, vulnerabilidad crítica y vulnerabilidad reabierta. Se guardan en la tabla `notificacion` en la misma transacción que el hecho que los origina.
+
+**Único canal: el aviso dentro de la aplicación.** No se envían correos ni mensajes. Para añadir el correo haría falta un servidor SMTP de la institución y un remitente autorizado, y un proceso que lea los avisos nuevos de `notificacion` y los envíe (así un fallo del correo no bloquea la operación).
+
+## Limitaciones de las integraciones externas
+
+- **Respaldos:** la aplicación **documenta** los respaldos; no los ejecuta ni guarda copias. Registrar una ejecución no prueba que exista el archivo: la evidencia es una referencia (registro del software de respaldo, ticket o acta) que alguien debe poder mostrar. No hay integración con un software de respaldo ni con el almacenamiento.
+- **Vulnerabilidades:** sin escáner conectado (ver arriba).
+- **Evidencias:** se guardan como referencia de texto; la aplicación no almacena archivos adjuntos.
 
 ## Indicadores de mantenimientos (A.7.13) y vulnerabilidades (A.8.8)
 

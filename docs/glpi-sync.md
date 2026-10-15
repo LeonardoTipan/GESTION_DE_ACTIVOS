@@ -38,6 +38,43 @@ Al terminar muestra el informe en consola, lo guarda en JSON (`glpi-informes/`) 
 - Si la lectura de un tipo falla (red, error de GLPI, respuesta que no es una lista, o menos elementos de los anunciados), ese tipo **no se procesa** y queda como error. Los demás tipos continúan.
 - Un elemento sin `id` válido se rechaza con error, sin crear ningún registro.
 
+## Tipos de activo de GLPI
+
+Cada tipo de GLPI es una **categoría** del inventario (`src/glpi-sync/config.ts`, `TIPOS_GLPI`). El nombre se puede cambiar con `GLPI_CATEGORIA_<TIPO>`; los tipos que se leen se eligen con `GLPI_ITEMTYPES`. La identidad sigue siendo **tipo + id de GLPI** (`origenGlpi`, único): si en GLPI cambia el número de inventario o el nombre, se actualiza el mismo registro.
+
+Comprobado contra el GLPI 11 de la empresa (API v2.2), solo con lecturas:
+
+| Apartado de GLPI | Tipo en la API | Categoría | Estado | Elementos hoy |
+|---|---|---|---|---|
+| Computadoras | `Computer` | Computadoras | Importado | 26 |
+| Monitores | `Monitor` | Monitores | Importado | 20 |
+| Programas | `Software` | Programas | Importado (no físico: sin revisión de código institucional) | 341 |
+| Dispositivos de redes | `NetworkEquipment` | Dispositivos de redes | Importado | 1 |
+| Periféricos | `Peripheral` | Periféricos | Importado | 56 |
+| Impresoras | `Printer` | Impresoras | Preparado | 0 |
+| Teléfonos | `Phone` | Teléfonos | Importado | 5 |
+| Gabinetes | `Enclosure` | Gabinetes | Preparado | 0 |
+| Multitomas | `PDU` | Multitomas | Preparado | 0 |
+| Dispositivos pasivos | `PassiveDCEquipment` | Dispositivos pasivos | Preparado | 0 |
+| Cables | `Cable` | Cables | Importado (su estado viene en `state`, no en `status`) | 1 |
+| (Racks) | `Rack` | Racks | Preparado | 0 |
+| (Tomas de red) | `Socket` | Tomas de red | Preparado; **sin papelera** en la API (el filtro `is_deleted` devuelve 400) | 0 |
+| (Licencias, certificados, aplicativos) | `SoftwareLicense`, `Certificate`, `Appliance` | Licencias, Certificados, Aplicativos | Preparados (no físicos) | 0 |
+
+"Preparado" significa que el tipo se lee en cada sincronización y que la categoría existe, pero hoy GLPI no tiene elementos de ese tipo. En cuanto se registre uno, aparecerá en el inventario.
+
+**No importados, con su motivo:**
+
+| Apartado | Motivo |
+|---|---|
+| **Cartuchos** y **Consumibles** | No son activos individuales: GLPI registra *modelos* (`CartridgeItem`, `ConsumableItem`) con existencias. En la API v2.2 esos modelos no tienen ruta de listado, y `Cartridge` devuelve error 500 del servidor. Convertir existencias en activos crearía registros ficticios. |
+| **Tarjetas SIM** | En GLPI son *componentes* (`/Components/SIMCard`) que se instalan dentro de un teléfono o equipo, no activos independientes. Se podrían mostrar como dato del activo que las contiene; queda pendiente. |
+| **Herramientas** y **Elementos** | No existen como tipos en la API v2.2 de este servidor (no aparecen en `/Assets` ni en la documentación `doc.json`). Probablemente son apartados de plugins o menús sin API. |
+| **Global** | Es una vista que reúne los demás tipos (`/Assets/Global`: 108 elementos físicos); importarla duplicaría los activos. |
+| **Equipos no gestionados** (`Unmanaged`) | La cuenta de servicio recibe 403 (sin permiso). |
+
+**Errores aislados por tipo.** Si falla la lectura de un tipo, ese tipo no se procesa ni se le marca ninguna baja, y el punto de control no avanza; los demás tipos continúan (prueba `incremental.spec.ts`).
+
 ## Sincronización incremental
 
 Comprobado contra el GLPI de la institución (API v2.2): el listado admite un filtro RSQL por fecha de modificación.
@@ -224,7 +261,7 @@ Al **vincular** un activo manual se aplica la misma regla: los valores de GLPI s
 | `comentario` | `comment` | Columna `TEXT`: se guarda completo con sus saltos de línea (tope de 5000 caracteres) |
 | `cifrado` | — | GLPI no lo informa en el listado: `false` al crear y después lo gestiona nuestra app |
 | `ultimaRevision` | `date_mod` → `date_creation` (con su desfase, p. ej. `-05:00`, se guardan en UTC) | **Solo al crear** |
-| `categoriaId` | Por tipo: Hardware, Red, Software | **Solo al crear** |
+| `categoriaId` | La categoría de su tipo de GLPI (ver «Tipos de activo de GLPI») | **Solo al crear**; los activos ya vinculados se reclasificaron una vez en la migración `20261015120000`, con su entrada en la bitácora |
 | `criticidadId` | `GLPI_CRITICIDAD_DEFECTO` (por defecto `Media`) | **Solo al crear**; GLPI no la conoce |
 
 Reglas de saneamiento:
