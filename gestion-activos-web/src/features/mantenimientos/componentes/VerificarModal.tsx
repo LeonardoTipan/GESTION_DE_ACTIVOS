@@ -138,7 +138,9 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           <Button
             type="submit"
             color={INFO_RESULTADO_VERIFICACION[form.values.resultado].color}
-            loading={verificar.isPending}
+            // Tras guardar sigue "cargando" hasta que el modal se cierra: evita un segundo envío
+            // (y un aviso duplicado) durante la animación de cierre.
+            loading={verificar.isPending || verificar.isSuccess}
             disabled={cerrando && faltan.length > 0}
           >
             Registrar verificación

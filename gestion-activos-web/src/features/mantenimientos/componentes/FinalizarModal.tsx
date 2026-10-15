@@ -196,7 +196,7 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" color="green" loading={finalizar.isPending}>
+          <Button type="submit" color="green" loading={finalizar.isPending || finalizar.isSuccess}>
             Finalizar
           </Button>
         </Group>

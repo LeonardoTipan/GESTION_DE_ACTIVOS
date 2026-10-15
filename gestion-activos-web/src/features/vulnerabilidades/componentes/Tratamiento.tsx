@@ -122,7 +122,7 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" loading={evaluar.isPending}>
+          <Button type="submit" loading={evaluar.isPending || evaluar.isSuccess}>
             Guardar evaluación
           </Button>
         </Group>
@@ -185,7 +185,7 @@ function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) 
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" loading={registrar.isPending}>
+          <Button type="submit" loading={registrar.isPending || registrar.isSuccess}>
             Registrar acción
           </Button>
         </Group>
@@ -286,7 +286,7 @@ function FormVerificar({ onClose, v, accionesVigentes }: { onClose: () => void; 
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" color={form.values.resultado === 'CORREGIDA' ? 'green' : 'orange'} loading={verificar.isPending} disabled={sinAcciones}>
+          <Button type="submit" color={form.values.resultado === 'CORREGIDA' ? 'green' : 'orange'} loading={verificar.isPending || verificar.isSuccess} disabled={sinAcciones}>
             Registrar verificación
           </Button>
         </Group>

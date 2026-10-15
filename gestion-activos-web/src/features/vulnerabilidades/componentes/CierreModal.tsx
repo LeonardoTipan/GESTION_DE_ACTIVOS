@@ -74,7 +74,7 @@ function FormAceptar({ onClose, vulnerabilidadId }: Omit<Props, 'opened'>) {
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" color="grape" loading={aceptar.isPending}>
+          <Button type="submit" color="grape" loading={aceptar.isPending || aceptar.isSuccess}>
             Aceptar riesgo
           </Button>
         </Group>
