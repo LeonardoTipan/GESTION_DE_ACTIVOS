@@ -134,6 +134,15 @@ export class ProgramarDesdePlanDto {
 
 // ── Capa 3 · Verificación y cierre ──────────────────────────────────────────
 
+/** Resultado de programar desde el plan. */
+export class ProgramacionDesdePlanDto {
+  @ApiProperty({ description: 'Mantenimiento creado (fase PROGRAMADO).' })
+  mantenimientoId: number;
+
+  @ApiProperty({ type: () => PlanMantenimientoDto, description: 'El plan, con la próxima fecha ya adelantada.' })
+  plan: PlanMantenimientoDto;
+}
+
 export class RegistrarVerificacionMantenimientoDto {
   @ApiProperty({ type: String, format: 'date-time' })
   @Type(() => Date)

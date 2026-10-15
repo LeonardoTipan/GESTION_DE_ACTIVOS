@@ -255,7 +255,7 @@ describe('Editar con motivo y anular (e2e)', () => {
       const trazas = await api(tokens.auditor)
         .get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${id}`)
         .expect(200);
-      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['MODIFICAR', 'MODIFICAR', 'REVERSAR', 'ANULAR']);
+      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['MODIFICAR', 'MODIFICAR', 'MODIFICAR', 'REVERSAR', 'ANULAR']);
     });
 
     it('indicadores (A.8.8): una anulada deja de contar como abierta', async () => {

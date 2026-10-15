@@ -81,6 +81,7 @@ export class VulnerabilidadesService {
       filtros.push({
         OR: [
           { descripcion: { contains: query.q } },
+          { cve: { contains: query.q } },
           { activo: { codigo: { contains: query.q } } },
           { activo: { nombre: { contains: query.q } } },
         ],
@@ -178,32 +179,37 @@ export class VulnerabilidadesService {
   }
 
   /** Inicia el tratamiento: exige la evaluación (prioridad, responsable y plan). */
-  async iniciarMitigacion(id: number): Promise<VulnerabilidadDto> {
+  async iniciarMitigacion(id: number, usuario?: AuthUser): Promise<VulnerabilidadDto> {
     const actual = await this.findOne(id);
     if (!actual.prioridad || !actual.responsable || !actual.planRemediacion) {
       throw new ConflictException(
         'Registre la evaluación (prioridad, responsable y plan de remediación) antes de iniciar el tratamiento.',
       );
     }
-    return this.transicionar(id, 'iniciar-mitigacion', {});
+    return this.transicionar(id, 'iniciar-mitigacion', {}, 'Tratamiento iniciado según el plan de remediación.', usuario);
   }
 
   aceptarRiesgo(id: number, dto: AceptarRiesgoDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {
-    return this.transicionar(id, 'aceptar-riesgo', {
-      mitigacion: dto.justificacion,
-      fechaCierre: new Date(),
-      cerradaPor: usuario?.username ?? null,
-    });
+    return this.transicionar(
+      id,
+      'aceptar-riesgo',
+      { mitigacion: dto.justificacion, fechaCierre: new Date(), cerradaPor: usuario?.username ?? null },
+      `Riesgo aceptado: ${dto.justificacion}`.slice(0, 5000),
+      usuario,
+    );
   }
 
   /**
    * Comprueba que la transición está permitida y la aplica con una
-   * actualización condicional: si otra petición se adelantó, 409.
+   * actualización condicional (si otra petición se adelantó, 409), dejando
+   * la traza: quién, cuándo, por qué y el estado anterior y nuevo.
    */
   private async transicionar(
     id: number,
     accion: AccionVulnerabilidad,
     data: Prisma.VulnerabilidadUpdateManyMutationInput,
+    motivo: string,
+    usuario?: AuthUser,
   ): Promise<VulnerabilidadDto> {
     const actual = await this.findOne(id);
     if (actual.anuladoEn) {
@@ -215,15 +221,14 @@ export class VulnerabilidadesService {
       );
     }
     const { desde, hacia } = TRANSICIONES[accion];
-    const { count } = await this.prisma.vulnerabilidad.updateMany({
-      where: { id, estado: { in: desde }, anuladoEn: null },
-      data: { ...data, estado: hacia },
-    });
-    if (count === 0) {
-      throw new ConflictException(
-        `La vulnerabilidad ${id} cambió de estado mientras se procesaba; vuelve a consultarla.`,
-      );
-    }
+    await this.trazas.modificar(
+      'VULNERABILIDAD',
+      id,
+      { ...data, estado: hacia },
+      motivo,
+      usuario?.username ?? 'sistema',
+      { estado: { in: desde } },
+    );
     return this.findOne(id);
   }
 

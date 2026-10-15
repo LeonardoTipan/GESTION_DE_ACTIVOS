@@ -30,6 +30,7 @@ import {
   ModificarPlanMantenimientoDto,
   PaginatedPlanMantenimientoDto,
   PlanMantenimientoDto,
+  ProgramacionDesdePlanDto,
   ProgramarDesdePlanDto,
   QueryPlanesMantenimientoDto,
   RegistrarVerificacionMantenimientoDto,
@@ -93,10 +94,10 @@ export class PlanesMantenimientoController {
   }
 
   @ApiOperation({ summary: 'Programar la intervención prevista del plan (admin, analista)', description: 'Crea el mantenimiento (capa 2) y adelanta la próxima fecha.' })
-  @ApiCreatedResponse({ description: '{ mantenimientoId, plan }' })
+  @ApiCreatedResponse({ type: ProgramacionDesdePlanDto })
   @Roles('admin', 'analista')
   @Post('planes/:id/programar')
-  programar(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarDesdePlanDto) {
+  programar(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarDesdePlanDto): Promise<ProgramacionDesdePlanDto> {
     return this.planes.programar(id, dto.fecha);
   }
 

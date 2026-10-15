@@ -90,9 +90,9 @@ export class RegistrarVulnerabilidadDto {
 
   @ApiPropertyOptional({
     enum: FuenteVulnerabilidad,
-    default: 'MANUAL',
+    // Sin "default" aquí: el cliente generado lo volvería obligatorio.
     description:
-      'De dónde viene. Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.',
+      'De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.',
   })
   @IsOptional()
   @IsEnum(FuenteVulnerabilidad)

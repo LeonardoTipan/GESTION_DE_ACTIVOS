@@ -335,6 +335,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       expect(motivos).toContain('Cerrada');
       expect(motivos).toContain('Reabierta');
       expect(motivos).toContain('confirmada');
+      expect(motivos).toContain('Tratamiento iniciado');
     }, LENTO);
 
     it('solo el admin anula una acción correctiva', async () => {

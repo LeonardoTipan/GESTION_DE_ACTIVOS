@@ -122,8 +122,9 @@ export class VulnerabilidadesController {
   @Patch(':id/iniciar-mitigacion')
   iniciarMitigacion(
     @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.iniciarMitigacion(id);
+    return this.vulnerabilidades.iniciarMitigacion(id, usuario);
   }
 
   @ApiOperation({
