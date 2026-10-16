@@ -40,7 +40,6 @@ import {
   useAnularAccion,
   useAnularVerificacionVulnerabilidad,
   useConfirmarVulnerabilidad,
-  useIniciarMitigacion,
   useVerificacionesVulnerabilidad,
   useVulnerabilidad,
   type Vulnerabilidad,
@@ -48,7 +47,8 @@ import {
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { AceptarRiesgoModal } from './componentes/CierreModal.tsx'
 import { EditarVulnerabilidadModal } from './componentes/EditarVulnerabilidadModal.tsx'
-import { AccionModal, EvaluarModal, VerificarModal } from './componentes/Tratamiento.tsx'
+import { PlazosVulnerabilidad } from './componentes/PlazosVulnerabilidad.tsx'
+import { AccionModal, EvaluarModal, IniciarTratamientoModal, VerificarModal } from './componentes/Tratamiento.tsx'
 import { accionesPermitidas, admiteEdicion, INFO_FUENTE, INFO_PRIORIDAD, pasoActivo, pasosCiclo, type Paso } from './riesgo.ts'
 
 function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
@@ -96,7 +96,7 @@ function Acciones({ vulnerabilidad: v, accionesVigentes }: { vulnerabilidad: Vul
   const puedeOperar = usePuedeOperar()
   const puedeAceptar = usePuedeAdministrar()
   const confirmar = useConfirmarVulnerabilidad()
-  const iniciar = useIniciarMitigacion()
+  const [iniciando, inicio] = useDisclosure()
   const [evaluando, evaluacion] = useDisclosure()
   const [registrandoAccion, accion] = useDisclosure()
   const [verificando, verificacion] = useDisclosure()
@@ -120,23 +120,6 @@ function Acciones({ vulnerabilidad: v, accionesVigentes }: { vulnerabilidad: Vul
         }),
     })
 
-  const iniciarTratamiento = () =>
-    modals.openConfirmModal({
-      title: 'Iniciar el tratamiento',
-      children: (
-        <Text size="sm">
-          La vulnerabilidad pasará a <b>En tratamiento</b>. Registre las acciones correctivas y, al final, una
-          verificación que confirme la corrección.
-        </Text>
-      ),
-      labels: { confirm: 'Iniciar', cancel: 'Volver' },
-      confirmProps: { color: 'yellow' },
-      onConfirm: () =>
-        iniciar.mutate(v.id, {
-          onSuccess: () => notifications.show({ color: 'yellow', title: 'Tratamiento iniciado', message: v.cve ?? `Vulnerabilidad #${v.id}` }),
-          onError: (e) => notifications.show({ color: 'red', title: 'No se pudo iniciar', message: e.message }),
-        }),
-    })
 
   return (
     <>
@@ -152,7 +135,7 @@ function Acciones({ vulnerabilidad: v, accionesVigentes }: { vulnerabilidad: Vul
           </Button>
         )}
         {ver('iniciar-mitigacion') && (
-          <Button color="yellow" leftSection={<IconPlayerPlay size={16} />} loading={iniciar.isPending} onClick={iniciarTratamiento}>
+          <Button color="yellow" leftSection={<IconPlayerPlay size={16} />} onClick={inicio.open}>
             Iniciar tratamiento
           </Button>
         )}
@@ -173,10 +156,21 @@ function Acciones({ vulnerabilidad: v, accionesVigentes }: { vulnerabilidad: Vul
         )}
       </Group>
       <EvaluarModal opened={evaluando} onClose={evaluacion.close} vulnerabilidad={v} />
+      <IniciarTratamientoModal opened={iniciando} onClose={inicio.close} vulnerabilidad={v} />
       <AccionModal opened={registrandoAccion} onClose={accion.close} vulnerabilidad={v} />
       <VerificarModal opened={verificando} onClose={verificacion.close} vulnerabilidad={v} accionesVigentes={accionesVigentes} />
       {puedeAceptar && <AceptarRiesgoModal opened={aceptando} onClose={aceptar.close} vulnerabilidadId={v.id} />}
     </>
+  )
+}
+
+/** Registrado fuera del intervalo previsto, como excepción autorizada. */
+function MarcaExcepcion({ registro: r }: { registro: { fueraDePlazo: boolean; motivoExcepcion: string | null; excepcionPor: string | null } }) {
+  if (!r.fueraDePlazo) return null
+  return (
+    <Text size="xs" c="orange" title={`${r.motivoExcepcion ?? ''} (autorizó ${r.excepcionPor ?? '—'})`}>
+      ⚠ fuera de plazo
+    </Text>
   )
 }
 
@@ -214,7 +208,10 @@ function Historial({ v }: { v: Vulnerabilidad }) {
             <Table.Tbody>
               {acciones.data.map((a) => (
                 <Table.Tr key={a.id} style={{ opacity: a.anuladoEn ? 0.55 : 1 }}>
-                  <Table.Td w={140}>{formatearFechaHora(a.fecha)}</Table.Td>
+                  <Table.Td w={140}>
+                    {formatearFechaHora(a.fecha)}
+                    <MarcaExcepcion registro={a} />
+                  </Table.Td>
                   <Table.Td>
                     {a.descripcion}
                     <Text size="xs" c="dimmed">
@@ -249,7 +246,10 @@ function Historial({ v }: { v: Vulnerabilidad }) {
             <Table.Tbody>
               {verificaciones.data.map((x) => (
                 <Table.Tr key={x.id} style={{ opacity: x.anuladoEn ? 0.55 : 1 }}>
-                  <Table.Td w={140}>{formatearFechaHora(x.fecha)}</Table.Td>
+                  <Table.Td w={140}>
+                    {formatearFechaHora(x.fecha)}
+                    <MarcaExcepcion registro={x} />
+                  </Table.Td>
                   <Table.Td w={110}>
                     <Badge color={x.resultado === 'CORREGIDA' ? 'green' : 'orange'}>{x.resultado === 'CORREGIDA' ? 'Corregida' : 'Persiste'}</Badge>
                   </Table.Td>
@@ -299,6 +299,11 @@ const ETIQUETAS_VULNERABILIDAD: Record<string, string> = {
   nivelRiesgo: 'Nivel de riesgo',
   fecha: 'Fecha de detección',
   fechaLimite: 'Fecha límite (SLA)',
+  fechaLimiteOriginal: 'Límite original',
+  tratamientoPrevisto: 'Tratamiento previsto',
+  tratamientoIniciadoEn: 'Tratamiento iniciado',
+  verificacionPrevista: 'Verificación prevista',
+  verificacionLimite: 'Límite de la verificación',
   fuente: 'Fuente',
   evidencia: 'Evidencia',
   confirmadaEn: 'Confirmada el',
@@ -498,6 +503,8 @@ export function VulnerabilidadPage() {
           </Text>
         </Alert>
       )}
+
+      <PlazosVulnerabilidad vulnerabilidad={v} />
 
       <Historial v={v} />
 

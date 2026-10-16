@@ -16,8 +16,11 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
+import { avisoFueraDePlazo, fmt, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import {
   useEvaluarVulnerabilidad,
+  useIniciarMitigacion,
   useRegistrarAccion,
   useVerificarVulnerabilidad,
   type NivelRiesgo,
@@ -44,19 +47,31 @@ export function EvaluarModal({ opened, onClose, vulnerabilidad }: { opened: bool
 
 function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) {
   const evaluar = useEvaluarVulnerabilidad()
-  const form = useForm<{ prioridad: Prioridad | null; responsable: string; planRemediacion: string; nivelRiesgo: NivelRiesgo; fechaLimite: string | null }>({
+  const form = useForm<{ prioridad: Prioridad | null; responsable: string; planRemediacion: string; nivelRiesgo: NivelRiesgo; fechaLimite: string | null; tratamientoPrevisto: string | null }>({
     initialValues: {
       prioridad: v.prioridad,
       responsable: v.responsable ?? '',
       planRemediacion: v.planRemediacion ?? '',
       nivelRiesgo: v.nivelRiesgo,
       fechaLimite: v.fechaLimite ? isoAFechaHoraLocal(v.fechaLimite) : null,
+      tratamientoPrevisto: v.tratamientoPrevisto ? isoAFechaHoraLocal(v.tratamientoPrevisto) : null,
     },
     validate: {
       prioridad: (p) => (p ? null : 'Indica la prioridad'),
       responsable: (r) => (!r.trim() ? 'Indica el responsable' : r.length > 191 ? 'Máximo 191' : null),
       planRemediacion: largo(10, 5000, 'Plan'),
-      fechaLimite: (f) => (f && dayjs(f).isBefore(dayjs(v.fecha)) ? 'No puede ser anterior a la detección' : null),
+      fechaLimite: (f) =>
+        f && dayjs(f).isBefore(dayjs(v.fecha))
+          ? 'No puede ser anterior a la detección'
+          : f && v.fechaLimite && dayjs(f).isAfter(dayjs(v.fechaLimite))
+            ? 'Para ampliar el plazo use «Ampliar plazo» (administrador, con motivo)'
+            : null,
+      tratamientoPrevisto: (t, x) =>
+        t && dayjs(t).isBefore(dayjs(v.fecha))
+          ? 'No puede ser anterior a la detección'
+          : t && x.fechaLimite && dayjs(x.fechaLimite).isBefore(dayjs(t))
+            ? 'No puede ser posterior a la fecha límite'
+            : null,
     },
   })
   const enviar = form.onSubmit((x) =>
@@ -69,6 +84,7 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
           planRemediacion: x.planRemediacion.trim(),
           nivelRiesgo: x.nivelRiesgo !== v.nivelRiesgo ? x.nivelRiesgo : undefined,
           fechaLimite: x.fechaLimite ? fechaHoraLocalAIso(x.fechaLimite) : undefined,
+          tratamientoPrevisto: x.tratamientoPrevisto ? fechaHoraLocalAIso(x.tratamientoPrevisto) : undefined,
         },
       },
       {
@@ -111,13 +127,25 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
             {...form.getInputProps('nivelRiesgo')}
           />
         </div>
-        <DateTimePicker
-          label="Fecha límite (SLA)"
-          valueFormat="DD MMM YYYY HH:mm"
-          minDate={new Date(v.fecha)}
-          clearable
-          {...form.getInputProps('fechaLimite')}
-        />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <DateTimePicker
+            label="Inicio previsto del tratamiento"
+            description="Distinto de la detección"
+            valueFormat="DD MMM YYYY HH:mm"
+            minDate={new Date(v.fecha)}
+            clearable
+            {...form.getInputProps('tratamientoPrevisto')}
+          />
+          <DateTimePicker
+            label="Fecha límite de remediación (SLA)"
+            description={v.fechaLimite ? 'Se puede adelantar; ampliarla es «Ampliar plazo»' : undefined}
+            valueFormat="DD MMM YYYY HH:mm"
+            minDate={new Date(v.fecha)}
+            maxDate={v.fechaLimite ? new Date(v.fechaLimite) : undefined}
+            clearable
+            {...form.getInputProps('fechaLimite')}
+          />
+        </SimpleGrid>
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             Volver
@@ -131,7 +159,74 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
   )
 }
 
+// ── Capa 2 · Inicio del tratamiento ─────────────────────────────────────────
+
+/** Inicio REAL contra lo previsto [inicio previsto del tratamiento, límite de remediación]. */
+const inicioFueraDePlazo = (v: Vulnerabilidad, real: string | null) =>
+  avisoFueraDePlazo('El inicio del tratamiento', real, v.tratamientoPrevisto, v.fechaLimite)
+
+export function IniciarTratamientoModal({ opened, onClose, vulnerabilidad }: { opened: boolean; onClose: () => void; vulnerabilidad: Vulnerabilidad }) {
+  return (
+    <Modal opened={opened} onClose={onClose} title="Iniciar el tratamiento" size="lg">
+      {opened && <FormIniciar onClose={onClose} v={vulnerabilidad} />}
+    </Modal>
+  )
+}
+
+function FormIniciar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) {
+  const iniciar = useIniciarMitigacion()
+  const form = useForm({
+    initialValues: { fecha: ahoraLocal() as string | null, motivoExcepcion: '' },
+    validate: {
+      fecha: (f) => (!f ? 'Indica cuándo empezó' : dayjs(f).isBefore(dayjs(v.fecha)) ? 'No puede ser anterior a la detección' : null),
+      motivoExcepcion: (m, x) => errorExcepcion(inicioFueraDePlazo(v, x.fecha), m),
+    },
+  })
+  const fuera = inicioFueraDePlazo(v, form.values.fecha)
+  const enviar = form.onSubmit((x) =>
+    iniciar.mutate(
+      {
+        id: v.id,
+        datos: {
+          fecha: fechaHoraLocalAIso(x.fecha!),
+          motivoExcepcion: inicioFueraDePlazo(v, x.fecha) ? x.motivoExcepcion.trim() : undefined,
+        },
+      },
+      {
+        onSuccess: () => {
+          notifications.show({ color: 'yellow', title: 'Tratamiento iniciado', message: v.cve ?? `Vulnerabilidad #${v.id}` })
+          onClose()
+        },
+        onError: error('No se pudo iniciar'),
+      },
+    ),
+  )
+  return (
+    <form onSubmit={enviar} noValidate>
+      <Stack gap="sm">
+        <Text size="sm" c="dimmed">
+          Pasará a <b>En tratamiento</b>. Detectada el {fmt(v.fecha)}; tratamiento previsto {fmt(v.tratamientoPrevisto)} → límite{' '}
+          {fmt(v.fechaLimite)}.
+        </Text>
+        <DateTimePicker label="Inicio real del tratamiento" valueFormat="DD MMM YYYY HH:mm" minDate={new Date(v.fecha)} maxDate={new Date()} withAsterisk {...form.getInputProps('fecha')} />
+        <CampoExcepcion fuera={fuera} value={form.values.motivoExcepcion} onChange={(m) => form.setFieldValue('motivoExcepcion', m)} error={form.errors.motivoExcepcion as string | undefined} />
+        <Group justify="flex-end">
+          <Button variant="default" onClick={onClose}>
+            Volver
+          </Button>
+          <Button type="submit" color="yellow" loading={iniciar.isPending || iniciar.isSuccess}>
+            Iniciar tratamiento
+          </Button>
+        </Group>
+      </Stack>
+    </form>
+  )
+}
+
 // ── Capa 2 · Acción correctiva ──────────────────────────────────────────────
+
+/** Una acción después del límite de remediación es una excepción (la API decide igual). */
+const accionFueraDePlazo = (v: Vulnerabilidad, real: string | null) => avisoFueraDePlazo('La acción correctiva', real, null, v.fechaLimite)
 
 export function AccionModal({ opened, onClose, vulnerabilidad }: { opened: boolean; onClose: () => void; vulnerabilidad: Vulnerabilidad }) {
   return (
@@ -144,12 +239,13 @@ export function AccionModal({ opened, onClose, vulnerabilidad }: { opened: boole
 function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) {
   const registrar = useRegistrarAccion()
   const form = useForm({
-    initialValues: { fecha: ahoraLocal() as string | null, descripcion: '', responsable: v.responsable ?? '', evidencia: '' },
+    initialValues: { fecha: ahoraLocal() as string | null, descripcion: '', responsable: v.responsable ?? '', evidencia: '', motivoExcepcion: '' },
     validate: {
       fecha: (f) => (!f ? 'Indica la fecha' : dayjs(f).isBefore(dayjs(v.fecha)) ? 'No puede ser anterior a la detección' : null),
       descripcion: largo(5, 5000, 'Descripción'),
       responsable: (r) => (!r.trim() ? 'Indica quién la aplicó' : null),
       evidencia: (e) => (e.length > 191 ? 'Máximo 191' : null),
+      motivoExcepcion: (m, x) => errorExcepcion(accionFueraDePlazo(v, x.fecha), m),
     },
   })
   const enviar = form.onSubmit((x) =>
@@ -161,6 +257,7 @@ function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) 
           descripcion: x.descripcion.trim(),
           responsable: x.responsable.trim(),
           evidencia: x.evidencia.trim() || undefined,
+          motivoExcepcion: accionFueraDePlazo(v, x.fecha) ? x.motivoExcepcion.trim() : undefined,
         },
       },
       {
@@ -181,6 +278,12 @@ function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) 
           <TextInput label="Responsable" withAsterisk {...form.getInputProps('responsable')} />
           <TextInput label="Evidencia" placeholder="Ticket, registro de cambios…" {...form.getInputProps('evidencia')} />
         </SimpleGrid>
+        <CampoExcepcion
+          fuera={accionFueraDePlazo(v, form.values.fecha)}
+          value={form.values.motivoExcepcion}
+          onChange={(m) => form.setFieldValue('motivoExcepcion', m)}
+          error={form.errors.motivoExcepcion as string | undefined}
+        />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             Volver
@@ -221,14 +324,17 @@ export function VerificarModal({
 function FormVerificar({ onClose, v, accionesVigentes }: { onClose: () => void; v: Vulnerabilidad; accionesVigentes: number }) {
   const verificar = useVerificarVulnerabilidad()
   const cerrada = v.estado === 'MITIGADA'
-  const form = useForm<{ resultado: ResultadoVerificacion; fecha: string | null; observaciones: string; evidencia: string; responsable: string }>({
+  // Su propia ventana prevista (si se programó), no la de remediación.
+  const fueraDeVentana = (f: string | null) => avisoFueraDePlazo('La verificación', f, v.verificacionPrevista, v.verificacionLimite)
+  const form = useForm<{ resultado: ResultadoVerificacion; fecha: string | null; observaciones: string; evidencia: string; responsable: string; motivoExcepcion: string }>({
     // Sobre una cerrada solo cabe comprobar que persiste (la reabre).
-    initialValues: { resultado: cerrada ? 'PERSISTE' : 'CORREGIDA', fecha: ahoraLocal(), observaciones: '', evidencia: '', responsable: '' },
+    initialValues: { resultado: cerrada ? 'PERSISTE' : 'CORREGIDA', fecha: ahoraLocal(), observaciones: '', evidencia: '', responsable: '', motivoExcepcion: '' },
     validate: {
       fecha: (f) => (f ? null : 'Indica la fecha'),
       observaciones: largo(10, 5000, 'Observaciones'),
       evidencia: (e) => (e.trim().length < 3 ? 'La verificación exige evidencia (mínimo 3 caracteres)' : e.length > 191 ? 'Máximo 191' : null),
       responsable: (r) => (!r.trim() ? 'Indica quién verificó' : null),
+      motivoExcepcion: (m, x) => errorExcepcion(fueraDeVentana(x.fecha), m),
     },
   })
   const sinAcciones = form.values.resultado === 'CORREGIDA' && accionesVigentes === 0
@@ -241,6 +347,7 @@ function FormVerificar({ onClose, v, accionesVigentes }: { onClose: () => void; 
           fecha: fechaHoraLocalAIso(x.fecha!),
           observaciones: x.observaciones.trim(),
           evidencia: x.evidencia.trim(),
+          motivoExcepcion: fueraDeVentana(x.fecha) ? x.motivoExcepcion.trim() : undefined,
           responsable: x.responsable.trim(),
         },
       },
@@ -282,6 +389,12 @@ function FormVerificar({ onClose, v, accionesVigentes }: { onClose: () => void; 
           <TextInput label="Evidencia" withAsterisk placeholder="Informe de escaneo 2026-10-14" {...form.getInputProps('evidencia')} />
           <TextInput label="Verificado por" withAsterisk {...form.getInputProps('responsable')} />
         </SimpleGrid>
+        <CampoExcepcion
+          fuera={fueraDeVentana(form.values.fecha)}
+          value={form.values.motivoExcepcion}
+          onChange={(m) => form.setFieldValue('motivoExcepcion', m)}
+          error={form.errors.motivoExcepcion as string | undefined}
+        />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             Volver

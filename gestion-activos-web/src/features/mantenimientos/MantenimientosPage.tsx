@@ -1,8 +1,10 @@
 import { Anchor, Badge, Button, Group, Select, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { IconCalendarStats, IconChecklist, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
+import type { Dayjs } from 'dayjs'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Calendario } from '../../shared/calendario/Calendario.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
@@ -140,6 +142,16 @@ function CampoTexto({ valor, onCambio, ...props }: { valor?: string; onCambio: (
   return <TextInput leftSection={<IconSearch size={14} />} value={texto} onChange={(e) => setTexto(e.currentTarget.value)} {...props} />
 }
 
+const CALENDARIO_CAPA = {
+  1: { titulo: 'Calendario de planificación', descripcion: 'Inicio previsto y fecha límite de cada intervención programada; los planes, en su próxima fecha.' },
+  2: { titulo: 'Calendario de ejecución', descripcion: 'Lo previsto (trazo discontinuo) frente a lo ejecutado realmente; en rojo, lo vencido.' },
+  3: { titulo: 'Calendario de verificación', descripcion: 'Ventanas de verificación previstas, con su propio plazo, y verificaciones registradas.' },
+} as const
+
+function CalendarioDeCapa({ capa, onCrear }: { capa: 1 | 2 | 3; onCrear?: (dia: Dayjs) => void }) {
+  return <Calendario {...CALENDARIO_CAPA[capa]} modulos={['mantenimientos']} capa={capa} onCrear={onCrear} textoCrear="Programar mantenimiento" />
+}
+
 export function MantenimientosPage() {
   const navigate = useNavigate()
   const { filtros, actualizar } = useFiltrosUrl(leerFiltros, escribirFiltros)
@@ -148,6 +160,11 @@ export function MantenimientosPage() {
   const categorias = useCategorias()
   const puedeOperar = usePuedeOperar()
   const [modalAbierto, modal] = useDisclosure()
+  const [diaInicial, setDiaInicial] = useState<Dayjs | null>(null)
+  const programarEl = (dia: Dayjs) => {
+    setDiaInicial(dia)
+    modal.open()
+  }
   const hayFiltros =
     filtros.fase !== undefined ||
     filtros.tipo !== undefined ||
@@ -187,7 +204,13 @@ export function MantenimientosPage() {
           </Text>
         </div>
         {puedeOperar && capa !== 'planificacion' && (
-          <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
+          <Button
+            leftSection={<IconPlus size={18} />}
+            onClick={() => {
+              setDiaInicial(null)
+              modal.open()
+            }}
+          >
             Programar mantenimiento
           </Button>
         )}
@@ -208,7 +231,10 @@ export function MantenimientosPage() {
       </Tabs>
 
       {capa === 'planificacion' ? (
-        <Planificacion />
+        <>
+          <Planificacion />
+          <CalendarioDeCapa capa={1} onCrear={puedeOperar ? programarEl : undefined} />
+        </>
       ) : (
         <>
           <Group gap="sm" align="flex-end" wrap="wrap">
@@ -321,6 +347,7 @@ export function MantenimientosPage() {
           >
             {(mantenimientos) => <TablaMantenimientos mantenimientos={mantenimientos} capa={capa} />}
           </TarjetaListado>
+          <CalendarioDeCapa capa={capa === 'verificacion' ? 3 : 2} />
         </>
       )}
 
@@ -329,6 +356,7 @@ export function MantenimientosPage() {
           opened={modalAbierto}
           onClose={modal.close}
           activoInicial={filtros.activoId}
+          diaInicial={diaInicial}
           onProgramado={(m) => navigate(`/mantenimientos/${m.id}`)}
         />
       )}

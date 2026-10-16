@@ -4,6 +4,8 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
+import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
+import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useVerificarMantenimiento, type Mantenimiento, type ResultadoVerificacion } from '../api/mantenimientos.ts'
 import { faltantesParaCerrar, INFO_RESULTADO_VERIFICACION, RESULTADOS_VERIFICACION } from '../fases.ts'
 
@@ -29,14 +31,17 @@ export function VerificarModal({ opened, onClose, mantenimiento }: Props) {
 function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
   const verificar = useVerificarMantenimiento()
   const faltan = faltantesParaCerrar(m)
+  // Su propia ventana prevista (si se programó), independiente del plazo de la ejecución.
+  const fueraDeVentana = (fecha: string | null) => avisoFueraDePlazo('La verificación', fecha, m.verificacionPrevista, m.verificacionLimite)
   const form = useForm<{
     resultado: ResultadoVerificacion
     fecha: string | null
     observaciones: string
     evidencia: string
     responsable: string
+    motivoExcepcion: string
   }>({
-    initialValues: { resultado: 'OPERATIVO', fecha: ahoraLocal(), observaciones: '', evidencia: '', responsable: '' },
+    initialValues: { resultado: 'OPERATIVO', fecha: ahoraLocal(), observaciones: '', evidencia: '', responsable: '', motivoExcepcion: '' },
     validate: {
       fecha: (v) =>
         !v
@@ -52,6 +57,7 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             ? 'Máximo 191 caracteres'
             : null,
       responsable: (v) => (!v.trim() ? 'Indica quién verificó' : v.length > 191 ? 'Máximo 191' : null),
+      motivoExcepcion: (v, valores) => errorExcepcion(fueraDeVentana(valores.fecha), v),
     },
   })
 
@@ -65,6 +71,7 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           observaciones: v.observaciones.trim(),
           evidencia: v.evidencia.trim() || undefined,
           responsable: v.responsable.trim(),
+          motivoExcepcion: fueraDeVentana(v.fecha) ? v.motivoExcepcion.trim() : undefined,
         },
       },
       {
@@ -87,6 +94,7 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
   )
 
   const cerrando = form.values.resultado === 'OPERATIVO'
+  const fuera = fueraDeVentana(form.values.fecha)
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
@@ -116,6 +124,12 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           />
           <TextInput label="Verificado por" withAsterisk placeholder="Supervisor de TIC" {...form.getInputProps('responsable')} />
         </Group>
+        <CampoExcepcion
+          fuera={fuera}
+          value={form.values.motivoExcepcion}
+          onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
+          error={form.errors.motivoExcepcion as string | undefined}
+        />
         <Textarea
           label="Observaciones"
           withAsterisk

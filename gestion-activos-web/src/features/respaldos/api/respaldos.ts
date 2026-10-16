@@ -194,3 +194,24 @@ export function useAnulacion() {
     onSuccess: invalidar,
   })
 }
+
+// ── Capa 3: ventana prevista de la prueba de restauración ────────────────────
+
+export function useProgramarPrueba() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ id, prevista, limite }: { id: number; prevista: string; limite: string }) =>
+      ejecutar(api.PATCH('/api/respaldos/ejecuciones/{id}/prueba', { params: { path: { id } }, body: { prevista, limite } })),
+    onSuccess: invalidar,
+  })
+}
+
+/** Ampliación formal (solo admin, con motivo). */
+export function useAmpliarPlazoPrueba() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: ({ id, nuevoLimite, motivo }: { id: number; nuevoLimite: string; motivo: string }) =>
+      ejecutar(api.PATCH('/api/respaldos/ejecuciones/{id}/plazo-prueba', { params: { path: { id } }, body: { nuevoLimite, motivo } })),
+    onSuccess: invalidar,
+  })
+}

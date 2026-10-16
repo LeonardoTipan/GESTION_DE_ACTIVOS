@@ -16,6 +16,7 @@ import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
 import { IconPlus, IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
+import { Calendario } from '../../shared/calendario/Calendario.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
@@ -350,6 +351,12 @@ export function VulnerabilidadesPage() {
       >
         {(vulnerabilidades) => <TablaVulnerabilidades vulnerabilidades={vulnerabilidades} />}
       </TarjetaListado>
+
+      <Calendario
+        titulo="Calendario de vulnerabilidades"
+        descripcion="Detección (real), tratamiento previsto hasta el límite de remediación, acciones y ventanas de verificación. Elija la capa para ver cada etapa."
+        modulos={['vulnerabilidades']}
+      />
 
       {puedeOperar && (
         <RegistrarModal

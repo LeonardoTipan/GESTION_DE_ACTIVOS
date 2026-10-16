@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { controlesEjecucion, FRECUENCIA, MEDIO, opciones, RETENCION, VENTANA } from './catalogos.ts'
-import { fechaDeVentana, folio } from './folios.ts'
+import { dentroDeVentana, fechaDeVentana, folio } from './folios.ts'
 
 describe('catálogos de respaldos (textos del prototipo)', () => {
   it('cada valor de la API tiene su texto', () => {
@@ -37,5 +37,25 @@ describe('folios y fechas sugeridas', () => {
     expect(fechaDeVentana(w, '2026-09-15')).toBe('2026-09-15')
     expect(fechaDeVentana(w, '2026-10-14')).toBe('2026-09-30')
     expect(fechaDeVentana(w, '2026-08-20')).toBe('2026-09-01')
+  })
+})
+
+describe('ventana horaria (aviso; la misma regla que la API)', () => {
+  // Fechas en hora local del equipo: 2026-10-14 es miércoles; 2026-10-17, sábado.
+  const local = (texto: string) => new Date(texto)
+  it('nocturna 22–02 cruza la medianoche', () => {
+    expect(dentroDeVentana('NOCTURNA_22_02', local('2026-10-14T22:30:00'))).toBe(true)
+    expect(dentroDeVentana('NOCTURNA_22_02', local('2026-10-14T01:59:00'))).toBe(true)
+    expect(dentroDeVentana('NOCTURNA_22_02', local('2026-10-14T19:00:00'))).toBe(false)
+  })
+  it('laboral: lunes a viernes de 08:00 a 18:00', () => {
+    expect(dentroDeVentana('HORARIO_LABORAL', local('2026-10-14T09:00:00'))).toBe(true)
+    expect(dentroDeVentana('HORARIO_LABORAL', local('2026-10-14T18:00:00'))).toBe(false)
+    expect(dentroDeVentana('HORARIO_LABORAL', local('2026-10-17T09:00:00'))).toBe(false)
+  })
+  it('fin de semana y continua', () => {
+    expect(dentroDeVentana('FIN_DE_SEMANA', local('2026-10-17T03:00:00'))).toBe(true)
+    expect(dentroDeVentana('FIN_DE_SEMANA', local('2026-10-14T03:00:00'))).toBe(false)
+    expect(dentroDeVentana('CONTINUA', local('2026-10-14T19:00:00'))).toBe(true)
   })
 })

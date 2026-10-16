@@ -8,6 +8,7 @@ import {
   Group,
   Loader,
   Modal,
+  NumberInput,
   Pagination,
   ScrollArea,
   Select,
@@ -58,6 +59,7 @@ const ETIQUETAS_PLAN: Record<string, string> = {
   tipo: 'Tipo',
   frecuencia: 'Frecuencia',
   proximaFecha: 'Próxima fecha',
+  plazoDias: 'Plazo (días)',
   responsable: 'Responsable',
   actividades: 'Actividades',
   estado: 'Estado',
@@ -180,6 +182,7 @@ interface ValoresPlan {
   tipo: TipoMantenimiento
   frecuencia: FrecuenciaMantenimiento
   proximaFecha: string | null
+  plazoDias: number | string
   responsable: string
   actividades: string
   estado: 'VIGENTE' | 'SUSPENDIDO'
@@ -207,14 +210,16 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
           tipo: plan.tipo,
           frecuencia: plan.frecuencia,
           proximaFecha: plan.proximaFecha ? isoAFechaHoraLocal(plan.proximaFecha) : null,
+          plazoDias: plan.plazoDias ?? 7,
           responsable: plan.responsable,
           actividades: plan.actividades,
           estado: plan.estado,
           motivoCambio: '',
         }
-      : { tipo: 'PREVENTIVO', frecuencia: 'TRIMESTRAL', proximaFecha: null, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
+      : { tipo: 'PREVENTIVO', frecuencia: 'TRIMESTRAL', proximaFecha: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
     validate: {
       proximaFecha: (v) => (v ? null : 'Indica la primera intervención'),
+      plazoDias: (v) => (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 365 ? 'Entre 1 y 365 días' : null),
       responsable: (v) => (!v.trim() ? 'Obligatorio' : v.length > 191 ? 'Máximo 191' : null),
       actividades: (v) => (v.trim().length < 10 ? 'Mínimo 10 caracteres' : v.length > 2000 ? 'Máximo 2000' : null),
       motivoCambio: (v) => (plan ? errorMotivo(v) : null),
@@ -227,6 +232,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
       tipo: v.tipo,
       frecuencia: v.frecuencia,
       proximaFecha: fechaHoraLocalAIso(v.proximaFecha!),
+      plazoDias: Number(v.plazoDias),
       responsable: v.responsable.trim(),
       actividades: v.actividades.trim(),
     }
@@ -289,7 +295,16 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
             allowDeselect={false}
             {...form.getInputProps('frecuencia')}
           />
-          <DateTimePicker label="Próxima intervención" valueFormat="DD MMM YYYY HH:mm" withAsterisk {...form.getInputProps('proximaFecha')} />
+          <DateTimePicker label="Próxima intervención (inicio previsto)" valueFormat="DD MMM YYYY HH:mm" withAsterisk {...form.getInputProps('proximaFecha')} />
+          <NumberInput
+            label="Plazo de cada intervención (días)"
+            description="Fecha límite = inicio previsto + plazo"
+            withAsterisk
+            min={1}
+            max={365}
+            allowDecimal={false}
+            {...form.getInputProps('plazoDias')}
+          />
           <TextInput label="Responsable" withAsterisk placeholder="Soporte TIC" {...form.getInputProps('responsable')} />
           {plan && (
             <Select

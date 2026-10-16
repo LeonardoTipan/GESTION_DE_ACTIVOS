@@ -15,7 +15,7 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 | **Activos** | admin, analista | todos | admin, analista | admin: **baja lógica**: queda *Dado de baja* y conserva ficha, historial y registros |
 | **Categorías** y **criticidades** | admin | todos | admin | admin; **bloqueado** si algún activo las usa |
 | **Respaldos** · plan, ejecución y restauración | admin, analista | todos | admin, analista, **con motivo** (versión nueva) | admin: **anular** (eliminación lógica, con motivo) y **revertir** |
-| **Mantenimientos** · plan, mantenimiento y verificación | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad y fecha, solo en fase Programado) | admin: anular y revertir (planes y mantenimientos); anular verificaciones |
+| **Mantenimientos** · plan, mantenimiento y verificación | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad, inicio previsto y fecha límite, solo en fase Programado) | admin: anular y revertir (planes y mantenimientos); anular verificaciones |
 | **Vulnerabilidades** · registro, acciones y verificaciones | admin, analista | todos | admin, analista, con motivo: CVE, descripción, riesgo, fechas, fuente y evidencia, solo mientras está pendiente | admin: anular y revertir; anular acciones y verificaciones |
 
 Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (programar desde el plan, iniciar, finalizar, cancelar y verificar; confirmar, evaluar, iniciar el tratamiento, registrar acciones, verificar y, solo admin, aceptar el riesgo). Todas las reglas se validan en la API: ocultar un botón en la interfaz no sustituye esa validación. Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
@@ -25,7 +25,7 @@ Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (pro
 Diseñado según el prototipo de referencia, en tres pasos:
 
 1. **Alcance (plan de respaldo).** Se seleccionan los activos operativos que aún no tienen plan (con un atajo para todos los críticos) y se fijan sus parámetros: frecuencia, tipo, medio, ventana, retención, frecuencia de prueba, RPO, RTO, responsable y justificación. Se crea un plan por activo. Un activo tiene como mucho un plan vigente. El activo de un plan no se cambia: se anula y se crea otro.
-2. **Ejecución.** Cada corrida del respaldo sobre un plan vigente: fecha (no futura), tipo, medio, volumen, duración, RPO, resultado, responsable y controles (cifrado, copia fuera de sitio, retención inmutable, integridad verificada).
+2. **Ejecución.** Cada corrida del respaldo sobre un plan vigente: fecha y hora reales (no futuras; fuera de la ventana del plan o antes de su inicio, solo como excepción de admin, ver *Plazos*), tipo, medio, volumen, duración, RPO, resultado, responsable y controles (cifrado, copia fuera de sitio, retención inmutable, integridad verificada).
 3. **Restauración o prueba.** Sobre una ejecución no fallida ni anulada, con fecha posterior a ella: motivo, resultado, tiempo real frente al RTO, integridad, evidencia (acta o ticket) y observaciones. El motivo distingue la *prueba programada* (la que exige la frecuencia de prueba del plan) de las restauraciones reales por incidente o solicitud.
 
 Las ejecuciones guardan además una **evidencia** (referencia documental) y **observaciones**; una ejecución fallida genera un aviso. Los tres listados se filtran por búsqueda, **categoría del activo**, responsable y, en ejecuciones y restauraciones, resultado y período, y se paginan.
@@ -69,6 +69,58 @@ La aplicación **no tiene un escáner de vulnerabilidades conectado**: todo hall
 3. **Verificación y cierre.** Nadie la marca como resuelta a mano: la cierra una **verificación «Corregida»** con evidencia, que exige al menos una acción vigente y registra quién la cerró. Una verificación **«Persiste»** la mantiene en tratamiento o, si ya estaba cerrada, la **reabre** y genera un aviso. *Aceptar el riesgo* (solo admin, con justificación) es el único cierre sin remediación.
 
 Cada paso queda en las trazas (confirmación, evaluación, inicio del tratamiento, cierre, reapertura, aceptación), con el usuario, la fecha y los valores anteriores y nuevos.
+
+## Plazos: lo previsto, lo real y lo verificado
+
+Cada etapa de los tres módulos guarda por separado **lo previsto** (un intervalo [inicio, límite]) y **lo que ocurrió** (la fecha y hora reales). La fecha real nunca se copia de la prevista, y el plan nunca se corrige para que cuadre.
+
+| Módulo | Capa 1 · previsto | Capa 2 · real (y su plazo) | Capa 3 · ventana propia |
+|---|---|---|---|
+| **Respaldos** | Inicio previsto del plan (`vigenteDesde`) y ventana horaria (nocturna 22–02, 00–04, fin de semana, laboral L–V 08–18, continua) | Fecha **y hora** real de cada ejecución | Prueba de restauración prevista [`pruebaPrevista`, `pruebaLimite`] de cada copia |
+| **Mantenimientos** | Inicio previsto (`fecha`) y **fecha límite** (`fechaLimite`); en los planes, `plazoDias` (límite = inicio + plazo) | Inicio y fin reales | Verificación prevista [`verificacionPrevista`, `verificacionLimite`] |
+| **Vulnerabilidades** | Detección (real, la registra una persona), inicio previsto del tratamiento y límite de remediación | Inicio real del tratamiento y fecha de cada acción | Verificación prevista [`verificacionPrevista`, `verificacionLimite`] |
+
+La verificación **no** tiene que caber en el plazo de la ejecución: tiene su propio plazo y su propio estado.
+
+**Fuera de plazo.** Si la fecha real cae fuera de lo previsto, la API responde 409 y pide una **excepción**: solo un **admin** la registra, con una justificación de al menos 20 caracteres. Se guardan `fueraDePlazo`, `motivoExcepcion` y `excepcionPor`, la fecha real queda como ocurrió y el plan no cambia. El analista ve el aviso y que no puede registrarla; el formulario no envía.
+
+**Corregir una fecha ya registrada** (ejecución o restauración de respaldo) se reevalúa igual si la fecha (o el motivo) cambia. Si cae fuera, solo el admin la guarda, y el motivo del cambio queda como justificación. Si la corrección la devuelve al plan, deja de ser excepción (la anterior queda en las trazas).
+
+**Ampliar un plazo** es una acción formal y solo de admin, con motivo:
+
+- límite de ejecución del mantenimiento;
+- límite de remediación de la vulnerabilidad;
+- límite de verificación;
+- límite de la prueba de restauración.
+
+Se conserva el **límite original** (`fechaLimiteOriginal`) y el cambio queda en las trazas. Reevaluar una vulnerabilidad no puede alargar su límite (409: se usa *Ampliar plazo*).
+
+**Reprogramar una ventana de capa 3** que ya está programada también es mover el plan: solo admin. Excepción: en mantenimientos, tras una verificación que no lo cerró (seguimiento o no satisfactorio), la ventana ya se usó y el analista programa la siguiente.
+
+**Otras reglas:**
+
+- No se registra dos veces la misma ejecución de respaldo (mismo plan, misma fecha y hora).
+- Una prueba **programada** de restauración exige que la copia tenga su prueba prevista, y solo hay una por copia.
+- Una restauración por incidente no está programada y no se compara con ninguna ventana.
+- Registrar una restauración documenta lo hecho; no recupera copias.
+
+**Zona horaria.** Las ventanas y los días se evalúan en la hora local de la institución: `ZONA_HORARIA`, o `GLPI_TIMEZONE`, o por defecto `America/Guayaquil`. La interfaz muestra y captura las fechas en la hora local del equipo, que se supone la misma. Los avisos previos de la interfaz usan la misma regla que la API, pero quien decide es siempre la API.
+
+### Calendarios
+
+- Cada pestaña o paso de cada módulo tiene su calendario: capa 1, capa 2 y capa 3.
+- **Calendario** (menú, `/calendario`) reúne los tres módulos, con selección de módulos y de capa.
+- Vistas: mes, semana y día.
+- Filtros: capa, categoría del activo, responsable y estado.
+- En el móvil se muestra como lista por días.
+- **Previsto** se dibuja con trazo discontinuo y **real** relleno. ⚠ marca lo registrado como excepción.
+- Estados: programado, vencido, en curso, completado, fallido o no satisfactorio, cancelado.
+- Al pulsar un evento se ven sus fechas y un enlace al registro. Las acciones se hacen en el registro, según el rol.
+- En la planificación, «+» en un día crea desde esa fecha (solo admin y analista):
+  - **Mantenimientos:** programa un mantenimiento de 08:00 a 18:00 de ese día.
+  - **Respaldos:** fija el inicio previsto del plan nuevo.
+- Los datos vienen de `GET /api/{respaldos|mantenimientos|vulnerabilidades}/agenda?desde&hasta[&capa&categoriaId&responsable&estado]`, calculados de lo guardado en la base.
+- Cualquier cambio guardado recalcula los calendarios abiertos.
 
 ## Avisos
 

@@ -42,6 +42,7 @@ import {
 import { CancelarModal } from './componentes/CancelarModal.tsx'
 import { FinalizarModal } from './componentes/FinalizarModal.tsx'
 import { IniciarModal } from './componentes/IniciarModal.tsx'
+import { PlazoEjecucion, PlazoVerificacion } from './componentes/PlazosMantenimiento.tsx'
 import { VerificarModal } from './componentes/VerificarModal.tsx'
 import { accionesPermitidas, estadoPasos, pasoActivo, type EstadoPaso } from './fases.ts'
 
@@ -49,7 +50,10 @@ import { accionesPermitidas, estadoPasos, pasoActivo, type EstadoPaso } from './
 const ETIQUETAS_MANTENIMIENTO: Record<string, string> = {
   tipo: 'Tipo',
   actividad: 'Actividad',
-  fecha: 'Fecha programada',
+  fecha: 'Inicio previsto',
+  fechaLimite: 'Fecha límite',
+  verificacionPrevista: 'Verificación prevista',
+  verificacionLimite: 'Límite de la verificación',
 }
 
 /** Un paso cancelado se pinta en rojo con ✗ y cambia su etiqueta. */
@@ -110,18 +114,8 @@ function Acciones({ mantenimiento }: { mantenimiento: Mantenimiento }) {
           </Button>
         )}
       </Group>
-      <IniciarModal
-        opened={iniciando}
-        onClose={iniciar.close}
-        mantenimientoId={mantenimiento.id}
-      />
-      <FinalizarModal
-        opened={finalizando}
-        onClose={finalizar.close}
-        mantenimientoId={mantenimiento.id}
-        fechaInicio={mantenimiento.fechaInicio}
-        tecnico={mantenimiento.tecnico}
-      />
+      <IniciarModal opened={iniciando} onClose={iniciar.close} mantenimiento={mantenimiento} />
+      <FinalizarModal opened={finalizando} onClose={finalizar.close} mantenimiento={mantenimiento} />
       <CancelarModal
         opened={cancelando}
         onClose={cancelar.close}
@@ -155,6 +149,7 @@ function Verificaciones({ mantenimiento: m }: { mantenimiento: Mantenimiento }) 
           </Button>
         )}
       </Group>
+      <PlazoVerificacion mantenimiento={m} verificaciones={verificaciones.data ?? []} />
       {m.fase !== 'FINALIZADO' ? (
         <Text size="sm" c="dimmed">
           Se verifica cuando el mantenimiento esté finalizado.
@@ -185,7 +180,14 @@ function Verificaciones({ mantenimiento: m }: { mantenimiento: Mantenimiento }) 
             <Table.Tbody>
               {verificaciones.data.map((v) => (
                 <Table.Tr key={v.id} style={{ opacity: v.anuladoEn ? 0.55 : 1 }}>
-                  <Table.Td>{formatearFechaHora(v.fecha)}</Table.Td>
+                  <Table.Td>
+                    {formatearFechaHora(v.fecha)}
+                    {v.fueraDePlazo && (
+                      <Text size="xs" c="orange" title={`${v.motivoExcepcion ?? ''} (autorizó ${v.excepcionPor ?? '—'})`}>
+                        ⚠ fuera de la ventana prevista
+                      </Text>
+                    )}
+                  </Table.Td>
                   <Table.Td>
                     <BadgeResultadoVerificacion resultado={v.resultado} />
                   </Table.Td>
@@ -349,7 +351,7 @@ export function MantenimientoPage() {
 
       {m.vencido && (
         <Alert color="red" title="Mantenimiento vencido" maw={720}>
-          La fecha programada ya pasó y todavía no se ha iniciado.
+          Pasó la fecha límite ({formatearFechaHora(m.fechaLimite ?? m.fecha)}) y todavía no se ha completado.
         </Alert>
       )}
 
@@ -388,13 +390,7 @@ export function MantenimientoPage() {
         </Title>
         <Stack gap="md">
           <Dato etiqueta="Actividad">{m.actividad}</Dato>
-          <SimpleGrid cols={{ base: 1, sm: 3 }}>
-            <Dato etiqueta="Fecha programada">{formatearFechaHora(m.fecha)}</Dato>
-            <Dato etiqueta="Inicio">{formatearFechaHora(m.fechaInicio)}</Dato>
-            <Dato etiqueta={cancelado ? 'Cancelado el' : 'Fin'}>
-              {formatearFechaHora(m.fechaFin)}
-            </Dato>
-          </SimpleGrid>
+          <PlazoEjecucion mantenimiento={m} />
           {m.fase === 'FINALIZADO' && (
             <>
               <Dato etiqueta="Estado del equipo">

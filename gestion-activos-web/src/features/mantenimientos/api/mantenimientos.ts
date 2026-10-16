@@ -242,3 +242,23 @@ export function useAnularVerificacionMantenimiento() {
     onSuccess: invalidar,
   })
 }
+
+// ── Plazos: ampliación formal (admin) y ventana de verificación ─────────────
+
+export function useAmpliarPlazoMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['AmpliarPlazoMantenimientoDto'] }) =>
+      ejecutar(api.PATCH('/api/mantenimientos/{id}/plazo', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useProgramarVerificacionMantenimiento() {
+  const invalidar = useInvalidarMantenimientos()
+  return useMutation({
+    mutationFn: ({ id, prevista, limite }: { id: number; prevista: string; limite: string }) =>
+      ejecutar(api.PATCH('/api/mantenimientos/{id}/verificacion-prevista', { params: { path: { id } }, body: { prevista, limite } })),
+    onSuccess: invalidar,
+  })
+}

@@ -234,6 +234,26 @@ export interface paths {
         patch: operations["CriticidadesController_update"];
         trace?: never;
     };
+    "/api/respaldos/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda (calendario) de las tres capas
+         * @description Ventanas previstas, ejecuciones reales, pruebas previstas y restauraciones reales del rango, con filtros.
+         */
+        get: operations["AgendaRespaldosController_agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/respaldos/tablero": {
         parameters: {
             query?: never;
@@ -373,6 +393,43 @@ export interface paths {
         head?: never;
         /** Modificar una ejecución con motivo (admin, analista) */
         patch: operations["EjecucionesRespaldoController_modificar"];
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones/{id}/prueba": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Programar la prueba de restauración (admin, analista)
+         * @description Capa 3: ventana prevista [prevista, límite] de la prueba de esta copia; tiene su propio plazo.
+         */
+        patch: operations["EjecucionesRespaldoController_programarPrueba"];
+        trace?: never;
+    };
+    "/api/respaldos/ejecuciones/{id}/plazo-prueba": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Ampliar el plazo de la prueba de restauración (solo admin) */
+        patch: operations["EjecucionesRespaldoController_ampliarPlazoPrueba"];
         trace?: never;
     };
     "/api/respaldos/ejecuciones/{id}/anular": {
@@ -531,6 +588,26 @@ export interface paths {
          * @description Versiones anteriores, anulaciones y reversiones de un registro de respaldos, mantenimientos o vulnerabilidades, del más reciente al más antiguo.
          */
         get: operations["TrazasController_listar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda (calendario) de las tres capas
+         * @description Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado o verificado) en el rango, con filtros.
+         */
+        get: operations["PlanesMantenimientoController_agenda"];
         put?: never;
         post?: never;
         delete?: never;
@@ -772,6 +849,46 @@ export interface paths {
         patch: operations["MantenimientosController_iniciar"];
         trace?: never;
     };
+    "/api/mantenimientos/{id}/plazo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Ampliar el plazo (solo admin)
+         * @description Amplía formalmente el límite de la ejecución o de la verificación, con motivo. Se conserva el límite original y queda la traza.
+         */
+        patch: operations["MantenimientosController_ampliarPlazo"];
+        trace?: never;
+    };
+    "/api/mantenimientos/{id}/verificacion-prevista": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Programar la verificación (admin, analista)
+         * @description Capa 3: ventana prevista [prevista, límite] para verificar un mantenimiento finalizado. Tiene su propio plazo.
+         */
+        patch: operations["MantenimientosController_programarVerificacion"];
+        trace?: never;
+    };
     "/api/mantenimientos/{id}/finalizar": {
         parameters: {
             query?: never;
@@ -847,6 +964,66 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda (calendario) de las tres capas
+         * @description Detecciones, tratamientos previstos, límites de remediación, acciones reales y verificaciones del rango, con filtros.
+         */
+        get: operations["TratamientoVulnerabilidadController_agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/verificacion-prevista": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Capa 3 · Programar la verificación (admin, analista)
+         * @description Ventana prevista [prevista, límite] para verificar la remediación: tiene su propio plazo.
+         */
+        patch: operations["TratamientoVulnerabilidadController_programarVerificacion"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/plazo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Ampliar el plazo (solo admin)
+         * @description Amplía formalmente el límite de remediación o de verificación, con motivo. Se conserva el original y queda la traza.
+         */
+        patch: operations["TratamientoVulnerabilidadController_ampliarPlazo"];
         trace?: never;
     };
     "/api/vulnerabilidades/lote": {
@@ -1660,6 +1837,66 @@ export interface components {
             /** @example Alta */
             nivel?: string;
         };
+        ActivoBreveDto: {
+            id: number;
+            codigo: string;
+            nombre: string;
+            tipo: string | null;
+            estado: string | null;
+            /**
+             * @description Nivel de criticidad.
+             * @example Alta
+             */
+            criticidad: string;
+            /**
+             * @description Categoría (tipo de activo de GLPI).
+             * @example Computadoras
+             */
+            categoria: string;
+            categoriaId: number;
+        };
+        EventoAgendaDto: {
+            /**
+             * @description Único en la respuesta.
+             * @example mant-ejecucion-12
+             */
+            clave: string;
+            /** @enum {string} */
+            modulo: "respaldos" | "mantenimientos" | "vulnerabilidades";
+            /**
+             * @description 1 planificación · 2 ejecución o tratamiento · 3 verificación o restauración.
+             * @enum {number}
+             */
+            capa: 1 | 2 | 3;
+            /** @enum {string} */
+            tipo: "PREVISTO" | "REAL";
+            /** @example Mantenimiento preventivo */
+            titulo: string;
+            /**
+             * Format: date-time
+             * @description Inicio previsto, o la fecha real.
+             */
+            inicio: string;
+            /**
+             * Format: date-time
+             * @description Límite previsto, o el fin real.
+             */
+            fin: string | null;
+            /** @enum {string} */
+            estado: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            /** @description Se registró fuera del intervalo previsto, como excepción. */
+            fueraDePlazo: boolean;
+            /** @example jperez */
+            responsable: string | null;
+            activo: components["schemas"]["ActivoBreveDto"];
+            /**
+             * @description Ruta del registro en la aplicación.
+             * @example /mantenimientos/12
+             */
+            ruta: string;
+            /** @example Ventana nocturna 22:00–02:00 */
+            detalle: string | null;
+        };
         IndicadorDto: {
             /** @example RES-01 */
             id: string;
@@ -1735,24 +1972,6 @@ export interface components {
             calendario: components["schemas"]["CalendarioPlanDto"][];
             /** @description Ventanas en curso o vencidas sin registro. */
             pendientes: components["schemas"]["PendientesDto"];
-        };
-        ActivoBreveDto: {
-            id: number;
-            codigo: string;
-            nombre: string;
-            tipo: string | null;
-            estado: string | null;
-            /**
-             * @description Nivel de criticidad.
-             * @example Alta
-             */
-            criticidad: string;
-            /**
-             * @description Categoría (tipo de activo de GLPI).
-             * @example Computadoras
-             */
-            categoria: string;
-            categoriaId: number;
         };
         PlanRespaldoDto: {
             /** @enum {string} */
@@ -1956,6 +2175,13 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
+            /** Format: date-time */
+            pruebaPrevista: string | null;
+            /** Format: date-time */
+            pruebaLimite: string | null;
             evidencia: string | null;
             observaciones: string | null;
             id: number;
@@ -2005,6 +2231,29 @@ export interface components {
              */
             evidencia?: string | null;
             observaciones?: string | null;
+            /** @description Fuera de la ventana horaria del plan o antes de su inicio: justificación de la excepción (solo admin). */
+            motivoExcepcion?: string;
+            /**
+             * Format: date-time
+             * @description Capa 3: inicio previsto de la prueba de restauración.
+             */
+            pruebaPrevista?: string;
+            /**
+             * Format: date-time
+             * @description Capa 3: límite previsto de la prueba de restauración.
+             */
+            pruebaLimite?: string;
+        };
+        ProgramarVerificacionDto: {
+            /** Format: date-time */
+            prevista: string;
+            /** Format: date-time */
+            limite: string;
+        };
+        AmpliarPlazoDto: {
+            /** Format: date-time */
+            nuevoLimite: string;
+            motivo: string;
         };
         ModificarEjecucionDto: {
             /**
@@ -2091,6 +2340,9 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             observaciones: string | null;
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
             id: number;
             activoId: number;
             activo: components["schemas"]["ActivoBreveDto"];
@@ -2131,6 +2383,8 @@ export interface components {
             /** @example Coordinación de Infraestructura */
             responsable: string;
             observaciones?: string | null;
+            /** @description Prueba fuera de su ventana prevista: justificación de la excepción (solo admin). */
+            motivoExcepcion?: string;
         };
         ModificarRestauracionDto: {
             /** Format: date */
@@ -2268,6 +2522,8 @@ export interface components {
             responsable: string;
             /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
             actividades: string;
+            /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
+            plazoDias?: number;
             /**
              * @description Sube con cada modificación.
              * @example 1
@@ -2315,6 +2571,8 @@ export interface components {
             responsable: string;
             /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
             actividades: string;
+            /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
+            plazoDias?: number;
             /**
              * @description Activos operativos sin plan vigente de ese tipo.
              * @example [
@@ -2341,6 +2599,8 @@ export interface components {
             responsable?: string;
             /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
             actividades?: string;
+            /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
+            plazoDias?: number;
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
             /** @enum {string} */
@@ -2386,6 +2646,9 @@ export interface components {
             evidencia: string | null;
             responsable: string;
             registradoPor: string;
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
         };
         RegistrarVerificacionMantenimientoDto: {
             /** Format: date-time */
@@ -2402,6 +2665,8 @@ export interface components {
              * @example Acta MT-2026-031
              */
             evidencia?: string;
+            /** @description Fuera de la ventana prevista de verificación: justificación (solo admin). */
+            motivoExcepcion?: string;
             /** @example Mesa de Servicios */
             responsable: string;
         };
@@ -2458,6 +2723,27 @@ export interface components {
             observaciones: string | null;
             evidencia: string | null;
             /**
+             * Format: date-time
+             * @description Límite previsto de la ejecución.
+             */
+            fechaLimite: string | null;
+            /**
+             * Format: date-time
+             * @description Límite antes de ampliarlo.
+             */
+            fechaLimiteOriginal: string | null;
+            /** @description Iniciado o terminado fuera del intervalo previsto, como excepción. */
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
+            /**
+             * Format: date-time
+             * @description Capa 3: inicio previsto de la verificación.
+             */
+            verificacionPrevista: string | null;
+            /** Format: date-time */
+            verificacionLimite: string | null;
+            /**
              * @description Capa 3: según la última verificación vigente (solo en los FINALIZADOS).
              * @enum {string}
              */
@@ -2489,10 +2775,16 @@ export interface components {
             actividad: string;
             /**
              * Format: date-time
-             * @description Fecha programada (puede ser futura).
+             * @description Inicio previsto (puede ser futuro).
              * @example 2026-10-15T08:00:00.000Z
              */
             fecha: string;
+            /**
+             * Format: date-time
+             * @description Límite previsto para completarlo: no anterior al inicio previsto.
+             * @example 2026-10-17T18:00:00.000Z
+             */
+            fechaLimite: string;
         };
         IniciarMantenimientoDto: {
             /**
@@ -2500,11 +2792,20 @@ export interface components {
              * @description Si no se envía, se usa la hora actual del servidor.
              */
             fechaInicio?: string;
+            /** @description Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres). */
+            motivoExcepcion?: string;
             /**
              * @description Técnico que realiza el trabajo.
              * @example jperez
              */
             tecnico?: string;
+        };
+        AmpliarPlazoMantenimientoDto: {
+            /** Format: date-time */
+            nuevoLimite: string;
+            motivo: string;
+            /** @enum {string} */
+            campo: "EJECUCION" | "VERIFICACION";
         };
         FinalizarMantenimientoDto: {
             /** @example Firmware actualizado a v2.4; sin incidencias. */
@@ -2545,6 +2846,18 @@ export interface components {
              * @example Informe técnico MT-031
              */
             evidencia?: string;
+            /** @description Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres). */
+            motivoExcepcion?: string;
+            /**
+             * Format: date-time
+             * @description Capa 3: inicio previsto de la verificación (no anterior al fin).
+             */
+            verificacionPrevista?: string;
+            /**
+             * Format: date-time
+             * @description Capa 3: límite previsto de la verificación.
+             */
+            verificacionLimite?: string;
         };
         CancelarMantenimientoDto: {
             /**
@@ -2563,53 +2876,18 @@ export interface components {
             actividad?: string;
             /**
              * Format: date-time
-             * @description Fecha programada (puede ser futura).
+             * @description Inicio previsto (puede ser futuro).
              * @example 2026-10-15T08:00:00.000Z
              */
             fecha?: string;
-            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
-            motivoCambio: string;
-        };
-        RegistrarLoteDto: {
-            /**
-             * @description Identificador público (se normaliza a mayúsculas).
-             * @example CVE-2026-12345
-             */
-            cve?: string;
-            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
-            descripcion: string;
-            /**
-             * @example ALTO
-             * @enum {string}
-             */
-            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
             /**
              * Format: date-time
-             * @description Fecha de detección (no puede ser futura).
-             * @example 2026-09-30T09:00:00.000Z
-             */
-            fecha: string;
-            /**
-             * Format: date-time
-             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
-             * @example 2026-10-15T23:59:59.000Z
+             * @description Límite previsto para completarlo: no anterior al inicio previsto.
+             * @example 2026-10-17T18:00:00.000Z
              */
             fechaLimite?: string;
-            /**
-             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
-             * @enum {string}
-             */
-            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
-            evidencia?: string;
-            /**
-             * @description Activos operativos afectados.
-             * @example [
-             *       5,
-             *       8
-             *     ]
-             */
-            activoIds: number[];
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
         };
         VulnerabilidadDto: {
             /** @example 1 */
@@ -2657,8 +2935,33 @@ export interface components {
              * @description Fecha de detección.
              */
             fecha: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Límite de remediación (≠ detección).
+             */
             fechaLimite: string | null;
+            /**
+             * Format: date-time
+             * @description Límite antes de ampliarlo.
+             */
+            fechaLimiteOriginal: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio previsto del tratamiento.
+             */
+            tratamientoPrevisto: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio real del tratamiento.
+             */
+            tratamientoIniciadoEn: string | null;
+            /**
+             * Format: date-time
+             * @description Capa 3: inicio previsto de la verificación.
+             */
+            verificacionPrevista: string | null;
+            /** Format: date-time */
+            verificacionLimite: string | null;
             /**
              * Format: date-time
              * @description Se registra automáticamente al mitigar o aceptar el riesgo.
@@ -2681,6 +2984,54 @@ export interface components {
             anuladoPor: string | null;
             motivoAnulacion: string | null;
         };
+        AmpliarPlazoVulnerabilidadDto: {
+            /** Format: date-time */
+            nuevoLimite: string;
+            motivo: string;
+            /** @enum {string} */
+            campo: "REMEDIACION" | "VERIFICACION";
+        };
+        RegistrarLoteDto: {
+            /**
+             * @description Identificador público (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
+            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
+            descripcion: string;
+            /**
+             * @example ALTO
+             * @enum {string}
+             */
+            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /**
+             * Format: date-time
+             * @description Fecha de detección (no puede ser futura).
+             * @example 2026-09-30T09:00:00.000Z
+             */
+            fecha: string;
+            /**
+             * Format: date-time
+             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
+             * @example 2026-10-15T23:59:59.000Z
+             */
+            fechaLimite?: string;
+            /**
+             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
+             * @enum {string}
+             */
+            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
+            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
+            evidencia?: string;
+            /**
+             * @description Activos operativos afectados.
+             * @example [
+             *       5,
+             *       8
+             *     ]
+             */
+            activoIds: number[];
+        };
         EvaluarVulnerabilidadDto: {
             /**
              * @description P1 = atender de inmediato.
@@ -2698,9 +3049,14 @@ export interface components {
             nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
             /**
              * Format: date-time
-             * @description Plazo (SLA) acordado.
+             * @description Límite de remediación (SLA). Fijarlo o adelantarlo; para ampliarlo se usa PATCH /plazo (admin).
              */
             fechaLimite?: string;
+            /**
+             * Format: date-time
+             * @description Inicio previsto del tratamiento (distinto de la detección): no anterior a la detección ni posterior al límite.
+             */
+            tratamientoPrevisto?: string;
         };
         AccionRemediacionDto: {
             /**
@@ -2719,6 +3075,9 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
             id: number;
             vulnerabilidadId: number;
             /** Format: date-time */
@@ -2737,6 +3096,8 @@ export interface components {
             responsable: string;
             /** @example Ticket CHG-2026-118 */
             evidencia?: string;
+            /** @description Acción posterior al límite de remediación: justificación (solo admin). */
+            motivoExcepcion?: string;
         };
         VerificacionVulnerabilidadDto: {
             /**
@@ -2755,6 +3116,9 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            fueraDePlazo: boolean;
+            motivoExcepcion: string | null;
+            excepcionPor: string | null;
             id: number;
             vulnerabilidadId: number;
             /** Format: date-time */
@@ -2780,6 +3144,8 @@ export interface components {
             evidencia: string;
             /** @example Oficial de Seguridad */
             responsable: string;
+            /** @description Verificación fuera de su ventana prevista: justificación (solo admin). */
+            motivoExcepcion?: string;
         };
         PaginatedVulnerabilidadDto: {
             data: components["schemas"]["VulnerabilidadDto"][];
@@ -2822,6 +3188,15 @@ export interface components {
             fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
             /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
             evidencia?: string;
+        };
+        IniciarTratamientoDto: {
+            /**
+             * Format: date-time
+             * @description Inicio real (por defecto, ahora).
+             */
+            fecha?: string;
+            /** @description Fuera del intervalo previsto: justificación (solo admin). */
+            motivoExcepcion?: string;
         };
         AceptarRiesgoDto: {
             /**
@@ -3907,6 +4282,52 @@ export interface operations {
             };
         };
     };
+    AgendaRespaldosController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     TableroRespaldosController_ver: {
         parameters: {
             query?: {
@@ -4436,6 +4857,92 @@ export interface operations {
             };
         };
     };
+    EjecucionesRespaldoController_programarPrueba: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgramarVerificacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EjecucionesRespaldoController_ampliarPlazoPrueba: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmpliarPlazoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EjecucionRespaldoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     EjecucionesRespaldoController_anular: {
         parameters: {
             query?: never;
@@ -4922,6 +5429,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrazaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PlanesMantenimientoController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
@@ -5759,6 +6312,92 @@ export interface operations {
             };
         };
     };
+    MantenimientosController_ampliarPlazo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmpliarPlazoMantenimientoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    MantenimientosController_programarVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgramarVerificacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     MantenimientosController_finalizar: {
         parameters: {
             query?: never;
@@ -5982,6 +6621,165 @@ export interface operations {
                 };
             };
             /** @description No estaba anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_programarVerificacion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProgramarVerificacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TratamientoVulnerabilidadController_ampliarPlazo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AmpliarPlazoVulnerabilidadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado o etapa no permitidos. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6742,7 +7540,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IniciarTratamientoDto"];
+            };
+        };
         responses: {
             200: {
                 headers: {

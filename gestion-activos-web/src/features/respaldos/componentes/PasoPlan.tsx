@@ -15,7 +15,10 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
+import { DatePickerInput } from '@mantine/dates'
 import { useState } from 'react'
+import { Calendario as Agenda } from '../../../shared/calendario/Calendario.tsx'
+import { formatearFecha } from '../../../shared/formato.ts'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
@@ -54,6 +57,7 @@ interface Valores {
   justificacion: string
   estado: string
   motivoCambio: string
+  vigenteDesde: string | null
 }
 
 const VACIO: Valores = {
@@ -69,6 +73,7 @@ const VACIO: Valores = {
   justificacion: '',
   estado: 'VIGENTE',
   motivoCambio: '',
+  vigenteDesde: null,
 }
 
 const requerido = (v: unknown) => (v === '' || v === null || v === undefined ? 'Obligatorio.' : null)
@@ -194,7 +199,7 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
       return
     }
     crear.mutate(
-      { ...parametros, activoIds: seleccion },
+      { ...parametros, activoIds: seleccion, vigenteDesde: v.vigenteDesde ?? undefined },
       {
         onSuccess: (creados) => {
           notifications.show({ color: 'green', title: 'Activos incorporados al plan', message: `${creados.length} plan(es) creado(s).` })
@@ -210,6 +215,7 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
   const anulados = planes.filter((p) => p.anuladoEn).length
 
   return (
+    <Stack gap="md">
     <Grid gap="md">
       <Grid.Col span={{ base: 12, xl: 8 }}>
         <Panel
@@ -258,7 +264,10 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
                     </Table.Td>
                     <Table.Td>{TIPO[p.tipo]}</Table.Td>
                     <Table.Td>{MEDIO[p.medio]}</Table.Td>
-                    <Table.Td>{VENTANA[p.ventana]}</Table.Td>
+                    <Table.Td>
+                      {VENTANA[p.ventana]}
+                      <Text size="xs" c="dimmed">desde {formatearFecha(p.vigenteDesde)}</Text>
+                    </Table.Td>
                     <Table.Td>{p.rpoHoras} h / {p.rtoMinutos} min</Table.Td>
                     <Table.Td>{RETENCION[p.retencion]}</Table.Td>
                     <Table.Td><Cobertura plan={p} tablero={tablero} /></Table.Td>
@@ -318,6 +327,15 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
                   <Select label="Tipo de respaldo" required data={opciones(TIPO)} {...form.getInputProps('tipo')} />
                   <Select label="Medio de almacenamiento" required data={opciones(MEDIO)} {...form.getInputProps('medio')} />
                   <Select label="Ventana de ejecución" required data={opciones(VENTANA)} {...form.getInputProps('ventana')} />
+                  {!editando && (
+                    <DatePickerInput
+                      label="Inicio previsto del plan"
+                      description="Antes de esta fecha, una ejecución es excepción. Por defecto, hoy."
+                      valueFormat="DD MMM YYYY"
+                      clearable
+                      {...form.getInputProps('vigenteDesde')}
+                    />
+                  )}
                   <Select label="Período de retención" required data={opciones(RETENCION)} {...form.getInputProps('retencion')} />
                   <Select label="Frecuencia de prueba de restauración" required data={opciones(FRECUENCIA_PRUEBA)} {...form.getInputProps('frecuenciaPrueba')} />
                   <NumberInput label="RPO comprometido (h)" required min={1} allowDecimal={false} {...form.getInputProps('rpoHoras')} />
@@ -364,5 +382,22 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
       </Grid.Col>
       {acciones.modales}
     </Grid>
+    <Agenda
+      titulo="Calendario de planificación"
+      descripcion="Ventanas previstas de ejecución de cada plan vigente, desde su inicio previsto. Pulse «+» en un día para incorporar activos con ese inicio previsto."
+      modulos={['respaldos']}
+      capa={1}
+      textoCrear="Incorporar activos al plan"
+      onCrear={
+        puedeOperar
+          ? (dia) => {
+              cancelar()
+              form.setFieldValue('vigenteDesde', dia.format('YYYY-MM-DD'))
+              notifications.show({ color: 'blue', title: `Inicio previsto: ${dia.format('DD MMM YYYY')}`, message: 'Seleccione los activos y los parámetros en el formulario.' })
+            }
+          : undefined
+      }
+    />
+    </Stack>
   )
 }

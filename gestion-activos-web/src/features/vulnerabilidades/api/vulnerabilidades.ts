@@ -68,10 +68,11 @@ export function useRegistrarVulnerabilidad() {
 export function useIniciarMitigacion() {
   const invalidar = useInvalidarVulnerabilidades()
   return useMutation({
-    mutationFn: (id: number) =>
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['IniciarTratamientoDto'] }) =>
       ejecutar(
         api.PATCH('/api/vulnerabilidades/{id}/iniciar-mitigacion', {
           params: { path: { id } },
+          body: datos,
         }),
       ),
     onSuccess: invalidar,
@@ -224,6 +225,26 @@ export function useAnularVerificacionVulnerabilidad() {
   return useMutation({
     mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
       ejecutar(api.POST('/api/vulnerabilidades/verificaciones/{id}/anular', { params: { path: { id } }, body: { motivo } })),
+    onSuccess: invalidar,
+  })
+}
+
+// ── Plazos: ampliación formal (admin) y ventana de verificación ─────────────
+
+export function useAmpliarPlazoVulnerabilidad() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['AmpliarPlazoVulnerabilidadDto'] }) =>
+      ejecutar(api.PATCH('/api/vulnerabilidades/{id}/plazo', { params: { path: { id } }, body: datos })),
+    onSuccess: invalidar,
+  })
+}
+
+export function useProgramarVerificacionVulnerabilidad() {
+  const invalidar = useInvalidarVulnerabilidades()
+  return useMutation({
+    mutationFn: ({ id, prevista, limite }: { id: number; prevista: string; limite: string }) =>
+      ejecutar(api.PATCH('/api/vulnerabilidades/{id}/verificacion-prevista', { params: { path: { id } }, body: { prevista, limite } })),
     onSuccess: invalidar,
   })
 }

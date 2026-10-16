@@ -1,4 +1,5 @@
 import {
+  IconCalendarMonth,
   IconCategory,
   IconDatabaseExport,
   IconLayoutDashboard,
@@ -53,6 +54,13 @@ export const MENU: readonly ItemMenu[] = [
     ruta: '/vulnerabilidades',
     icono: IconShieldExclamation,
     descripcion: 'Riesgos, mitigación y plazos (SLA).',
+    roles: [],
+  },
+  {
+    etiqueta: 'Calendario',
+    ruta: '/calendario',
+    icono: IconCalendarMonth,
+    descripcion: 'Lo planificado, lo ejecutado y lo verificado de los tres módulos.',
     roles: [],
   },
   {

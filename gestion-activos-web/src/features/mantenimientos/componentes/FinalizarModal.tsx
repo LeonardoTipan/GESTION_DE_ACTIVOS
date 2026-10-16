@@ -15,17 +15,15 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
-import { useFinalizarMantenimiento, type EstadoEquipo } from '../api/mantenimientos.ts'
+import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
+import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
+import { useFinalizarMantenimiento, type EstadoEquipo, type Mantenimiento } from '../api/mantenimientos.ts'
 import { ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
 
 interface Props {
   opened: boolean
   onClose: () => void
-  mantenimientoId: number
-  /** ISO del inicio: el fin no puede ser anterior. */
-  fechaInicio: string | null
-  /** Técnico indicado al iniciar, si lo hubo. */
-  tecnico: string | null
+  mantenimiento: Mantenimiento
 }
 
 interface Valores {
@@ -39,6 +37,9 @@ interface Valores {
   repuestos: string
   observaciones: string
   evidencia: string
+  motivoExcepcion: string
+  verificacionPrevista: string | null
+  verificacionLimite: string | null
 }
 
 const maximo = (n: number) => (v: string) => (v.trim().length > n ? `Máximo ${n} caracteres` : null)
@@ -55,7 +56,13 @@ export function FinalizarModal({ opened, onClose, ...resto }: Props) {
   )
 }
 
-function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<Props, 'opened'>) {
+/** Si ya se inició fuera de plazo (con su excepción), la API no vuelve a pedirla al finalizar. */
+function finFueraDePlazo(m: Mantenimiento, fin: string | null) {
+  return m.fechaLimite && !m.fueraDePlazo ? avisoFueraDePlazo('El fin real', fin, null, m.fechaLimite) : null
+}
+
+function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
+  const { fechaInicio, tecnico } = m
   const finalizar = useFinalizarMantenimiento()
   const form = useForm<Valores>({
     initialValues: {
@@ -69,6 +76,9 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
       repuestos: '',
       observaciones: '',
       evidencia: '',
+      motivoExcepcion: '',
+      verificacionPrevista: null,
+      verificacionLimite: null,
     },
     validate: {
       resultado: (v) => (!v.trim() ? 'Describe las actividades realizadas' : maximo(191)(v)),
@@ -86,14 +96,28 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
       repuestos: maximo(2000),
       observaciones: maximo(2000),
       evidencia: maximo(191),
+      motivoExcepcion: (v, valores) => errorExcepcion(finFueraDePlazo(m, valores.fechaFin), v),
+      verificacionPrevista: (v, valores) =>
+        !v && valores.verificacionLimite
+          ? 'Indica también el inicio previsto'
+          : v && valores.fechaFin && dayjs(v).isBefore(dayjs(valores.fechaFin))
+            ? 'No puede ser anterior al fin'
+            : null,
+      verificacionLimite: (v, valores) =>
+        !v && valores.verificacionPrevista
+          ? 'Indica también el límite'
+          : v && valores.verificacionPrevista && dayjs(v).isBefore(dayjs(valores.verificacionPrevista))
+            ? 'No puede ser anterior al inicio previsto'
+            : null,
     },
   })
 
+  const fuera = finFueraDePlazo(m, form.values.fechaFin)
   const opcional = (v: string) => v.trim() || undefined
   const enviar = form.onSubmit((v) =>
     finalizar.mutate(
       {
-        id: mantenimientoId,
+        id: m.id,
         datos: {
           estadoEquipo: v.estadoEquipo,
           resultado: v.resultado.trim(),
@@ -105,6 +129,9 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
           repuestos: opcional(v.repuestos),
           observaciones: opcional(v.observaciones),
           evidencia: opcional(v.evidencia),
+          motivoExcepcion: fuera ? v.motivoExcepcion.trim() : undefined,
+          verificacionPrevista: v.verificacionPrevista ? fechaHoraLocalAIso(v.verificacionPrevista) : undefined,
+          verificacionLimite: v.verificacionLimite ? fechaHoraLocalAIso(v.verificacionLimite) : undefined,
         },
       },
       {
@@ -160,6 +187,12 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
             {...form.getInputProps('costo')}
           />
         </SimpleGrid>
+        <CampoExcepcion
+          fuera={fuera}
+          value={form.values.motivoExcepcion}
+          onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
+          error={form.errors.motivoExcepcion as string | undefined}
+        />
         <Textarea
           label="Diagnóstico"
           withAsterisk
@@ -192,6 +225,30 @@ function FormFinalizar({ onClose, mantenimientoId, fechaInicio, tecnico }: Omit<
           />
         </SimpleGrid>
         <Textarea label="Observaciones" autosize minRows={1} {...form.getInputProps('observaciones')} />
+        <div>
+          <Text size="sm" fw={500}>
+            Verificación prevista (capa 3, opcional)
+          </Text>
+          <Text size="xs" c="dimmed" mb={4}>
+            Tiene su propio plazo: no tiene que caber en el de la ejecución. También se puede programar después.
+          </Text>
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <DateTimePicker
+              label="Inicio previsto"
+              valueFormat="DD MMM YYYY HH:mm"
+              clearable
+              minDate={form.values.fechaFin ? new Date(form.values.fechaFin) : undefined}
+              {...form.getInputProps('verificacionPrevista')}
+            />
+            <DateTimePicker
+              label="Límite"
+              valueFormat="DD MMM YYYY HH:mm"
+              clearable
+              minDate={form.values.verificacionPrevista ? new Date(form.values.verificacionPrevista) : undefined}
+              {...form.getInputProps('verificacionLimite')}
+            />
+          </SimpleGrid>
+        </div>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver

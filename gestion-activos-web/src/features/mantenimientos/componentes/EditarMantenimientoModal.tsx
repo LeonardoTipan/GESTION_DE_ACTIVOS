@@ -2,6 +2,7 @@ import { Button, Group, Modal, SegmentedControl, Stack, Text, Textarea } from '@
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
+import dayjs from 'dayjs'
 import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
@@ -35,11 +36,12 @@ export function EditarMantenimientoModal({ opened, onClose, mantenimiento }: Pro
 
 function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
   const editar = useEditarMantenimiento()
-  const form = useForm<{ tipo: TipoMantenimiento; actividad: string; fecha: string | null; motivoCambio: string }>({
+  const form = useForm<{ tipo: TipoMantenimiento; actividad: string; fecha: string | null; fechaLimite: string | null; motivoCambio: string }>({
     initialValues: {
       tipo: mantenimiento.tipo,
       actividad: mantenimiento.actividad,
       fecha: isoAFechaHoraLocal(mantenimiento.fecha),
+      fechaLimite: mantenimiento.fechaLimite ? isoAFechaHoraLocal(mantenimiento.fechaLimite) : null,
       motivoCambio: '',
     },
     validate: {
@@ -50,7 +52,13 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           : v.trim().length > 191
             ? 'Máximo 191 caracteres'
             : null,
-      fecha: (v) => (v ? null : 'Indica la fecha programada'),
+      fecha: (v) => (v ? null : 'Indica el inicio previsto'),
+      fechaLimite: (v, valores) =>
+        !v
+          ? 'Indica la fecha límite'
+          : valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
+            ? 'La fecha límite no puede ser anterior al inicio previsto'
+            : null,
     },
   })
 
@@ -62,6 +70,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           tipo: v.tipo,
           actividad: v.actividad.trim(),
           fecha: fechaHoraLocalAIso(v.fecha!),
+          fechaLimite: fechaHoraLocalAIso(v.fechaLimite!),
           motivoCambio: v.motivoCambio.trim(),
         },
       },
@@ -103,18 +112,27 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
           minRows={2}
           {...form.getInputProps('actividad')}
         />
-        <DateTimePicker
-          label="Fecha programada"
-          valueFormat="DD MMM YYYY HH:mm"
-          withAsterisk
-          {...form.getInputProps('fecha')}
-        />
+        <Group grow align="flex-start">
+          <DateTimePicker
+            label="Inicio previsto"
+            valueFormat="DD MMM YYYY HH:mm"
+            withAsterisk
+            {...form.getInputProps('fecha')}
+          />
+          <DateTimePicker
+            label="Fecha límite"
+            valueFormat="DD MMM YYYY HH:mm"
+            withAsterisk
+            minDate={form.values.fecha ? new Date(form.values.fecha) : undefined}
+            {...form.getInputProps('fechaLimite')}
+          />
+        </Group>
         <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
-          <Button type="submit" loading={editar.isPending} disabled={!form.isDirty()}>
+          <Button type="submit" loading={editar.isPending || editar.isSuccess} disabled={!form.isDirty()}>
             Guardar cambios
           </Button>
         </Group>

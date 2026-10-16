@@ -2,7 +2,9 @@ import { MantineProvider } from '@mantine/core'
 import { DatesProvider } from '@mantine/dates'
 import { ModalsProvider } from '@mantine/modals'
 import { Notifications } from '@mantine/notifications'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { CLAVE_AGENDA } from '../shared/calendario/api.ts'
+import dayjs from 'dayjs'
 import 'dayjs/locale/es'
 import type { User } from 'oidc-client-ts'
 import { AuthProvider } from 'react-oidc-context'
@@ -11,10 +13,17 @@ import { userManager, type EstadoLogin } from '../features/auth/user-manager.ts'
 import { router } from './router.tsx'
 import { theme } from './theme.ts'
 
-const queryClient = new QueryClient({
+// Fechas en español también fuera de los componentes de Mantine (calendarios, textos con dayjs).
+dayjs.locale('es')
+
+const queryClient: QueryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, refetchOnWindowFocus: false },
   },
+  // Cualquier cambio guardado puede mover un evento: los calendarios se recalculan.
+  mutationCache: new MutationCache({
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: CLAVE_AGENDA }),
+  }),
 })
 
 /** Al volver de Keycloak: quita ?code=... de la URL y regresa a la ruta pedida. */

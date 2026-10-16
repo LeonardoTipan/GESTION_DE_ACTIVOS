@@ -7,7 +7,7 @@ const rutas = (roles: Parameters<typeof menuPara>[0]) =>
 describe('menuPara', () => {
   it('admin ve todo, incluidos los catálogos', () => {
     expect(rutas(['admin'])).toContain('/catalogos')
-    expect(rutas(['admin'])).toHaveLength(6)
+    expect(rutas(['admin'])).toHaveLength(7)
   })
 
   it('analista y auditor no ven los catálogos', () => {
@@ -19,6 +19,7 @@ describe('menuPara', () => {
         '/respaldos',
         '/mantenimientos',
         '/vulnerabilidades',
+        '/calendario',
       ])
     }
   })

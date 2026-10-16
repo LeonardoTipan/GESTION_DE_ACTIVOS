@@ -16,13 +16,20 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
+import { DateTimePicker } from '@mantine/dates'
+import dayjs from 'dayjs'
 import { useState } from 'react'
-import { formatearFecha } from '../../../shared/formato.ts'
+import { Calendario as Agenda } from '../../../shared/calendario/Calendario.tsx'
+import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { AmpliarPlazoModal, CampoExcepcion, VentanaModal } from '../../../shared/plazos/componentes.tsx'
+import { fmt, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
-import { usePuedeOperar } from '../../auth/use-puede.ts'
+import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import {
+  useAmpliarPlazoPrueba,
   useModificarEjecucion,
+  useProgramarPrueba,
   useRegistrarEjecucion,
   type Ejecucion,
   type Plan,
@@ -37,12 +44,15 @@ import {
   opciones,
   RESULTADO,
   TIPO,
+  VENTANA,
 } from '../catalogos.ts'
 import { useAccionesRegistro } from './acciones.tsx'
 import { Calendario, Panel } from './comunes.tsx'
-import { fechaDeVentana, folio } from '../folios.ts'
+import { dentroDeVentana, fechaDeVentana, folio, HORA_SUGERIDA } from '../folios.ts'
 
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => dayjs().format('YYYY-MM-DD')
+/** Una fecha real no puede ser futura (5 min de margen, como la API). */
+const esFutura = (f: string) => dayjs(f).isAfter(dayjs().add(5, 'minute'))
 
 interface Valores {
   planId: string
@@ -61,6 +71,9 @@ interface Valores {
   evidencia: string
   observaciones: string
   motivoCambio: string
+  motivoExcepcion: string
+  pruebaPrevista: string | null
+  pruebaLimite: string | null
 }
 
 const VACIO: Valores = {
@@ -80,6 +93,9 @@ const VACIO: Valores = {
   evidencia: '',
   observaciones: '',
   motivoCambio: '',
+  motivoExcepcion: '',
+  pruebaPrevista: null,
+  pruebaLimite: null,
 }
 
 const requerido = (v: unknown) => (v === '' || v === null || v === undefined ? 'Obligatorio.' : null)
@@ -105,12 +121,45 @@ export function PasoEjecucion({
   const [editando, setEditando] = useState<Ejecucion | null>(null)
   const [ventana, setVentana] = useState<{ planId: number; ventana: VentanaCalendario } | null>(null)
   const vigentes = planes.filter((p) => !p.anuladoEn && p.estado === 'VIGENTE')
+  const admin = usePuedeAdministrar()
+
+  /** Por qué la hora real queda fuera del plan (antes de su inicio o de su ventana), como en la API; o null. */
+  const fueraDelPlan = (v: Pick<Valores, 'planId' | 'fecha'>): string | null => {
+    const plan = planes.find((p) => String(p.id) === v.planId)
+    if (!plan || !v.fecha) return null
+    const inicio = dayjs(plan.vigenteDesde).format('YYYY-MM-DD')
+    if (dayjs(v.fecha).format('YYYY-MM-DD') < inicio) return `La ejecución es anterior al inicio previsto del plan (${inicio}).`
+    if (!dentroDeVentana(plan.ventana, dayjs(v.fecha).toDate())) return `La ejecución está fuera de la ventana ${VENTANA[plan.ventana].toLowerCase()} del plan.`
+    return null
+  }
+  /** Al modificar, solo se reevalúa si la fecha cambia (como en la API). */
+  const fechaCambiada = (fecha: string) => !editando || !dayjs(fecha).isSame(dayjs(editando.fecha))
 
   const form = useForm<Valores>({
-    initialValues: { ...VACIO, fecha: hoy() },
+    initialValues: { ...VACIO, fecha: ahoraLocal() },
     validate: {
       planId: (v) => (editando ? null : requerido(v)),
-      fecha: (v) => (!v ? 'Obligatorio.' : v > hoy() ? 'No puede ser futura.' : null),
+      fecha: (f, v) =>
+        !f
+          ? 'Obligatorio.'
+          : esFutura(f)
+            ? 'No puede ser futura.'
+            : editando && !admin && fechaCambiada(f) && fueraDelPlan(v)
+              ? 'Fuera del plan: solo un administrador puede corregirla a esta fecha.'
+              : null,
+      motivoExcepcion: (m, v) => (editando ? null : errorExcepcion(fueraDelPlan(v), m)),
+      pruebaPrevista: (p, v) =>
+        !p && v.pruebaLimite
+          ? 'Indique también el inicio previsto.'
+          : p && v.fecha && dayjs(p).isBefore(dayjs(v.fecha))
+            ? 'No puede ser anterior a la ejecución.'
+            : null,
+      pruebaLimite: (l, v) =>
+        !l && v.pruebaPrevista
+          ? 'Indique también el límite.'
+          : l && v.pruebaPrevista && dayjs(l).isBefore(dayjs(v.pruebaPrevista))
+            ? 'No puede ser anterior al inicio previsto.'
+            : null,
       tipo: requerido,
       medio: requerido,
       resultado: requerido,
@@ -136,7 +185,9 @@ export function PasoEjecucion({
   const seleccionarVentana = (planId: number, w: VentanaCalendario) => {
     setEditando(null)
     setVentana({ planId, ventana: w })
-    form.setValues({ ...VACIO, fecha: fechaDeVentana(w, hoy()) })
+    const plan = vigentes.find((p) => p.id === planId)
+    const dia = fechaDeVentana(w, hoy())
+    form.setValues({ ...VACIO, fecha: `${dia} ${plan ? HORA_SUGERIDA[plan.ventana] : '09:00'}:00` })
     cargarPlan(String(planId))
   }
 
@@ -146,7 +197,7 @@ export function PasoEjecucion({
     form.setValues({
       ...VACIO,
       planId: String(e.planId),
-      fecha: e.fecha.slice(0, 10),
+      fecha: isoAFechaHoraLocal(e.fecha),
       tipo: e.tipo,
       medio: e.medio,
       volumenGb: e.volumenGb,
@@ -165,12 +216,12 @@ export function PasoEjecucion({
   const limpiar = () => {
     setEditando(null)
     setVentana(null)
-    form.setValues({ ...VACIO, fecha: hoy() })
+    form.setValues({ ...VACIO, fecha: ahoraLocal() })
   }
 
   const enviar = form.onSubmit((v) => {
     const datos = {
-      fecha: `${v.fecha}T00:00:00.000Z`,
+      fecha: fechaHoraLocalAIso(v.fecha),
       tipo: v.tipo as Ejecucion['tipo'],
       medio: v.medio as Ejecucion['medio'],
       volumenGb: Number(v.volumenGb),
@@ -188,7 +239,7 @@ export function PasoEjecucion({
     const error = (e: Error) => notifications.show({ color: 'red', title: 'No se pudo guardar', message: e.message })
     if (editando) {
       modificar.mutate(
-        { id: editando.id, datos: { ...datos, motivoCambio: v.motivoCambio.trim() } },
+        { id: editando.id, datos: { ...datos, fecha: fechaCambiada(v.fecha) ? datos.fecha : undefined, motivoCambio: v.motivoCambio.trim() } },
         {
           onSuccess: (e) => {
             notifications.show({ color: 'green', title: 'Respaldo modificado', message: `${folio('RES', e.id)} · versión ${e.version}` })
@@ -200,7 +251,13 @@ export function PasoEjecucion({
       return
     }
     registrar.mutate(
-      { ...datos, planId: Number(v.planId) },
+      {
+        ...datos,
+        planId: Number(v.planId),
+        motivoExcepcion: fueraDelPlan(v) ? v.motivoExcepcion.trim() : undefined,
+        pruebaPrevista: v.pruebaPrevista ? fechaHoraLocalAIso(v.pruebaPrevista) : undefined,
+        pruebaLimite: v.pruebaLimite ? fechaHoraLocalAIso(v.pruebaLimite) : undefined,
+      },
       {
         onSuccess: (e) => {
           notifications.show({ color: 'green', title: 'Respaldo registrado', message: `${folio('RES', e.id)} · ${e.activo.nombre}` })
@@ -256,7 +313,14 @@ export function PasoEjecucion({
                     return (
                       <Table.Tr key={e.id} style={{ opacity: e.anuladoEn ? 0.55 : 1 }}>
                         <Table.Td ff="monospace" td={e.anuladoEn ? 'line-through' : undefined}>{folio('RES', e.id)}</Table.Td>
-                        <Table.Td>{formatearFecha(e.fecha)}</Table.Td>
+                        <Table.Td>
+                          {formatearFechaHora(e.fecha)}
+                          {e.fueraDePlazo && (
+                            <Text size="xs" c="orange" title={`${e.motivoExcepcion ?? ''} (autorizó ${e.excepcionPor ?? '—'})`}>
+                              ⚠ fuera del plan
+                            </Text>
+                          )}
+                        </Table.Td>
                         <Table.Td>
                           {e.activo.nombre}
                           <Text size="xs" c="dimmed">{e.activo.categoria}</Text>
@@ -280,6 +344,7 @@ export function PasoEjecucion({
                           <Badge size="sm" color={COLOR_RESULTADO[e.resultado]} variant="light">{RESULTADO[e.resultado]}</Badge>
                           {e.evidencia && <Text size="xs" c="dimmed">evid.: {e.evidencia}</Text>}
                           {e.observaciones && <Text size="xs" c="dimmed" lineClamp={2}>{e.observaciones}</Text>}
+                          <PruebaPrevista ejecucion={e} />
                         </Table.Td>
                         <Table.Td><BadgeRegistro registro={e} /></Table.Td>
                         <Table.Td>
@@ -337,7 +402,14 @@ export function PasoEjecucion({
                     />
                   )}
                   <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                    <TextInput type="date" label="Fecha de ejecución" required max={hoy()} {...form.getInputProps('fecha')} />
+                    <DateTimePicker
+                      label="Fecha y hora real de ejecución"
+                      description="Hora local; se compara con la ventana del plan"
+                      valueFormat="DD MMM YYYY HH:mm"
+                      required
+                      maxDate={new Date()}
+                      {...form.getInputProps('fecha')}
+                    />
                     <Select label="Tipo de respaldo" required data={opciones(TIPO)} {...form.getInputProps('tipo')} />
                     <Select label="Medio de almacenamiento" required data={opciones(MEDIO)} {...form.getInputProps('medio')} />
                     <NumberInput label="Volumen (GB)" required min={0} allowDecimal={false} {...form.getInputProps('volumenGb')} />
@@ -346,6 +418,22 @@ export function PasoEjecucion({
                     <Select label="Resultado" required data={opciones(RESULTADO)} {...form.getInputProps('resultado')} />
                     <TextInput label="Responsable" required {...form.getInputProps('responsable')} />
                   </SimpleGrid>
+                  {editando ? (
+                    fechaCambiada(form.values.fecha) &&
+                    fueraDelPlan(form.values) &&
+                    admin && (
+                      <Alert color="orange" title="La nueva fecha queda fuera del plan">
+                        {fueraDelPlan(form.values)} Se registrará como excepción y el motivo del cambio será su justificación.
+                      </Alert>
+                    )
+                  ) : (
+                    <CampoExcepcion
+                      fuera={fueraDelPlan(form.values)}
+                      value={form.values.motivoExcepcion}
+                      onChange={(m) => form.setFieldValue('motivoExcepcion', m)}
+                      error={form.errors.motivoExcepcion as string | undefined}
+                    />
+                  )}
                   <Group gap="md">
                     <Checkbox label="Cifrado (A.8.24)" {...form.getInputProps('cifrado', { type: 'checkbox' })} />
                     <Checkbox label="Copia fuera de sitio" {...form.getInputProps('fueraSitio', { type: 'checkbox' })} />
@@ -359,6 +447,20 @@ export function PasoEjecucion({
                     {...form.getInputProps('evidencia')}
                   />
                   <Textarea label="Observaciones" autosize minRows={1} placeholder="Incidencias, causa de un fallo…" {...form.getInputProps('observaciones')} />
+                  {!editando && form.values.resultado !== 'FALLIDO' && (
+                    <div>
+                      <Text size="sm" fw={500}>
+                        Prueba de restauración prevista (paso 3, opcional)
+                      </Text>
+                      <Text size="xs" c="dimmed" mb={4}>
+                        Tiene su propio plazo. También se puede programar después desde la tabla.
+                      </Text>
+                      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                        <DateTimePicker label="Inicio previsto" valueFormat="DD MMM YYYY HH:mm" clearable {...form.getInputProps('pruebaPrevista')} />
+                        <DateTimePicker label="Límite" valueFormat="DD MMM YYYY HH:mm" clearable {...form.getInputProps('pruebaLimite')} />
+                      </SimpleGrid>
+                    </div>
+                  )}
                   {editando && (
                     <Textarea
                       label="Motivo del cambio"
@@ -385,7 +487,72 @@ export function PasoEjecucion({
           </Panel>
         </Grid.Col>
       </Grid>
+      <Agenda
+        titulo="Calendario de ejecución: previsto y real"
+        descripcion="Ventanas previstas (trazo discontinuo) frente a las ejecuciones registradas con su hora real; ⚠ las registradas como excepción."
+        modulos={['respaldos']}
+        capa={2}
+      />
       {acciones.modales}
     </Stack>
+  )
+}
+
+/**
+ * Capa 3 · Ventana prevista de la prueba de restauración de esta copia, con su
+ * propio plazo. Una ya programada solo la cambia o amplía un admin.
+ */
+function PruebaPrevista({ ejecucion: e }: { ejecucion: Ejecucion }) {
+  const operar = usePuedeOperar()
+  const admin = usePuedeAdministrar()
+  const programar = useProgramarPrueba()
+  const ampliar = useAmpliarPlazoPrueba()
+  const [modal, setModal] = useState<'programar' | 'ampliar' | null>(null)
+  if (e.anuladoEn || e.resultado === 'FALLIDO') return null
+  const cerrar = () => setModal(null)
+  const opciones = (titulo: string) => ({
+    onSuccess: () => {
+      notifications.show({ color: 'green', title: titulo, message: 'El cambio queda en las trazas.' })
+      cerrar()
+    },
+    onError: (err: Error) => notifications.show({ color: 'red', title: 'No se pudo guardar', message: err.message }),
+  })
+  return (
+    <>
+      <Text size="xs" c="dimmed">
+        Prueba: {e.pruebaPrevista ? `${fmt(e.pruebaPrevista)} → ${fmt(e.pruebaLimite)}` : 'sin programar'}
+      </Text>
+      <Group gap={4}>
+        {operar && (!e.pruebaPrevista || admin) && (
+          <Button size="compact-xs" variant="subtle" onClick={() => setModal('programar')}>
+            {e.pruebaPrevista ? 'Reprogramar prueba' : 'Programar prueba'}
+          </Button>
+        )}
+        {admin && e.pruebaLimite && (
+          <Button size="compact-xs" variant="subtle" color="orange" onClick={() => setModal('ampliar')}>
+            Ampliar plazo
+          </Button>
+        )}
+      </Group>
+      <VentanaModal
+        abierto={modal === 'programar'}
+        onCerrar={cerrar}
+        titulo={`Programar la prueba de restauración de ${folio('RES', e.id)}`}
+        explicacion="La prueba comprueba que esta copia se puede restaurar. Tiene su propio plazo; no puede empezar antes de la ejecución."
+        prevista={e.pruebaPrevista}
+        limite={e.pruebaLimite}
+        minimo={e.fecha}
+        enviando={programar.isPending}
+        onConfirmar={(prevista, limite) => programar.mutate({ id: e.id, prevista, limite }, opciones('Prueba programada'))}
+      />
+      <AmpliarPlazoModal
+        abierto={modal === 'ampliar'}
+        onCerrar={cerrar}
+        titulo={`Ampliar el plazo de la prueba de ${folio('RES', e.id)}`}
+        limiteActual={e.pruebaLimite}
+        enviando={ampliar.isPending}
+        onConfirmar={(nuevoLimite, motivo) => ampliar.mutate({ id: e.id, nuevoLimite, motivo }, opciones('Plazo ampliado'))}
+      />
+    </>
   )
 }

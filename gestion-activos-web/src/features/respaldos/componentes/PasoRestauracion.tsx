@@ -16,11 +16,16 @@ import {
 } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
+import { DateTimePicker } from '@mantine/dates'
+import dayjs from 'dayjs'
 import { useState } from 'react'
-import { formatearFecha } from '../../../shared/formato.ts'
+import { Calendario as Agenda } from '../../../shared/calendario/Calendario.tsx'
+import { ahoraLocal, fechaHoraLocalAIso, formatearFecha, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
+import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
-import { usePuedeOperar } from '../../auth/use-puede.ts'
+import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
 import {
   useEjecucionesRestaurables,
   useModificarRestauracion,
@@ -35,7 +40,9 @@ import { useAccionesRegistro } from './acciones.tsx'
 import { Calendario, Panel } from './comunes.tsx'
 import { fechaDeVentana, folio } from '../folios.ts'
 
-const hoy = () => new Date().toISOString().slice(0, 10)
+const hoy = () => dayjs().format('YYYY-MM-DD')
+/** Una fecha real no puede ser futura (5 min de margen, como la API). */
+const esFutura = (f: string) => dayjs(f).isAfter(dayjs().add(5, 'minute'))
 
 interface Valores {
   ejecucionId: string
@@ -49,6 +56,7 @@ interface Valores {
   integridad: boolean
   observaciones: string
   motivoCambio: string
+  motivoExcepcion: string
 }
 
 const VACIO: Valores = {
@@ -63,6 +71,7 @@ const VACIO: Valores = {
   integridad: true,
   observaciones: '',
   motivoCambio: '',
+  motivoExcepcion: '',
 }
 
 const requerido = (v: unknown) => (v === '' || v === null || v === undefined ? 'Obligatorio.' : null)
@@ -88,6 +97,18 @@ export function PasoRestauracion({
   const acciones = useAccionesRegistro('restauraciones')
   const [editando, setEditando] = useState<Restauracion | null>(null)
   const [ventana, setVentana] = useState<{ plan: Plan; ventana: VentanaCalendario } | null>(null)
+  const admin = usePuedeAdministrar()
+
+  const origenDe = (v: Pick<Valores, 'ejecucionId'>) => (fuentes.data ?? []).find((e) => String(e.id) === v.ejecucionId)
+  /** Una prueba PROGRAMADA se compara con la ventana prevista de su copia (como la API); otro motivo, no. */
+  const fueraDePrueba = (v: Pick<Valores, 'ejecucionId' | 'motivo' | 'fecha'>) => {
+    const origen = origenDe(v)
+    if (v.motivo !== 'PRUEBA_PROGRAMADA' || !origen?.pruebaPrevista) return null
+    return avisoFueraDePlazo('La prueba de restauración', v.fecha, origen.pruebaPrevista, origen.pruebaLimite)
+  }
+  /** Al modificar, la API solo reevalúa si cambian la fecha o el motivo. */
+  const cambiaLoEvaluado = (v: Pick<Valores, 'fecha' | 'motivo'>) =>
+    !editando || !dayjs(v.fecha).isSame(dayjs(editando.fecha)) || v.motivo !== editando.motivo
 
   // Al venir de una ventana de prueba, solo los respaldos de ese activo anteriores a su cierre.
   const disponibles = (fuentes.data ?? []).filter(
@@ -95,11 +116,23 @@ export function PasoRestauracion({
   )
 
   const form = useForm<Valores>({
-    initialValues: { ...VACIO, fecha: hoy() },
+    initialValues: { ...VACIO, fecha: ahoraLocal() },
     validate: {
       ejecucionId: (v) => (editando ? null : requerido(v)),
-      fecha: (v) => (!v ? 'Obligatorio.' : v > hoy() ? 'No puede ser futura.' : null),
-      motivo: requerido,
+      fecha: (f, v) => {
+        if (!f) return 'Obligatorio.'
+        if (esFutura(f)) return 'No puede ser futura.'
+        const origen = origenDe(v)
+        if (origen && dayjs(f).isBefore(dayjs(origen.fecha))) return 'No puede ser anterior a la ejecución del respaldo.'
+        if (editando && !admin && cambiaLoEvaluado(v) && fueraDePrueba(v)) return 'Fuera de la ventana de la prueba: solo un administrador puede corregirla así.'
+        return null
+      },
+      motivoExcepcion: (m, v) => (editando ? null : errorExcepcion(fueraDePrueba(v), m)),
+      motivo: (m, v) =>
+        requerido(m) ??
+        (m === 'PRUEBA_PROGRAMADA' && origenDe(v) && !origenDe(v)?.pruebaPrevista
+          ? 'Esta copia no tiene prueba programada: prográmela en el paso 2 o elija otro motivo.'
+          : null),
       resultado: requerido,
       tiempoRealMin: entero(0),
       rtoMinutos: entero(1),
@@ -117,7 +150,7 @@ export function PasoRestauracion({
     setVentana({ plan, ventana: w })
     form.setValues({
       ...VACIO,
-      fecha: fechaDeVentana(w, hoy()),
+      fecha: fechaDeVentana(w, hoy()) === hoy() ? ahoraLocal() : `${fechaDeVentana(w, hoy())} 12:00:00`,
       motivo: 'PRUEBA_PROGRAMADA',
       rtoMinutos: plan.rtoMinutos,
       responsable: plan.responsable,
@@ -138,7 +171,7 @@ export function PasoRestauracion({
     form.setValues({
       ...VACIO,
       ejecucionId: String(r.ejecucionId),
-      fecha: r.fecha.slice(0, 10),
+      fecha: isoAFechaHoraLocal(r.fecha),
       motivo: r.motivo,
       resultado: r.resultado,
       tiempoRealMin: r.tiempoRealMin,
@@ -152,12 +185,12 @@ export function PasoRestauracion({
   const limpiar = () => {
     setEditando(null)
     setVentana(null)
-    form.setValues({ ...VACIO, fecha: hoy() })
+    form.setValues({ ...VACIO, fecha: ahoraLocal() })
   }
 
   const enviar = form.onSubmit((v) => {
     const datos = {
-      fecha: `${v.fecha}T00:00:00.000Z`,
+      fecha: fechaHoraLocalAIso(v.fecha),
       motivo: v.motivo as Restauracion['motivo'],
       resultado: v.resultado as Restauracion['resultado'],
       tiempoRealMin: Number(v.tiempoRealMin),
@@ -182,7 +215,7 @@ export function PasoRestauracion({
       return
     }
     registrar.mutate(
-      { ...datos, ejecucionId: Number(v.ejecucionId) },
+      { ...datos, ejecucionId: Number(v.ejecucionId), motivoExcepcion: fueraDePrueba(v) ? v.motivoExcepcion.trim() : undefined },
       {
         onSuccess: (r) => {
           notifications.show({ color: 'green', title: 'Restauración registrada', message: `${folio('RST', r.id)} · ${r.activo.nombre}` })
@@ -235,7 +268,14 @@ export function PasoRestauracion({
                   {restauraciones.map((r) => (
                     <Table.Tr key={r.id} style={{ opacity: r.anuladoEn ? 0.55 : 1 }}>
                       <Table.Td ff="monospace" td={r.anuladoEn ? 'line-through' : undefined}>{folio('RST', r.id)}</Table.Td>
-                      <Table.Td>{formatearFecha(r.fecha)}</Table.Td>
+                      <Table.Td>
+                        {formatearFechaHora(r.fecha)}
+                        {r.fueraDePlazo && (
+                          <Text size="xs" c="orange" title={`${r.motivoExcepcion ?? ''} (autorizó ${r.excepcionPor ?? '—'})`}>
+                            ⚠ fuera de la ventana
+                          </Text>
+                        )}
+                      </Table.Td>
                       <Table.Td>{r.activo.nombre}</Table.Td>
                       <Table.Td ff="monospace">{folio('RES', r.ejecucionId)}</Table.Td>
                       <Table.Td>{MOTIVO_RESTAURACION[r.motivo]}</Table.Td>
@@ -307,14 +347,14 @@ export function PasoRestauracion({
                       description="Determina el activo restaurado y el RTO comprometido en su plan."
                       data={disponibles.map((e) => ({
                         value: String(e.id),
-                        label: `${folio('RES', e.id)} · ${e.activo.nombre} · ${formatearFecha(e.fecha)} · ${TIPO[e.tipo]}`,
+                        label: `${folio('RES', e.id)} · ${e.activo.nombre} · ${formatearFecha(e.fecha)} · ${TIPO[e.tipo]}${e.pruebaPrevista ? ` · prueba prevista ${formatearFecha(e.pruebaPrevista)}` : ''}`,
                       }))}
                       {...form.getInputProps('ejecucionId')}
                       onChange={elegirOrigen}
                     />
                   )}
                   <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                    <TextInput type="date" label="Fecha" required max={hoy()} {...form.getInputProps('fecha')} />
+                    <DateTimePicker label="Fecha y hora real" valueFormat="DD MMM YYYY HH:mm" required maxDate={new Date()} {...form.getInputProps('fecha')} />
                     <Select label="Motivo" required data={opciones(MOTIVO_RESTAURACION)} {...form.getInputProps('motivo')} />
                     <Select label="Resultado" required data={opciones(RESULTADO)} {...form.getInputProps('resultado')} />
                     <NumberInput label="Tiempo real (min)" required min={0} allowDecimal={false} {...form.getInputProps('tiempoRealMin')} />
@@ -322,6 +362,25 @@ export function PasoRestauracion({
                     <TextInput label="Evidencia (acta o ticket)" required maxLength={60} placeholder="Acta PR-10/2026" {...form.getInputProps('evidencia')} />
                     <TextInput label="Responsable" required {...form.getInputProps('responsable')} />
                   </SimpleGrid>
+                  {editando ? (
+                    cambiaLoEvaluado(form.values) &&
+                    fueraDePrueba(form.values) &&
+                    admin && (
+                      <Alert color="orange" title="Fuera de la ventana de la prueba">
+                        {fueraDePrueba(form.values)} Se registrará como excepción y el motivo del cambio será su justificación.
+                      </Alert>
+                    )
+                  ) : (
+                    <CampoExcepcion
+                      fuera={fueraDePrueba(form.values)}
+                      value={form.values.motivoExcepcion}
+                      onChange={(m) => form.setFieldValue('motivoExcepcion', m)}
+                      error={form.errors.motivoExcepcion as string | undefined}
+                    />
+                  )}
+                  <Text size="xs" c="dimmed">
+                    Registrar una restauración documenta lo que se hizo; la aplicación no recupera copias por sí misma.
+                  </Text>
                   <Checkbox label="Integridad de los datos verificada (A.8.13)" {...form.getInputProps('integridad', { type: 'checkbox' })} />
                   <Textarea label="Observaciones" autosize minRows={1} placeholder="Diferencias entre la prueba prevista y lo ejecutado, incidencias…" {...form.getInputProps('observaciones')} />
                   {editando && (
@@ -350,6 +409,12 @@ export function PasoRestauracion({
           </Panel>
         </Grid.Col>
       </Grid>
+      <Agenda
+        titulo="Calendario de pruebas de restauración"
+        descripcion="Ventanas previstas de prueba (con su propio plazo) y restauraciones registradas. Registrar una restauración documenta lo hecho; no recupera copias."
+        modulos={['respaldos']}
+        capa={3}
+      />
       {acciones.modales}
     </Stack>
   )
