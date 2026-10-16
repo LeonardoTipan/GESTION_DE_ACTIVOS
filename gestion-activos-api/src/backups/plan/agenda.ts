@@ -1,6 +1,7 @@
 import type { Capa, EstadoEvento, EventoAgendaDto } from '../../common/dto/agenda.dto.js';
 import type { ActivoBreveDto } from '../../common/dto/registro.dto.js';
 import { diaLocal, instanteLocal } from '../../common/plazos/plazos.js';
+import { dia } from '../../common/indicadores/indicador.js';
 import type { VentanaRespaldo } from '../../generated/prisma/enums.js';
 import { MOTIVOS_PRUEBA } from '../tablero/tablero.js';
 import { estadoVentana, ventanasDe, type FrecuenciaVentana } from '../tablero/ventanas.js';
@@ -83,7 +84,8 @@ export function agendaRespaldos(d: {
   };
 
   for (const p of d.planes) {
-    const desdePlan = diaLocal(p.vigenteDesde, d.zona);
+    // vigenteDesde es un día de calendario (guardado a medianoche UTC): se lee tal cual, sin zona.
+    const desdePlan = dia(p.vigenteDesde);
     const ejecuciones = d.ejecuciones.filter((e) => e.planId === p.id);
     const fechasEjec = ejecuciones.map((e) => diaLocal(e.fecha, d.zona));
     const base = { modulo: 'respaldos' as const, activo: p.activo, responsable: p.responsable, fueraDePlazo: false };

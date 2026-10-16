@@ -1,6 +1,7 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AmpliarPlazoDto, ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
 import { diaLocal, evaluarPlazo, exigirExcepcion, exigirIntervalo, exigirReprogramacion, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
+import { dia } from '../../common/indicadores/indicador.js';
 import { dentroDeVentana, TEXTO_VENTANA } from './ventana-horaria.js';
 import type { VentanaRespaldo } from '../../generated/prisma/enums.js';
 import { TrazasService } from '../../audit/trazas.service.js';
@@ -133,8 +134,8 @@ export class EjecucionesRespaldoService {
 
   /** Por qué una hora real queda fuera del plan (antes de su inicio o de su ventana), o null. */
   private fueraDelPlan(plan: { vigenteDesde: Date; ventana: VentanaRespaldo }, fecha: Date): string | null {
-    if (diaLocal(fecha) < diaLocal(plan.vigenteDesde)) {
-      return `La ejecución es anterior al inicio previsto del plan (${diaLocal(plan.vigenteDesde)}).`;
+    if (diaLocal(fecha) < dia(plan.vigenteDesde)) {
+      return `La ejecución es anterior al inicio previsto del plan (${dia(plan.vigenteDesde)}).`;
     }
     if (!dentroDeVentana(plan.ventana, fecha)) {
       return `La ejecución está fuera de la ventana ${TEXTO_VENTANA[plan.ventana]} del plan.`;

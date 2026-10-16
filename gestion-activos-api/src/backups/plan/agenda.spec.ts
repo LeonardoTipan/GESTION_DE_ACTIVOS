@@ -25,6 +25,12 @@ describe('agenda de respaldos', () => {
     expect(del31.fin!.toISOString()).toBe('2027-01-01T07:00:00.000Z');
   });
 
+  it('el inicio previsto del plan es un día de calendario: «1 de octubre» no empieza el 30 de septiembre en Guayaquil', () => {
+    const desdeOctubre = { ...plan, vigenteDesde: d('2026-10-01T00:00:00Z') }; // así se guarda «2026-10-01»
+    const eventos = agendaRespaldos({ planes: [desdeOctubre], ejecuciones: [], restauraciones: [], desde: d('2026-09-29T05:00:00Z'), hasta: d('2026-10-03T04:59:59Z'), ahora: d('2026-10-02T12:00:00Z'), capa: 1, zona: Z });
+    expect(eventos.map((e) => e.clave)).toEqual(['r1-5-2026-10-01', 'r1-5-2026-10-02']);
+  });
+
   it('capa 2 y 3: la ejecución es REAL; su prueba programada es un evento PREVISTO aparte, con su propio plazo', () => {
     const ejecucion = { id: 9, planId: 5, fecha: d('2027-01-01T03:30:00Z'), duracionMin: 30, resultado: 'EXITOSO' as const, responsable: 'Infra', fueraDePlazo: false, pruebaPrevista: d('2027-01-02T14:00:00Z'), pruebaLimite: d('2027-01-05T22:00:00Z'), activo };
     const datos = { planes: [], ejecuciones: [ejecucion], restauraciones: [], desde: d('2026-12-31T05:00:00Z'), hasta: d('2027-01-10T04:59:59Z'), ahora: d('2027-01-06T12:00:00Z'), zona: Z };

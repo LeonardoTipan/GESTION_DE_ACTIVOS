@@ -110,7 +110,7 @@ export class TableroRespaldosService {
     ]);
 
     const tablero: Tablero = calcularTablero({
-      hoy: dia(new Date()),
+      hoy: diaLocal(new Date()),
       periodo,
       criticos,
       planes: planes.map((p) => ({

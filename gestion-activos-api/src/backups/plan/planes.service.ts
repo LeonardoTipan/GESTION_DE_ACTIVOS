@@ -1,3 +1,4 @@
+import { diaLocal } from '../../common/plazos/plazos.js';
 import {
   BadRequestException,
   ConflictException,
@@ -30,7 +31,8 @@ const aDto = (p: PlanConActivo): PlanRespaldoDto => ({ ...p, activo: activoBreve
 export const PLAN_VIGENTE = { estado: 'VIGENTE', anuladoEn: null } as const;
 
 /** Medianoche UTC de hoy: las fechas de los formularios son días. */
-export const hoyUtc = (): Date => new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00.000Z`);
+/** Hoy en la zona de la institución, como día de calendario (medianoche UTC). */
+export const hoyUtc = (): Date => new Date(`${diaLocal(new Date())}T00:00:00.000Z`);
 
 /**
  * Paso 1 · Alcance del respaldo: qué activos se respaldan y con qué parámetros
