@@ -21,7 +21,7 @@ import {
 } from '@mantine/core'
 import { useDebouncedValue, useMediaQuery } from '@mantine/hooks'
 import { IconAlertTriangle, IconChevronLeft, IconChevronRight, IconPlus, IconSearch } from '@tabler/icons-react'
-import dayjs, { type Dayjs } from 'dayjs'
+import type { Dayjs } from 'dayjs'
 import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { useCategoriasConActivos } from '../../features/inventario/api/activos.ts'
@@ -44,6 +44,7 @@ import {
 } from './agenda.ts'
 import { useAgenda } from './api.ts'
 
+import { enZona } from '../zona.ts'
 const DIAS = ['lun', 'mar', 'mié', 'jue', 'vie', 'sáb', 'dom']
 const MAX_POR_CELDA = 3
 
@@ -69,7 +70,7 @@ interface Props {
 export function Calendario({ titulo, descripcion, modulos, capa, onCrear, textoCrear = 'Programar', accionesEvento }: Props) {
   const movil = useMediaQuery('(max-width: 48em)')
   const [vista, setVista] = useState<Vista>('mes')
-  const [ancla, setAncla] = useState(() => dayjs())
+  const [ancla, setAncla] = useState(() => enZona())
   const [capaElegida, setCapaElegida] = useState<Capa | undefined>(capa)
   const [categoriaId, setCategoriaId] = useState<number | undefined>()
   const [estado, setEstado] = useState<EstadoEvento | undefined>()
@@ -110,7 +111,7 @@ export function Calendario({ titulo, descripcion, modulos, capa, onCrear, textoC
             <ActionIcon variant="default" aria-label="Período anterior" onClick={() => setAncla(moverAncla(vista, ancla, -1))}>
               <IconChevronLeft size={16} />
             </ActionIcon>
-            <Button size="xs" variant="default" onClick={() => setAncla(dayjs())}>
+            <Button size="xs" variant="default" onClick={() => setAncla(enZona())}>
               Hoy
             </Button>
             <ActionIcon variant="default" aria-label="Período siguiente" onClick={() => setAncla(moverAncla(vista, ancla, 1))}>
@@ -262,7 +263,7 @@ function Mes({
 }: {
   ancla: Dayjs; desde: Dayjs; hasta: Dayjs; eventos: EventoAgenda[]; onEvento: (e: EventoAgenda) => void; onDia: (d: Dayjs) => void; onCrear?: (d: Dayjs) => void; textoCrear: string
 }) {
-  const hoy = dayjs()
+  const hoy = enZona()
   return (
     <Box style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', border: '1px solid var(--mantine-color-default-border)', borderRadius: 8, overflow: 'hidden' }}>
       {DIAS.map((d) => (
@@ -314,7 +315,7 @@ function Semana({ desde, hasta, eventos, onEvento, onDia, movil }: { desde: Dayj
       {dias.map((dia) => (
         <Box key={dia.format('YYYY-MM-DD')} p={6} style={{ border: '1px solid var(--mantine-color-default-border)', borderRadius: 8 }}>
           <UnstyledButton onClick={() => onDia(dia)}>
-            <Text size="xs" fw={700} tt="capitalize" c={dia.isSame(dayjs(), 'day') ? 'blue' : undefined}>
+            <Text size="xs" fw={700} tt="capitalize" c={dia.isSame(enZona(), 'day') ? 'blue' : undefined}>
               {dia.format('ddd D MMM')}
             </Text>
           </UnstyledButton>
@@ -382,7 +383,7 @@ function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode })
 
 function DetalleEvento({ evento: e, acciones }: { evento: EventoAgenda; acciones?: ReactNode }) {
   const previsto = e.tipo === 'PREVISTO'
-  const f = (s: string | null) => (s ? dayjs(s).format('dddd D [de] MMMM YYYY, HH:mm') : '—')
+  const f = (s: string | null) => (s ? enZona(s).format('dddd D [de] MMMM YYYY, HH:mm') : '—')
   return (
     <Stack gap="sm">
       <Text fw={600}>{e.titulo}</Text>

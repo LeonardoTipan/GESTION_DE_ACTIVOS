@@ -1,6 +1,10 @@
 import dayjs from 'dayjs'
 import { describe, expect, it } from 'vitest'
 import { marcasDelDia, moverAncla, rangoDe, textoRol, type EventoAgenda } from './agenda.ts'
+import { enZona } from '../zona.ts'
+
+/** Un día u hora de Guayaquil, como los que usa el calendario. */
+const z = (pared: string) => enZona(pared)
 
 const evento = (inicio: string, fin: string | null, tipo: 'PREVISTO' | 'REAL' = 'PREVISTO'): EventoAgenda => ({
   clave: 'x', modulo: 'mantenimientos', capa: 1, tipo, titulo: 'X', inicio, fin, estado: 'PROGRAMADO',
@@ -23,11 +27,11 @@ describe('calendario', () => {
   })
 
   it('un intervalo aparece en su inicio y en su límite (y en los días intermedios solo si se piden)', () => {
-    const e = evento(dayjs('2026-12-30T08:00').toISOString(), dayjs('2027-01-02T18:00').toISOString())
-    expect(marcasDelDia([e], dayjs('2026-12-30')).map((m) => m.rol)).toEqual(['inicio'])
-    expect(marcasDelDia([e], dayjs('2027-01-02')).map((m) => m.rol)).toEqual(['limite'])
-    expect(marcasDelDia([e], dayjs('2026-12-31'))).toEqual([])
-    expect(marcasDelDia([e], dayjs('2026-12-31'), true).map((m) => m.rol)).toEqual(['continua'])
+    const e = evento(z('2026-12-30 08:00').toISOString(), z('2027-01-02 18:00').toISOString())
+    expect(marcasDelDia([e], z('2026-12-30')).map((m) => m.rol)).toEqual(['inicio'])
+    expect(marcasDelDia([e], z('2027-01-02')).map((m) => m.rol)).toEqual(['limite'])
+    expect(marcasDelDia([e], z('2026-12-31'))).toEqual([])
+    expect(marcasDelDia([e], z('2026-12-31'), true).map((m) => m.rol)).toEqual(['continua'])
   })
 
   it('distingue lo previsto de lo real en las etiquetas', () => {

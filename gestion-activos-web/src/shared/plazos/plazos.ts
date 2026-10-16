@@ -1,5 +1,5 @@
-import dayjs from 'dayjs'
 
+import { enZona, instante } from '../zona.ts'
 /**
  * La misma regla que la API (common/plazos): dónde cae una fecha real respecto
  * al intervalo previsto. Sirve para avisar ANTES de enviar; quien decide es la API.
@@ -8,13 +8,14 @@ export type Posicion = 'EN_PLAZO' | 'ANTES' | 'DESPUES' | 'SIN_PLAZO'
 
 export function posicionEnPlazo(real: string | Date, inicio?: string | Date | null, limite?: string | Date | null): Posicion {
   if (!inicio && !limite) return 'SIN_PLAZO'
-  const r = dayjs(real)
-  if (inicio && r.isBefore(dayjs(inicio))) return 'ANTES'
-  if (limite && r.isAfter(dayjs(limite))) return 'DESPUES'
+  const r = instante(real)
+  if (inicio && r.isBefore(instante(inicio))) return 'ANTES'
+  if (limite && r.isAfter(instante(limite))) return 'DESPUES'
   return 'EN_PLAZO'
 }
 
-export const fmt = (d: string | Date | null | undefined) => (d ? dayjs(d).format('DD MMM YYYY HH:mm') : '—')
+/** Fecha y hora en la hora de la institución. */
+export const fmt = (d: string | Date | null | undefined) => (d ? enZona(d).format('DD MMM YYYY HH:mm') : '—')
 
 /** Texto del aviso, o null si está en plazo. */
 export function avisoFueraDePlazo(que: string, real: string | Date | null, inicio?: string | Date | null, limite?: string | Date | null): string | null {

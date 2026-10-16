@@ -1,7 +1,6 @@
 import { Alert, Button, Group, Modal, Stack, Text, Textarea } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { IconAlertTriangle } from '@tabler/icons-react'
-import dayjs from 'dayjs'
 import { useState } from 'react'
 import { usePuedeAdministrar } from '../../features/auth/use-puede.ts'
 import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../formato.ts'
@@ -9,6 +8,7 @@ import { errorMotivo } from '../registro/registro.ts'
 import { fmt } from './plazos.ts'
 
 
+import { instante } from '../zona.ts'
 /**
  * Si la fecha real cae fuera de lo previsto: lo avisa y, a un admin, le pide
  * la justificación de la excepción. Otro rol ve que no puede registrarla.
@@ -59,7 +59,7 @@ function FormAmpliar({ limiteActual, enviando, onCerrar, onConfirmar }: { limite
   const [nuevo, setNuevo] = useState<string | null>(null)
   const [motivo, setMotivo] = useState('')
   const [tocado, setTocado] = useState(false)
-  const errorFecha = !nuevo ? 'Indique el nuevo límite.' : limiteActual && !dayjs(nuevo).isAfter(dayjs(limiteActual)) ? 'Debe ser posterior al límite actual.' : null
+  const errorFecha = !nuevo ? 'Indique el nuevo límite.' : limiteActual && !instante(nuevo).isAfter(instante(limiteActual)) ? 'Debe ser posterior al límite actual.' : null
   const errorMot = errorMotivo(motivo)
   return (
     <form
@@ -73,7 +73,7 @@ function FormAmpliar({ limiteActual, enviando, onCerrar, onConfirmar }: { limite
         <Text size="sm">
           Límite actual: <b>{fmt(limiteActual)}</b>. Se conserva como límite original y el cambio queda en las trazas.
         </Text>
-        <DateTimePicker label="Nuevo límite" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={nuevo} onChange={setNuevo} error={tocado ? errorFecha : null} minDate={limiteActual ? new Date(limiteActual) : undefined} />
+        <DateTimePicker label="Nuevo límite" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={nuevo} onChange={setNuevo} error={tocado ? errorFecha : null} minDate={limiteActual ? isoAFechaHoraLocal(limiteActual) : undefined} />
         <Textarea label="Motivo de la ampliación" withAsterisk autosize minRows={2} value={motivo} onChange={(e) => setMotivo(e.currentTarget.value)} error={tocado ? errorMot : null} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onCerrar}>
@@ -107,8 +107,8 @@ function FormVentana({ explicacion, prevista, limite, minimo, enviando, onCerrar
   const [p, setP] = useState<string | null>(prevista ? isoAFechaHoraLocal(prevista) : null)
   const [l, setL] = useState<string | null>(limite ? isoAFechaHoraLocal(limite) : null)
   const [tocado, setTocado] = useState(false)
-  const errorP = !p ? 'Indique el inicio previsto.' : minimo && dayjs(p).isBefore(dayjs(minimo)) ? `No puede ser anterior a ${fmt(minimo)}.` : null
-  const errorL = !l ? 'Indique el límite.' : p && dayjs(l).isBefore(dayjs(p)) ? 'La fecha límite no puede ser anterior al inicio.' : null
+  const errorP = !p ? 'Indique el inicio previsto.' : minimo && instante(p).isBefore(instante(minimo)) ? `No puede ser anterior a ${fmt(minimo)}.` : null
+  const errorL = !l ? 'Indique el límite.' : p && instante(l).isBefore(instante(p)) ? 'La fecha límite no puede ser anterior al inicio.' : null
   return (
     <form
       onSubmit={(e) => {
@@ -122,8 +122,8 @@ function FormVentana({ explicacion, prevista, limite, minimo, enviando, onCerrar
           {explicacion}
         </Text>
         <Group grow align="flex-start">
-          <DateTimePicker label="Inicio previsto" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={p} onChange={setP} error={tocado ? errorP : null} minDate={minimo ? new Date(minimo) : undefined} />
-          <DateTimePicker label="Límite" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={l} onChange={setL} error={tocado ? errorL : null} minDate={p ? new Date(p) : undefined} />
+          <DateTimePicker label="Inicio previsto" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={p} onChange={setP} error={tocado ? errorP : null} minDate={minimo ? isoAFechaHoraLocal(minimo) : undefined} />
+          <DateTimePicker label="Límite" valueFormat="DD MMM YYYY HH:mm" withAsterisk value={l} onChange={setL} error={tocado ? errorL : null} minDate={p ?? undefined} />
         </Group>
         <Group justify="flex-end">
           <Button variant="default" onClick={onCerrar}>

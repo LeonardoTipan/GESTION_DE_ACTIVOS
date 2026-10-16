@@ -15,12 +15,7 @@ import { DateInput, DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useEffect } from 'react'
-import {
-  diaAIso,
-  fechaHoraLocalAIso,
-  isoADia,
-  isoAFechaHoraLocal,
-} from '../../../shared/formato.ts'
+import { ahoraLocal, diaAIso, fechaHoraLocalAIso, hoyLocal, isoADia, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { useGuardarActivo, type Activo } from '../api/activos.ts'
 import { useCategorias, useCriticidades } from '../api/catalogos.ts'
 
@@ -253,7 +248,7 @@ export function ActivoFormModal({
               label="Última revisión"
               placeholder="Elige la fecha"
               valueFormat="DD MMM YYYY"
-              maxDate={new Date()}
+              maxDate={hoyLocal()}
               withAsterisk
               {...form.getInputProps('ultimaRevision')}
             />
@@ -266,7 +261,7 @@ export function ActivoFormModal({
               label="Fecha de compra"
               placeholder="Elige la fecha"
               valueFormat="DD MMM YYYY"
-              maxDate={new Date()}
+              maxDate={hoyLocal()}
               clearable
               {...form.getInputProps('fechaCompra')}
             />
@@ -353,7 +348,7 @@ export function ActivoFormModal({
               label="Fecha de alta"
               description="Registro en el inventario de origen"
               valueFormat="DD MMM YYYY HH:mm"
-              maxDate={new Date()}
+              maxDate={ahoraLocal()}
               clearable
               {...form.getInputProps('fechaAlta')}
             />

@@ -2,13 +2,13 @@ import { Alert, Button, Group, Modal, SegmentedControl, Stack, Text, Textarea, T
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
-import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useVerificarMantenimiento, type Mantenimiento, type ResultadoVerificacion } from '../api/mantenimientos.ts'
 import { faltantesParaCerrar, INFO_RESULTADO_VERIFICACION, RESULTADOS_VERIFICACION } from '../fases.ts'
 
+import { instante } from '../../../shared/zona.ts'
 interface Props {
   opened: boolean
   onClose: () => void
@@ -46,7 +46,7 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       fecha: (v) =>
         !v
           ? 'Indica cuándo se verificó'
-          : m.fechaFin && dayjs(v).isBefore(dayjs(m.fechaFin))
+          : m.fechaFin && instante(v).isBefore(instante(m.fechaFin))
             ? 'No puede ser anterior al fin del mantenimiento'
             : null,
       observaciones: (v) => (v.trim().length < 10 ? 'Mínimo 10 caracteres' : v.length > 2000 ? 'Máximo 2000' : null),
@@ -117,8 +117,8 @@ function FormVerificar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           <DateTimePicker
             label="Fecha de la verificación"
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={m.fechaFin ? new Date(m.fechaFin) : undefined}
-            maxDate={new Date()}
+            minDate={m.fechaFin ? isoAFechaHoraLocal(m.fechaFin) : undefined}
+            maxDate={ahoraLocal()}
             withAsterisk
             {...form.getInputProps('fecha')}
           />

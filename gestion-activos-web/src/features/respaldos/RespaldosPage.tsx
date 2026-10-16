@@ -3,7 +3,7 @@ import { useDebouncedValue } from '@mantine/hooks'
 import { IconAlertTriangle, IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
-import { formatearFecha } from '../../shared/formato.ts'
+import { formatearDia, formatearFecha } from '../../shared/formato.ts'
 import { FranjaIndicadores, SelectorPeriodo } from '../../shared/registro/componentes.tsx'
 import { periodoPorId } from '../../shared/registro/registro.ts'
 import { enteroPositivo, valorPermitido } from '../../shared/hooks/use-filtros-url.ts'
@@ -86,7 +86,7 @@ function RegistrosAnteriores() {
               <Table.Td>{r.alcanceDetalle}</Table.Td>
               <Table.Td>{r.estadoEjecucion}{r.fechaEjecucion ? ` · ${formatearFecha(r.fechaEjecucion)}` : ''}</Table.Td>
               <Table.Td>{r.estadoPrueba}{r.fechaPrueba ? ` · ${formatearFecha(r.fechaPrueba)}` : ''}</Table.Td>
-              <Table.Td>{formatearFecha(r.createdAt)}</Table.Td>
+              <Table.Td>{formatearDia(r.createdAt)}</Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>

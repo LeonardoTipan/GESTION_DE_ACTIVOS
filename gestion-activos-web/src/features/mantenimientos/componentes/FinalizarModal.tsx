@@ -13,13 +13,13 @@ import {
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
-import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useFinalizarMantenimiento, type EstadoEquipo, type Mantenimiento } from '../api/mantenimientos.ts'
 import { ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
 
+import { instante } from '../../../shared/zona.ts'
 interface Props {
   opened: boolean
   onClose: () => void
@@ -85,7 +85,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       fechaFin: (v) =>
         !v
           ? 'Indica cuándo terminó'
-          : fechaInicio && dayjs(v).isBefore(dayjs(fechaInicio))
+          : fechaInicio && instante(v).isBefore(instante(fechaInicio))
             ? 'No puede ser anterior al inicio'
             : null,
       tecnico: (v) => (!v.trim() ? 'Indica el técnico responsable' : maximo(191)(v)),
@@ -100,13 +100,13 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       verificacionPrevista: (v, valores) =>
         !v && valores.verificacionLimite
           ? 'Indica también el inicio previsto'
-          : v && valores.fechaFin && dayjs(v).isBefore(dayjs(valores.fechaFin))
+          : v && valores.fechaFin && instante(v).isBefore(instante(valores.fechaFin))
             ? 'No puede ser anterior al fin'
             : null,
       verificacionLimite: (v, valores) =>
         !v && valores.verificacionPrevista
           ? 'Indica también el límite'
-          : v && valores.verificacionPrevista && dayjs(v).isBefore(dayjs(valores.verificacionPrevista))
+          : v && valores.verificacionPrevista && instante(v).isBefore(instante(valores.verificacionPrevista))
             ? 'No puede ser anterior al inicio previsto'
             : null,
     },
@@ -166,8 +166,8 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           <DateTimePicker
             label="Fecha y hora de fin"
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={fechaInicio ? new Date(fechaInicio) : undefined}
-            maxDate={new Date()}
+            minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
+            maxDate={ahoraLocal()}
             withAsterisk
             {...form.getInputProps('fechaFin')}
           />
@@ -237,14 +237,14 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
               label="Inicio previsto"
               valueFormat="DD MMM YYYY HH:mm"
               clearable
-              minDate={form.values.fechaFin ? new Date(form.values.fechaFin) : undefined}
+              minDate={form.values.fechaFin ?? undefined}
               {...form.getInputProps('verificacionPrevista')}
             />
             <DateTimePicker
               label="Límite"
               valueFormat="DD MMM YYYY HH:mm"
               clearable
-              minDate={form.values.verificacionPrevista ? new Date(form.values.verificacionPrevista) : undefined}
+              minDate={form.values.verificacionPrevista ?? undefined}
               {...form.getInputProps('verificacionLimite')}
             />
           </SimpleGrid>

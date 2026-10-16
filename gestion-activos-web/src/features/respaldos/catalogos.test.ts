@@ -41,8 +41,8 @@ describe('folios y fechas sugeridas', () => {
 })
 
 describe('ventana horaria (aviso; la misma regla que la API)', () => {
-  // Fechas en hora local del equipo: 2026-10-14 es miércoles; 2026-10-17, sábado.
-  const local = (texto: string) => new Date(texto)
+  // Hora de Guayaquil (UTC−5): 2026-10-14 es miércoles; 2026-10-17, sábado.
+  const local = (texto: string) => `${texto}-05:00`
   it('nocturna 22–02 cruza la medianoche', () => {
     expect(dentroDeVentana('NOCTURNA_22_02', local('2026-10-14T22:30:00'))).toBe(true)
     expect(dentroDeVentana('NOCTURNA_22_02', local('2026-10-14T01:59:00'))).toBe(true)

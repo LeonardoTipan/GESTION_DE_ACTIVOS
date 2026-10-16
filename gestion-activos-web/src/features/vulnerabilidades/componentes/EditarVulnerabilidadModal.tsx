@@ -13,8 +13,7 @@ import {
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
-import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import {
@@ -25,6 +24,7 @@ import {
 } from '../api/vulnerabilidades.ts'
 import { FORMATO_CVE, FUENTES, INFO_FUENTE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
 
+import { instante } from '../../../shared/zona.ts'
 /** Tope de los campos de texto largo (el mismo que aplica la API). */
 const MAX_TEXTO_LARGO = 5000
 
@@ -86,7 +86,7 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
             : null,
       fecha: (v) => (v ? null : 'Indica cuándo se detectó'),
       fechaLimite: (v, valores) =>
-        v && valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
+        v && valores.fecha && instante(v).isBefore(instante(valores.fecha))
           ? 'No puede ser anterior a la detección'
           : null,
     },
@@ -165,14 +165,14 @@ function Formulario({ onClose, vulnerabilidad: v0 }: Omit<Props, 'opened'>) {
           <DateTimePicker
             label="Fecha de detección"
             valueFormat="DD MMM YYYY HH:mm"
-            maxDate={new Date()}
+            maxDate={ahoraLocal()}
             withAsterisk
             {...form.getInputProps('fecha')}
           />
           <DateTimePicker
             label="Fecha límite (SLA)"
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={form.values.fecha ? dayjs(form.values.fecha).toDate() : undefined}
+            minDate={form.values.fecha ?? undefined}
             {...form.getInputProps('fechaLimite')}
           />
         </SimpleGrid>

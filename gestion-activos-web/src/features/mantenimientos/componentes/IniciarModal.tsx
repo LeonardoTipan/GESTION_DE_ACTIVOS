@@ -73,7 +73,7 @@ function FormIniciar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
         <DateTimePicker
           label="Fecha y hora real de inicio"
           valueFormat="DD MMM YYYY HH:mm"
-          maxDate={new Date()}
+          maxDate={ahoraLocal()}
           withAsterisk
           {...form.getInputProps('fechaInicio')}
         />

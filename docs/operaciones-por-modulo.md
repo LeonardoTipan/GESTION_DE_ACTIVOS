@@ -104,7 +104,7 @@ Se conserva el **límite original** (`fechaLimiteOriginal`) y el cambio queda en
 - Una restauración por incidente no está programada y no se compara con ninguna ventana.
 - Registrar una restauración documenta lo hecho; no recupera copias.
 
-**Zona horaria.** Las ventanas y los días se evalúan en la hora local de la institución: `ZONA_HORARIA`, o `GLPI_TIMEZONE`, o por defecto `America/Guayaquil`. La interfaz muestra y captura las fechas en la hora local del equipo, que se supone la misma. Los avisos previos de la interfaz usan la misma regla que la API, pero quien decide es siempre la API.
+**Zona horaria: Guayaquil.** Toda la aplicación trabaja en la hora de la institución, `America/Guayaquil` (UTC−5, sin horario de verano), **sea cual sea la zona del equipo** del usuario. En la API se usa `ZONA_HORARIA`, o `GLPI_TIMEZONE`, o por defecto `America/Guayaquil`; en la interfaz, `VITE_ZONA_HORARIA` (por defecto la misma). La API evalúa las ventanas y los días en esa zona y guarda en UTC. La interfaz muestra, captura y compara las fechas en esa zona (`shared/zona.ts`): un «22:30» escrito en un formulario es 22:30 de Guayaquil aunque el navegador esté en otra zona. Los días de calendario sin hora (compra, última revisión, inicio de un plan de respaldo) se guardan a medianoche UTC y se leen tal cual, sin zona. Los avisos previos de la interfaz usan la misma regla que la API, pero quien decide es siempre la API.
 
 ### Calendarios
 

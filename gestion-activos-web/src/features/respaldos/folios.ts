@@ -1,3 +1,5 @@
+import { enZona } from '../../shared/zona.ts'
+
 // Funciones puras del módulo de respaldos (sin dependencias de la interfaz).
 
 /** Folio legible del prototipo: PLN-0003, RES-0012, RST-0002. */
@@ -15,12 +17,13 @@ type Ventana = 'NOCTURNA_22_02' | 'NOCTURNA_00_04' | 'FIN_DE_SEMANA' | 'HORARIO_
 
 /**
  * ¿La hora real cae en la ventana horaria del plan? La misma regla que la API
- * (en la hora local del equipo, que es la de la institución); solo sirve para
+ * (en la hora de la institución, sea cual sea la del equipo); solo sirve para
  * avisar antes de enviar: quien decide es la API.
  */
-export function dentroDeVentana(ventana: Ventana, fecha: Date): boolean {
-  const dia = fecha.getDay()
-  const minutos = fecha.getHours() * 60 + fecha.getMinutes()
+export function dentroDeVentana(ventana: Ventana, fecha: string | Date): boolean {
+  const local = enZona(fecha)
+  const dia = local.day()
+  const minutos = local.hour() * 60 + local.minute()
   switch (ventana) {
     case 'NOCTURNA_22_02':
       return minutos >= 22 * 60 || minutos < 2 * 60

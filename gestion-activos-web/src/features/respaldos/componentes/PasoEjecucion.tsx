@@ -17,10 +17,9 @@ import {
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { DateTimePicker } from '@mantine/dates'
-import dayjs from 'dayjs'
 import { useState } from 'react'
 import { Calendario as Agenda } from '../../../shared/calendario/Calendario.tsx'
-import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, hoyLocal, isoADia, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { AmpliarPlazoModal, CampoExcepcion, VentanaModal } from '../../../shared/plazos/componentes.tsx'
 import { fmt, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
@@ -50,9 +49,10 @@ import { useAccionesRegistro } from './acciones.tsx'
 import { Calendario, Panel } from './comunes.tsx'
 import { dentroDeVentana, fechaDeVentana, folio, HORA_SUGERIDA } from '../folios.ts'
 
-const hoy = () => dayjs().format('YYYY-MM-DD')
+import { enZona, instante } from '../../../shared/zona.ts'
+const hoy = hoyLocal
 /** Una fecha real no puede ser futura (5 min de margen, como la API). */
-const esFutura = (f: string) => dayjs(f).isAfter(dayjs().add(5, 'minute'))
+const esFutura = (f: string) => instante(f).isAfter(enZona().add(5, 'minute'))
 
 interface Valores {
   planId: string
@@ -127,13 +127,14 @@ export function PasoEjecucion({
   const fueraDelPlan = (v: Pick<Valores, 'planId' | 'fecha'>): string | null => {
     const plan = planes.find((p) => String(p.id) === v.planId)
     if (!plan || !v.fecha) return null
-    const inicio = dayjs(plan.vigenteDesde).format('YYYY-MM-DD')
-    if (dayjs(v.fecha).format('YYYY-MM-DD') < inicio) return `La ejecución es anterior al inicio previsto del plan (${inicio}).`
-    if (!dentroDeVentana(plan.ventana, dayjs(v.fecha).toDate())) return `La ejecución está fuera de la ventana ${VENTANA[plan.ventana].toLowerCase()} del plan.`
+    // vigenteDesde es un día de calendario (medianoche UTC): se lee sin zona, como en la API.
+    const inicio = isoADia(plan.vigenteDesde)
+    if (enZona(v.fecha).format('YYYY-MM-DD') < inicio) return `La ejecución es anterior al inicio previsto del plan (${inicio}).`
+    if (!dentroDeVentana(plan.ventana, v.fecha)) return `La ejecución está fuera de la ventana ${VENTANA[plan.ventana].toLowerCase()} del plan.`
     return null
   }
   /** Al modificar, solo se reevalúa si la fecha cambia (como en la API). */
-  const fechaCambiada = (fecha: string) => !editando || !dayjs(fecha).isSame(dayjs(editando.fecha))
+  const fechaCambiada = (fecha: string) => !editando || !instante(fecha).isSame(instante(editando.fecha))
 
   const form = useForm<Valores>({
     initialValues: { ...VACIO, fecha: ahoraLocal() },
@@ -151,13 +152,13 @@ export function PasoEjecucion({
       pruebaPrevista: (p, v) =>
         !p && v.pruebaLimite
           ? 'Indique también el inicio previsto.'
-          : p && v.fecha && dayjs(p).isBefore(dayjs(v.fecha))
+          : p && v.fecha && instante(p).isBefore(instante(v.fecha))
             ? 'No puede ser anterior a la ejecución.'
             : null,
       pruebaLimite: (l, v) =>
         !l && v.pruebaPrevista
           ? 'Indique también el límite.'
-          : l && v.pruebaPrevista && dayjs(l).isBefore(dayjs(v.pruebaPrevista))
+          : l && v.pruebaPrevista && instante(l).isBefore(instante(v.pruebaPrevista))
             ? 'No puede ser anterior al inicio previsto.'
             : null,
       tipo: requerido,
@@ -407,7 +408,7 @@ export function PasoEjecucion({
                       description="Hora local; se compara con la ventana del plan"
                       valueFormat="DD MMM YYYY HH:mm"
                       required
-                      maxDate={new Date()}
+                      maxDate={ahoraLocal()}
                       {...form.getInputProps('fecha')}
                     />
                     <Select label="Tipo de respaldo" required data={opciones(TIPO)} {...form.getInputProps('tipo')} />

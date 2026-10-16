@@ -14,7 +14,6 @@ import {
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, fmt, errorExcepcion } from '../../../shared/plazos/plazos.ts'
@@ -30,6 +29,7 @@ import {
 } from '../api/vulnerabilidades.ts'
 import { INFO_NIVEL, INFO_PRIORIDAD, NIVELES, PRIORIDADES } from '../riesgo.ts'
 
+import { instante } from '../../../shared/zona.ts'
 const largo = (min: number, max: number, etiqueta: string) => (v: string) =>
   v.trim().length < min ? `${etiqueta}: mínimo ${min} caracteres` : v.length > max ? `Máximo ${max} caracteres` : null
 const error = (titulo: string) => (e: Error) => notifications.show({ color: 'red', title: titulo, message: e.message })
@@ -61,15 +61,15 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
       responsable: (r) => (!r.trim() ? 'Indica el responsable' : r.length > 191 ? 'Máximo 191' : null),
       planRemediacion: largo(10, 5000, 'Plan'),
       fechaLimite: (f) =>
-        f && dayjs(f).isBefore(dayjs(v.fecha))
+        f && instante(f).isBefore(instante(v.fecha))
           ? 'No puede ser anterior a la detección'
-          : f && v.fechaLimite && dayjs(f).isAfter(dayjs(v.fechaLimite))
+          : f && v.fechaLimite && instante(f).isAfter(instante(v.fechaLimite))
             ? 'Para ampliar el plazo use «Ampliar plazo» (administrador, con motivo)'
             : null,
       tratamientoPrevisto: (t, x) =>
-        t && dayjs(t).isBefore(dayjs(v.fecha))
+        t && instante(t).isBefore(instante(v.fecha))
           ? 'No puede ser anterior a la detección'
-          : t && x.fechaLimite && dayjs(x.fechaLimite).isBefore(dayjs(t))
+          : t && x.fechaLimite && instante(x.fechaLimite).isBefore(instante(t))
             ? 'No puede ser posterior a la fecha límite'
             : null,
     },
@@ -132,7 +132,7 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
             label="Inicio previsto del tratamiento"
             description="Distinto de la detección"
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={new Date(v.fecha)}
+            minDate={isoAFechaHoraLocal(v.fecha)}
             clearable
             {...form.getInputProps('tratamientoPrevisto')}
           />
@@ -140,8 +140,8 @@ function FormEvaluar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
             label="Fecha límite de remediación (SLA)"
             description={v.fechaLimite ? 'Se puede adelantar; ampliarla es «Ampliar plazo»' : undefined}
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={new Date(v.fecha)}
-            maxDate={v.fechaLimite ? new Date(v.fechaLimite) : undefined}
+            minDate={isoAFechaHoraLocal(v.fecha)}
+            maxDate={v.fechaLimite ? isoAFechaHoraLocal(v.fechaLimite) : undefined}
             clearable
             {...form.getInputProps('fechaLimite')}
           />
@@ -178,7 +178,7 @@ function FormIniciar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
   const form = useForm({
     initialValues: { fecha: ahoraLocal() as string | null, motivoExcepcion: '' },
     validate: {
-      fecha: (f) => (!f ? 'Indica cuándo empezó' : dayjs(f).isBefore(dayjs(v.fecha)) ? 'No puede ser anterior a la detección' : null),
+      fecha: (f) => (!f ? 'Indica cuándo empezó' : instante(f).isBefore(instante(v.fecha)) ? 'No puede ser anterior a la detección' : null),
       motivoExcepcion: (m, x) => errorExcepcion(inicioFueraDePlazo(v, x.fecha), m),
     },
   })
@@ -208,7 +208,7 @@ function FormIniciar({ onClose, v }: { onClose: () => void; v: Vulnerabilidad })
           Pasará a <b>En tratamiento</b>. Detectada el {fmt(v.fecha)}; tratamiento previsto {fmt(v.tratamientoPrevisto)} → límite{' '}
           {fmt(v.fechaLimite)}.
         </Text>
-        <DateTimePicker label="Inicio real del tratamiento" valueFormat="DD MMM YYYY HH:mm" minDate={new Date(v.fecha)} maxDate={new Date()} withAsterisk {...form.getInputProps('fecha')} />
+        <DateTimePicker label="Inicio real del tratamiento" valueFormat="DD MMM YYYY HH:mm" minDate={isoAFechaHoraLocal(v.fecha)} maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fecha')} />
         <CampoExcepcion fuera={fuera} value={form.values.motivoExcepcion} onChange={(m) => form.setFieldValue('motivoExcepcion', m)} error={form.errors.motivoExcepcion as string | undefined} />
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
@@ -241,7 +241,7 @@ function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) 
   const form = useForm({
     initialValues: { fecha: ahoraLocal() as string | null, descripcion: '', responsable: v.responsable ?? '', evidencia: '', motivoExcepcion: '' },
     validate: {
-      fecha: (f) => (!f ? 'Indica la fecha' : dayjs(f).isBefore(dayjs(v.fecha)) ? 'No puede ser anterior a la detección' : null),
+      fecha: (f) => (!f ? 'Indica la fecha' : instante(f).isBefore(instante(v.fecha)) ? 'No puede ser anterior a la detección' : null),
       descripcion: largo(5, 5000, 'Descripción'),
       responsable: (r) => (!r.trim() ? 'Indica quién la aplicó' : null),
       evidencia: (e) => (e.length > 191 ? 'Máximo 191' : null),
@@ -274,7 +274,7 @@ function FormAccion({ onClose, v }: { onClose: () => void; v: Vulnerabilidad }) 
       <Stack gap="sm">
         <Textarea label="Acción aplicada" withAsterisk autosize minRows={2} placeholder="Actualizado OpenSSL a 3.0.15 y reiniciado el servicio." {...form.getInputProps('descripcion')} />
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <DateTimePicker label="Fecha" valueFormat="DD MMM YYYY HH:mm" maxDate={new Date()} withAsterisk {...form.getInputProps('fecha')} />
+          <DateTimePicker label="Fecha" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fecha')} />
           <TextInput label="Responsable" withAsterisk {...form.getInputProps('responsable')} />
           <TextInput label="Evidencia" placeholder="Ticket, registro de cambios…" {...form.getInputProps('evidencia')} />
         </SimpleGrid>
@@ -385,7 +385,7 @@ function FormVerificar({ onClose, v, accionesVigentes }: { onClose: () => void; 
         )}
         <Textarea label="Observaciones" withAsterisk autosize minRows={2} placeholder="Nuevo escaneo sin hallazgos en el puerto 443." {...form.getInputProps('observaciones')} />
         <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <DateTimePicker label="Fecha" valueFormat="DD MMM YYYY HH:mm" maxDate={new Date()} withAsterisk {...form.getInputProps('fecha')} />
+          <DateTimePicker label="Fecha" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fecha')} />
           <TextInput label="Evidencia" withAsterisk placeholder="Informe de escaneo 2026-10-14" {...form.getInputProps('evidencia')} />
           <TextInput label="Verificado por" withAsterisk {...form.getInputProps('responsable')} />
         </SimpleGrid>

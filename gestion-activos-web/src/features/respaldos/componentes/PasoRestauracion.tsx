@@ -17,10 +17,9 @@ import {
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { DateTimePicker } from '@mantine/dates'
-import dayjs from 'dayjs'
 import { useState } from 'react'
 import { Calendario as Agenda } from '../../../shared/calendario/Calendario.tsx'
-import { ahoraLocal, fechaHoraLocalAIso, formatearFecha, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, formatearDia, formatearFechaHora, hoyLocal, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { AccionesRegistro, BadgeRegistro } from '../../../shared/registro/componentes.tsx'
@@ -40,9 +39,10 @@ import { useAccionesRegistro } from './acciones.tsx'
 import { Calendario, Panel } from './comunes.tsx'
 import { fechaDeVentana, folio } from '../folios.ts'
 
-const hoy = () => dayjs().format('YYYY-MM-DD')
+import { enZona, instante } from '../../../shared/zona.ts'
+const hoy = hoyLocal
 /** Una fecha real no puede ser futura (5 min de margen, como la API). */
-const esFutura = (f: string) => dayjs(f).isAfter(dayjs().add(5, 'minute'))
+const esFutura = (f: string) => instante(f).isAfter(enZona().add(5, 'minute'))
 
 interface Valores {
   ejecucionId: string
@@ -108,7 +108,7 @@ export function PasoRestauracion({
   }
   /** Al modificar, la API solo reevalúa si cambian la fecha o el motivo. */
   const cambiaLoEvaluado = (v: Pick<Valores, 'fecha' | 'motivo'>) =>
-    !editando || !dayjs(v.fecha).isSame(dayjs(editando.fecha)) || v.motivo !== editando.motivo
+    !editando || !instante(v.fecha).isSame(instante(editando.fecha)) || v.motivo !== editando.motivo
 
   // Al venir de una ventana de prueba, solo los respaldos de ese activo anteriores a su cierre.
   const disponibles = (fuentes.data ?? []).filter(
@@ -123,7 +123,7 @@ export function PasoRestauracion({
         if (!f) return 'Obligatorio.'
         if (esFutura(f)) return 'No puede ser futura.'
         const origen = origenDe(v)
-        if (origen && dayjs(f).isBefore(dayjs(origen.fecha))) return 'No puede ser anterior a la ejecución del respaldo.'
+        if (origen && instante(f).isBefore(instante(origen.fecha))) return 'No puede ser anterior a la ejecución del respaldo.'
         if (editando && !admin && cambiaLoEvaluado(v) && fueraDePrueba(v)) return 'Fuera de la ventana de la prueba: solo un administrador puede corregirla así.'
         return null
       },
@@ -347,14 +347,14 @@ export function PasoRestauracion({
                       description="Determina el activo restaurado y el RTO comprometido en su plan."
                       data={disponibles.map((e) => ({
                         value: String(e.id),
-                        label: `${folio('RES', e.id)} · ${e.activo.nombre} · ${formatearFecha(e.fecha)} · ${TIPO[e.tipo]}${e.pruebaPrevista ? ` · prueba prevista ${formatearFecha(e.pruebaPrevista)}` : ''}`,
+                        label: `${folio('RES', e.id)} · ${e.activo.nombre} · ${formatearDia(e.fecha)} · ${TIPO[e.tipo]}${e.pruebaPrevista ? ` · prueba prevista ${formatearDia(e.pruebaPrevista)}` : ''}`,
                       }))}
                       {...form.getInputProps('ejecucionId')}
                       onChange={elegirOrigen}
                     />
                   )}
                   <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                    <DateTimePicker label="Fecha y hora real" valueFormat="DD MMM YYYY HH:mm" required maxDate={new Date()} {...form.getInputProps('fecha')} />
+                    <DateTimePicker label="Fecha y hora real" valueFormat="DD MMM YYYY HH:mm" required maxDate={ahoraLocal()} {...form.getInputProps('fecha')} />
                     <Select label="Motivo" required data={opciones(MOTIVO_RESTAURACION)} {...form.getInputProps('motivo')} />
                     <Select label="Resultado" required data={opciones(RESULTADO)} {...form.getInputProps('resultado')} />
                     <NumberInput label="Tiempo real (min)" required min={0} allowDecimal={false} {...form.getInputProps('tiempoRealMin')} />

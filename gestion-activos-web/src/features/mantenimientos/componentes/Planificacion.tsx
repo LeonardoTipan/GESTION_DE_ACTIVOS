@@ -28,7 +28,7 @@ import { notifications } from '@mantine/notifications'
 import { IconCalendarPlus, IconPlus, IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
-import { formatearFecha, formatearFechaHora, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { fechaHoraLocalAIso, formatearDia, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import {
   AccionesRegistro,
   BadgeRegistro,
@@ -115,7 +115,7 @@ function Tablero() {
                   {data.proximas.map((p) => (
                     <Table.Tr key={`${p.origen}-${p.id}`}>
                       <Table.Td c={p.vencido ? 'red' : undefined} fw={p.vencido ? 600 : undefined} w={150}>
-                        {formatearFecha(p.fecha)}
+                        {formatearDia(p.fecha)}
                       </Table.Td>
                       <Table.Td>
                         {p.activo.codigo} · {p.activo.nombre}
@@ -376,7 +376,7 @@ export function Planificacion() {
           color: 'green',
           title: `Mantenimiento #${r.mantenimientoId} programado`,
           message: r.plan.proximaFecha
-            ? `Siguiente intervención del plan: ${formatearFecha(r.plan.proximaFecha)}.`
+            ? `Siguiente intervención del plan: ${formatearDia(r.plan.proximaFecha)}.`
             : 'Era un plan de una sola vez: no quedan intervenciones.',
         }),
       onError: (e) => notifications.show({ color: 'red', title: 'No se pudo programar', message: e.message }),

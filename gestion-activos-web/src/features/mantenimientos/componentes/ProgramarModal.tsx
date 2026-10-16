@@ -2,8 +2,8 @@ import { Button, Group, Modal, SegmentedControl, Stack, Text, Textarea } from '@
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs, { type Dayjs } from 'dayjs'
-import { FORMATO_FECHA_HORA_LOCAL, fechaHoraLocalAIso } from '../../../shared/formato.ts'
+import type { Dayjs } from 'dayjs'
+import { fechaHoraLocalAIso } from '../../../shared/formato.ts'
 import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
   useProgramarMantenimiento,
@@ -12,6 +12,7 @@ import {
 } from '../api/mantenimientos.ts'
 import { INFO_TIPO, TIPOS } from '../fases.ts'
 
+import { instante } from '../../../shared/zona.ts'
 interface Props {
   opened: boolean
   onClose: () => void
@@ -45,8 +46,8 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
       activoId: activoInicial ?? null,
       tipo: 'PREVENTIVO',
       actividad: '',
-      fecha: diaInicial ? diaInicial.hour(8).minute(0).second(0).format(FORMATO_FECHA_HORA_LOCAL) : null,
-      fechaLimite: diaInicial ? diaInicial.hour(18).minute(0).second(0).format(FORMATO_FECHA_HORA_LOCAL) : null,
+      fecha: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 08:00:00` : null,
+      fechaLimite: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 18:00:00` : null,
     },
     validate: {
       activoId: (v) => (v ? null : 'Elige el activo'),
@@ -60,7 +61,7 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
       fechaLimite: (v, valores) =>
         !v
           ? 'Indica la fecha límite'
-          : valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
+          : valores.fecha && instante(v).isBefore(instante(valores.fecha))
             ? 'La fecha límite no puede ser anterior al inicio previsto'
             : null,
     },
@@ -133,7 +134,7 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
             description="Después, queda vencido"
             valueFormat="DD MMM YYYY HH:mm"
             withAsterisk
-            minDate={form.values.fecha ? new Date(form.values.fecha) : undefined}
+            minDate={form.values.fecha ?? undefined}
             {...form.getInputProps('fechaLimite')}
           />
         </Group>

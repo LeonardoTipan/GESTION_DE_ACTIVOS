@@ -1,4 +1,5 @@
 import type { components } from '../../api/schema'
+import { hoyLocal } from '../formato.ts'
 
 /** Mínimo exigido al motivo de una modificación, anulación o reversión (igual que la API). */
 export const MOTIVO_MINIMO = 20
@@ -42,9 +43,11 @@ export interface Periodo {
 const iso = (d: Date) => d.toISOString().slice(0, 10)
 const utc = (y: number, m: number, d: number) => new Date(Date.UTC(y, m, d))
 const ROMANOS = ['I', 'II', 'III', 'IV']
+/** Hoy en la zona de la institución, como día UTC (los períodos son días de calendario). */
+const hoyInstitucion = () => new Date(`${hoyLocal()}T00:00:00.000Z`)
 
 /** Trimestre actual y anterior, semestre actual, año actual y todo el histórico. */
-export function periodosDisponibles(hoy = new Date()): Periodo[] {
+export function periodosDisponibles(hoy = hoyInstitucion()): Periodo[] {
   const y = hoy.getUTCFullYear()
   const q = Math.floor(hoy.getUTCMonth() / 3)
   const trimestre = (anio: number, t: number): Periodo => ({
@@ -70,7 +73,7 @@ export function periodosDisponibles(hoy = new Date()): Periodo[] {
 }
 
 /** El período de la URL, o el trimestre actual. */
-export function periodoPorId(id: string | null, hoy = new Date()): Periodo {
+export function periodoPorId(id: string | null, hoy = hoyInstitucion()): Periodo {
   const periodos = periodosDisponibles(hoy)
   return periodos.find((p) => p.id === id) ?? periodos[0]
 }

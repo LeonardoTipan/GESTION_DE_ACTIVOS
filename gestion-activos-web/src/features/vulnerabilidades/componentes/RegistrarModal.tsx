@@ -13,7 +13,6 @@ import {
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
 import { ahoraLocal, fechaHoraLocalAIso } from '../../../shared/formato.ts'
 import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
@@ -25,6 +24,7 @@ import {
 } from '../api/vulnerabilidades.ts'
 import { FORMATO_CVE, FUENTES, INFO_FUENTE, INFO_NIVEL, NIVELES } from '../riesgo.ts'
 
+import { instante } from '../../../shared/zona.ts'
 /** Tope de los campos de texto largo (el mismo que aplica la API). */
 const MAX_TEXTO_LARGO = 5000
 
@@ -89,7 +89,7 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
             : null,
       fecha: (v) => (v ? null : 'Indica cuándo se detectó'),
       fechaLimite: (v, valores) =>
-        v && valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
+        v && valores.fecha && instante(v).isBefore(instante(valores.fecha))
           ? 'No puede ser anterior a la detección'
           : null,
       evidencia: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
@@ -165,7 +165,7 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
           <DateTimePicker
             label="Fecha de detección"
             valueFormat="DD MMM YYYY HH:mm"
-            maxDate={new Date()}
+            maxDate={ahoraLocal()}
             withAsterisk
             {...form.getInputProps('fecha')}
           />
@@ -173,7 +173,7 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
             label="Fecha límite (SLA)"
             description="Opcional. Plazo para remediarla"
             valueFormat="DD MMM YYYY HH:mm"
-            minDate={form.values.fecha ? dayjs(form.values.fecha).toDate() : undefined}
+            minDate={form.values.fecha ?? undefined}
             clearable
             {...form.getInputProps('fechaLimite')}
           />

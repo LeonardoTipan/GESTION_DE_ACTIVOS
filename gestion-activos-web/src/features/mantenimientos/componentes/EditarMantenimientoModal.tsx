@@ -2,7 +2,6 @@ import { Button, Group, Modal, SegmentedControl, Stack, Text, Textarea } from '@
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
-import dayjs from 'dayjs'
 import { fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
@@ -13,6 +12,7 @@ import {
 } from '../api/mantenimientos.ts'
 import { INFO_TIPO, TIPOS } from '../fases.ts'
 
+import { instante } from '../../../shared/zona.ts'
 interface Props {
   opened: boolean
   onClose: () => void
@@ -56,7 +56,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
       fechaLimite: (v, valores) =>
         !v
           ? 'Indica la fecha límite'
-          : valores.fecha && dayjs(v).isBefore(dayjs(valores.fecha))
+          : valores.fecha && instante(v).isBefore(instante(valores.fecha))
             ? 'La fecha límite no puede ser anterior al inicio previsto'
             : null,
     },
@@ -123,7 +123,7 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
             label="Fecha límite"
             valueFormat="DD MMM YYYY HH:mm"
             withAsterisk
-            minDate={form.values.fecha ? new Date(form.values.fecha) : undefined}
+            minDate={form.values.fecha ?? undefined}
             {...form.getInputProps('fechaLimite')}
           />
         </Group>

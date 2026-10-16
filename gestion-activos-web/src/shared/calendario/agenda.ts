@@ -1,10 +1,11 @@
-import dayjs, { type Dayjs } from 'dayjs'
+import type { Dayjs } from 'dayjs'
 import type { components } from '../../api/schema'
 
+import { enZona } from '../zona.ts'
 /**
  * Lógica pura de los calendarios: rangos de cada vista y qué eventos tocan
- * cada día. Las fechas se muestran en la hora local del navegador (la de la
- * institución); la API las guarda en UTC.
+ * cada día. Las fechas se muestran y agrupan por día en la hora de la
+ * institución (shared/zona.ts), sea cual sea la del equipo; la API las guarda en UTC.
  */
 
 export type EventoAgenda = components['schemas']['EventoAgendaDto']
@@ -79,8 +80,8 @@ export interface Marca {
 export function marcasDelDia(eventos: EventoAgenda[], dia: Dayjs, incluirContinuas = false): Marca[] {
   const marcas: Marca[] = []
   for (const evento of eventos) {
-    const inicio = dayjs(evento.inicio)
-    const fin = evento.fin ? dayjs(evento.fin) : null
+    const inicio = enZona(evento.inicio)
+    const fin = evento.fin ? enZona(evento.fin) : null
     if (!fin || fin.isSame(inicio, 'day')) {
       if (inicio.isSame(dia, 'day')) marcas.push({ evento, rol: 'unico', hora: inicio })
     } else if (inicio.isSame(dia, 'day')) {
