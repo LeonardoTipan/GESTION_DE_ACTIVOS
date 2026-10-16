@@ -114,7 +114,9 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
           verificacionPrevista: iso(ahora - DIA), verificacionLimite: iso(ahora + DIA),
         })
         .expect(200);
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - DIA), limite: iso(ahora - 2 * DIA) }).expect(400);
+      // Una ventana ya programada y sin usar es plan: el analista no la mueve (403); el admin sí, con un intervalo válido.
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - DIA), limite: iso(ahora + 2 * DIA) }).expect(403);
+      await api(tokens.admin).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - DIA), limite: iso(ahora - 2 * DIA) }).expect(400);
       // Fuera de su ventana (antes de la prevista) → 409.
       await api(tokens.analista)
         .post(`/api/mantenimientos/${id}/verificaciones`, { fecha: iso(ahora - 2 * DIA), resultado: 'OPERATIVO', observaciones: 'Equipo enciende bien.', evidencia: 'Acta 1', responsable: 'Supervisor' })
@@ -131,6 +133,22 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       const capa3 = await agenda('mantenimientos', 3, ahora - 5 * DIA, ahora + DIA);
       expect(capa3.find((e) => e.clave === `m3r-${v.body.id}`)).toMatchObject({ tipo: 'REAL', estado: 'COMPLETADO', inicio: iso(ahora - HORA) });
       expect(capa3.some((e) => e.clave === `m3p-${id}`)).toBe(false); // ya verificado: no queda pendiente
+    }, LENTO);
+
+    it('tras una verificación que no lo cierra, el analista programa la siguiente (la ventana ya se usó)', async () => {
+      const { id } = (await programar(ahora - 3 * DIA, ahora - 2 * DIA).expect(201)).body;
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: iso(ahora - 3 * DIA + HORA), tecnico: 'jperez' }).expect(200);
+      await api(tokens.analista)
+        .patch(`/api/mantenimientos/${id}/finalizar`, {
+          fechaFin: iso(ahora - 3 * DIA + 2 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'DEGRADADO', diagnostico: 'Fuente quemada.', duracionMin: 60,
+          verificacionPrevista: iso(ahora - 2 * DIA), verificacionLimite: iso(ahora - DIA),
+        })
+        .expect(200);
+      await api(tokens.analista)
+        .post(`/api/mantenimientos/${id}/verificaciones`, { fecha: iso(ahora - 2 * DIA + HORA), resultado: 'NO_SATISFACTORIO', observaciones: 'Sigue reiniciándose.', responsable: 'Supervisor' })
+        .expect(201);
+      const res = await api(tokens.analista).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - HORA), limite: iso(ahora + DIA) }).expect(200);
+      expect(res.body).toMatchObject({ verificacionPrevista: iso(ahora - HORA), verificacionLimite: iso(ahora + DIA), cierre: 'NO_SATISFACTORIO' });
     }, LENTO);
 
     it('agenda: lo no iniciado es PREVISTO (no completado), vencido al pasar el límite; filtra por categoría', async () => {
@@ -212,6 +230,31 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       await api(tokens.admin).patch(`/api/respaldos/ejecuciones/${ejecucionId}/plazo-prueba`, { nuevoLimite: iso(ahora + 3 * DIA), motivo: MOTIVO }).expect(200);
     });
 
+    it('modificar la fecha de una ejecución no salta el plan: fuera de la ventana solo el admin, y el motivo del cambio es la justificación', async () => {
+      const { fueraDePlazo: _, ...cuerpo } = ejecucion({ fecha: noche(3) });
+      const { id } = (await api(tokens.analista).post('/api/respaldos/ejecuciones', cuerpo).expect(201)).body;
+      const motivoCambio = 'La hora se copió mal del registro del software de respaldo.';
+      const mediodia = `${iso(ahora - 3 * DIA).slice(0, 10)}T17:00:00.000Z`; // 12:00 en Quito
+      await api(tokens.analista).patch(`/api/respaldos/ejecuciones/${id}`, { fecha: mediodia, motivoCambio }).expect(403);
+      // Otros datos sin tocar la fecha: no se reevalúa.
+      await api(tokens.analista).patch(`/api/respaldos/ejecuciones/${id}`, { volumenGb: 12, motivoCambio }).expect(200);
+      const ok = await api(tokens.admin).patch(`/api/respaldos/ejecuciones/${id}`, { fecha: mediodia, motivoCambio }).expect(200);
+      expect(ok.body).toMatchObject({ fecha: mediodia, fueraDePlazo: true, motivoExcepcion: motivoCambio, excepcionPor: 'admin.test' });
+      // Devuelta a la ventana deja de ser excepción (la anterior queda en las trazas).
+      const vuelta = await api(tokens.analista).patch(`/api/respaldos/ejecuciones/${id}`, { fecha: noche(3), motivoCambio }).expect(200);
+      expect(vuelta.body).toMatchObject({ fueraDePlazo: false, motivoExcepcion: null });
+      await api(tokens.admin).post(`/api/respaldos/ejecuciones/${id}/anular`, { motivo: 'Registro de prueba de modificación de fechas.' }).expect(200);
+    });
+
+    it('una prueba de restauración ya programada solo la reprograma un admin; una restauración no se convierte en una segunda prueba', async () => {
+      await api(tokens.analista).patch(`/api/respaldos/ejecuciones/${ejecucionId}/prueba`, { prevista: iso(ahora - DIA), limite: iso(ahora + 4 * DIA) }).expect(403);
+      await api(tokens.admin).patch(`/api/respaldos/ejecuciones/${ejecucionId}/prueba`, { prevista: iso(ahora - DIA), limite: iso(ahora + 4 * DIA) }).expect(200);
+      const incidente = (await prisma.restauracion.findFirstOrThrow({ where: { ejecucionId, motivo: 'INCIDENTE_DISPONIBILIDAD' } })).id;
+      await api(tokens.admin)
+        .patch(`/api/respaldos/restauraciones/${incidente}`, { motivo: 'PRUEBA_PROGRAMADA', motivoCambio: 'Se registró con un motivo equivocado en el formulario.' })
+        .expect(409);
+    });
+
     it('agenda: ventanas previstas, ejecuciones reales y restauraciones como eventos distintos', async () => {
       const capa1 = await agenda('respaldos', 1, ahora - 3 * DIA, ahora);
       expect(capa1.every((e) => e.tipo === 'PREVISTO')).toBe(true);
@@ -271,6 +314,12 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       expect(capa1.find((e) => e.clave === `v1l-${id}`)).toMatchObject({ tipo: 'PREVISTO', inicio: iso(ahora + 5 * DIA), estado: 'COMPLETADO' });
       const capa3 = await agenda('vulnerabilidades', 3, ahora - 10 * DIA, ahora + 10 * DIA);
       expect(capa3.filter((e) => e.tipo === 'REAL')).toMatchObject([{ estado: 'COMPLETADO', fueraDePlazo: true }]);
+    });
+
+    it('una verificación ya programada solo la reprograma un admin', async () => {
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora + 2 * DIA), limite: iso(ahora + 3 * DIA) }).expect(403);
+      const ok = await api(tokens.admin).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora + 2 * DIA), limite: iso(ahora + 3 * DIA) }).expect(200);
+      expect(ok.body).toMatchObject({ verificacionPrevista: iso(ahora + 2 * DIA), verificacionLimite: iso(ahora + 3 * DIA) });
     });
 
     it('permisos: el auditor no programa ni amplía', async () => {

@@ -1,7 +1,8 @@
 import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AmpliarPlazoDto, ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
-import { diaLocal, exigirExcepcion, exigirIntervalo, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
+import { diaLocal, evaluarPlazo, exigirExcepcion, exigirIntervalo, exigirReprogramacion, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
 import { dentroDeVentana, TEXTO_VENTANA } from './ventana-horaria.js';
+import type { VentanaRespaldo } from '../../generated/prisma/enums.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import {
@@ -95,12 +96,7 @@ export class EjecucionesRespaldoService {
     const plan = await this.planes.exigirVigente(dto.planId);
     await this.activos.exigirOperativo(plan.activoId);
     const { motivoExcepcion, ...datos } = dto;
-    const fuera =
-      diaLocal(dto.fecha) < diaLocal(plan.vigenteDesde)
-        ? `La ejecución es anterior al inicio previsto del plan (${diaLocal(plan.vigenteDesde)}).`
-        : !dentroDeVentana(plan.ventana, dto.fecha)
-          ? `La ejecución está fuera de la ventana ${TEXTO_VENTANA[plan.ventana]} del plan.`
-          : null;
+    const fuera = this.fueraDelPlan(plan, dto.fecha);
     const excepcion = fuera ? exigirExcepcion(fuera, motivoExcepcion, usuario) : SIN_EXCEPCION;
     if (dto.pruebaPrevista && dto.pruebaPrevista < dto.fecha) {
       throw new BadRequestException('La prueba de restauración prevista no puede ser anterior a la ejecución.');
@@ -135,10 +131,32 @@ export class EjecucionesRespaldoService {
     return aDto(r);
   }
 
+  /** Por qué una hora real queda fuera del plan (antes de su inicio o de su ventana), o null. */
+  private fueraDelPlan(plan: { vigenteDesde: Date; ventana: VentanaRespaldo }, fecha: Date): string | null {
+    if (diaLocal(fecha) < diaLocal(plan.vigenteDesde)) {
+      return `La ejecución es anterior al inicio previsto del plan (${diaLocal(plan.vigenteDesde)}).`;
+    }
+    if (!dentroDeVentana(plan.ventana, fecha)) {
+      return `La ejecución está fuera de la ventana ${TEXTO_VENTANA[plan.ventana]} del plan.`;
+    }
+    return null;
+  }
+
   async modificar(id: number, dto: ModificarEjecucionDto, usuario: AuthUser) {
     const { motivoCambio, ...datos } = dto;
     exigirNoFutura(datos.fecha);
-    await this.trazas.modificar('EJECUCION_RESPALDO', id, datos, motivoCambio, usuario.username);
+    // Corregir la fecha no puede saltarse el plan: si la nueva cae fuera, es una excepción
+    // (solo admin) y su justificación es el motivo del cambio.
+    let excepcion = {};
+    const actual = datos.fecha ? await this.findOne(id) : null;
+    // Solo si la fecha cambia: editar otros datos de un registro antiguo no la reevalúa.
+    if (datos.fecha && actual && datos.fecha.getTime() !== actual.fecha.getTime()) {
+      const plan = await this.prisma.planRespaldo.findUniqueOrThrow({ where: { id: actual.planId } });
+      const fuera = this.fueraDelPlan(plan, datos.fecha);
+      // Si la corrección la devuelve al plan, deja de ser excepción (la anterior queda en la traza).
+      excepcion = fuera ? exigirExcepcion(fuera, motivoCambio, usuario) : SIN_EXCEPCION;
+    }
+    await this.trazas.modificar('EJECUCION_RESPALDO', id, { ...datos, ...excepcion }, motivoCambio, usuario.username);
     return this.findOne(id);
   }
 
@@ -151,6 +169,7 @@ export class EjecucionesRespaldoService {
     if (dto.prevista < e.fecha) {
       throw new BadRequestException('La prueba prevista no puede ser anterior a la ejecución.');
     }
+    exigirReprogramacion(e.pruebaLimite !== null, 'La prueba de restauración', usuario);
     exigirIntervalo(dto.prevista, dto.limite, 'Prueba de restauración');
     await this.trazas.modificar(
       'EJECUCION_RESPALDO',
@@ -283,7 +302,38 @@ export class RestauracionesService {
   async modificar(id: number, dto: ModificarRestauracionDto, usuario: AuthUser) {
     const { motivoCambio, ...datos } = dto;
     exigirNoFutura(datos.fecha);
-    await this.trazas.modificar('RESTAURACION', id, datos, motivoCambio, usuario.username);
+    // Como al registrar: si cambia la fecha o el motivo, se reevalúa contra la copia y su
+    // prueba prevista; fuera de la ventana es excepción (admin) justificada por el motivo del cambio.
+    const actual = await this.findOne(id);
+    const fecha = datos.fecha ?? actual.fecha;
+    const motivo = datos.motivo ?? actual.motivo;
+    let excepcion = {};
+    if (fecha.getTime() !== actual.fecha.getTime() || motivo !== actual.motivo) {
+      const origen = await this.prisma.ejecucionRespaldo.findUniqueOrThrow({ where: { id: actual.ejecucionId } });
+      if (fecha < origen.fecha) {
+        throw new BadRequestException('La restauración no puede ser anterior a la ejecución del respaldo.');
+      }
+      if (motivo === 'PRUEBA_PROGRAMADA') {
+        if (!origen.pruebaPrevista) {
+          throw new ConflictException(`La ejecución ${origen.id} no tiene una prueba de restauración programada.`);
+        }
+        const previa = await this.prisma.restauracion.findFirst({
+          where: { ejecucionId: origen.id, motivo: 'PRUEBA_PROGRAMADA', anuladoEn: null, id: { not: id } },
+          select: { id: true },
+        });
+        if (previa) {
+          throw new ConflictException(`La prueba programada de esta copia ya está registrada (restauración ${previa.id}).`);
+        }
+        const fuera = evaluarPlazo(fecha, origen.pruebaPrevista, origen.pruebaLimite);
+        excepcion =
+          fuera === 'ANTES' || fuera === 'DESPUES'
+            ? exigirExcepcion('La prueba de restauración queda fuera de su ventana prevista.', motivoCambio, usuario)
+            : SIN_EXCEPCION;
+      } else {
+        excepcion = SIN_EXCEPCION;
+      }
+    }
+    await this.trazas.modificar('RESTAURACION', id, { ...datos, ...excepcion }, motivoCambio, usuario.username);
     return this.findOne(id);
   }
 

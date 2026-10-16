@@ -25,6 +25,16 @@ export function exigirIntervalo(inicio: Date | null | undefined, limite: Date | 
   }
 }
 
+/**
+ * Una ventana prevista ya programada es plan: reprogramarla equivale a moverle
+ * el plazo, así que solo lo hace un admin (como la ampliación formal).
+ */
+export function exigirReprogramacion(yaProgramada: boolean, que: string, usuario: AuthUser): void {
+  if (yaProgramada && !usuario.roles.includes('admin')) {
+    throw new ForbiddenException(`${que} ya está programada: cambiarla o ampliar su plazo es de un administrador.`);
+  }
+}
+
 export const MOTIVO_EXCEPCION_MINIMO = 20;
 
 export interface Excepcion {

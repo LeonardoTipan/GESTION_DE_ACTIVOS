@@ -67,7 +67,7 @@ export class ParametrosPlanMantenimientoDto {
   @MaxLength(2000)
   actividades: string;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 365, default: 7, description: 'Días de plazo de cada intervención desde su inicio previsto.' })
+  @ApiPropertyOptional({ minimum: 1, maximum: 365, description: 'Días de plazo de cada intervención desde su inicio previsto (7 si se omite).' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

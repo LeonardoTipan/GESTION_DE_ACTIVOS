@@ -8,7 +8,7 @@ import { AvisosService } from '../../audit/avisos.service.js';
 import type { EventoAgendaDto, ProgramarVerificacionDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import { agendaVulnerabilidades } from './agenda.js';
-import { exigirIntervalo, plazoOExcepcion } from '../../common/plazos/plazos.js';
+import { exigirIntervalo, exigirReprogramacion, plazoOExcepcion } from '../../common/plazos/plazos.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
@@ -308,6 +308,7 @@ export class TratamientoVulnerabilidadService {
     if (v.tratamientoIniciadoEn && dto.prevista < v.tratamientoIniciadoEn) {
       throw new BadRequestException('La verificación prevista no puede ser anterior al inicio del tratamiento.');
     }
+    exigirReprogramacion(v.verificacionLimite !== null, 'La verificación', u);
     exigirIntervalo(dto.prevista, dto.limite, 'Verificación');
     await this.trazas.modificar(
       'VULNERABILIDAD',

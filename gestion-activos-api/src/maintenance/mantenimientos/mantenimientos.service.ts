@@ -16,7 +16,7 @@ import type { IndicadorDto } from '../../common/indicadores/indicador.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type { ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
-import { exigirIntervalo, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
+import { exigirIntervalo, exigirReprogramacion, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
 import type {
   AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
@@ -374,6 +374,14 @@ export class MantenimientosService {
     if (actual.fechaFin && dto.prevista < actual.fechaFin) {
       throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
     }
+    // Tras una verificación que no lo cerró (seguimiento, no satisfactorio) se programa la siguiente:
+    // esa ventana ya se usó. Solo cambiar una aún sin usar es mover el plan.
+    const sinUsar =
+      actual.verificacionPrevista !== null &&
+      (await this.prisma.verificacionMantenimiento.count({
+        where: { mantenimientoId: id, anuladoEn: null, fecha: { gte: actual.verificacionPrevista } },
+      })) === 0;
+    exigirReprogramacion(sinUsar, 'La verificación', usuario);
     exigirIntervalo(dto.prevista, dto.limite, 'Verificación');
     await this.trazas.modificar(
       'MANTENIMIENTO',

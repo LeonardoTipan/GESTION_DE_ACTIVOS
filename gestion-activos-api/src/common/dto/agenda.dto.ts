@@ -45,7 +45,7 @@ export class EventoAgendaDto {
   @ApiProperty({ description: 'Se registró fuera del intervalo previsto, como excepción.' })
   fueraDePlazo: boolean;
 
-  @ApiProperty({ nullable: true, example: 'jperez' })
+  @ApiProperty({ type: String, nullable: true, example: 'jperez' })
   responsable: string | null;
 
   @ApiProperty({ type: ActivoBreveDto })
@@ -54,7 +54,7 @@ export class EventoAgendaDto {
   @ApiProperty({ example: '/mantenimientos/12', description: 'Ruta del registro en la aplicación.' })
   ruta: string;
 
-  @ApiProperty({ example: 'Ventana nocturna 22:00–02:00', nullable: true })
+  @ApiProperty({ type: String, example: 'Ventana nocturna 22:00–02:00', nullable: true })
   detalle: string | null;
 }
 
