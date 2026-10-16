@@ -187,7 +187,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       // El equipo en condición "Malo" recibe un mantenimiento correctivo.
       id = (
         await api(tokens.analista)
-          .post('/api/mantenimientos', { activoId: ids.pcMala, tipo: 'CORRECTIVO', actividad: 'Fuente dañada', fecha: hace(1) })
+          .post('/api/mantenimientos', { activoId: ids.pcMala, tipo: 'CORRECTIVO', actividad: 'Fuente dañada', fecha: hace(2), fechaLimite: en(2) })
           .expect(201)
       ).body.id;
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: hace(1), tecnico: 'jperez' }).expect(200);
@@ -374,6 +374,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
             rtoMinutos: 240,
             responsable: 'Infraestructura',
             justificacion: 'Monitor de la sala de control con configuración propia.',
+            vigenteDesde: hace(30).slice(0, 10),
             activoIds: [ids.monitor],
           })
           .expect(201)
@@ -381,7 +382,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       await api(tokens.analista)
         .post('/api/respaldos/ejecuciones', {
           planId: plan.id,
-          fecha: hace(1).slice(0, 10),
+          fecha: `${hace(1).slice(0, 10)}T03:30:00.000Z`,
           tipo: 'COMPLETO',
           medio: 'DISCO_A_DISCO',
           volumenGb: 1,

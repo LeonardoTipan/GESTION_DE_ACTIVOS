@@ -12,6 +12,8 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { AvisosService } from '../../audit/avisos.service.js';
 import { TrazasService } from '../../audit/trazas.service.js';
+import { plazoOExcepcion } from '../../common/plazos/plazos.js';
+import type { IniciarTratamientoDto } from '../tratamiento/dto.js';
 import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
@@ -179,14 +181,27 @@ export class VulnerabilidadesService {
   }
 
   /** Inicia el tratamiento: exige la evaluación (prioridad, responsable y plan). */
-  async iniciarMitigacion(id: number, usuario?: AuthUser): Promise<VulnerabilidadDto> {
+  async iniciarMitigacion(id: number, usuario?: AuthUser, dto: IniciarTratamientoDto = {}): Promise<VulnerabilidadDto> {
     const actual = await this.findOne(id);
     if (!actual.prioridad || !actual.responsable || !actual.planRemediacion) {
       throw new ConflictException(
         'Registre la evaluación (prioridad, responsable y plan de remediación) antes de iniciar el tratamiento.',
       );
     }
-    return this.transicionar(id, 'iniciar-mitigacion', {}, 'Tratamiento iniciado según el plan de remediación.', usuario);
+    // Inicio REAL contra lo previsto [inicio previsto del tratamiento, límite de remediación].
+    const inicio = dto.fecha ?? new Date();
+    const excepcion = plazoOExcepcion({
+      real: inicio,
+      inicio: actual.tratamientoPrevisto,
+      limite: actual.fechaLimite,
+      que: 'El inicio del tratamiento',
+      motivoExcepcion: dto.motivoExcepcion,
+      usuario,
+    });
+    const motivo = excepcion.fueraDePlazo
+      ? `Tratamiento iniciado FUERA DE PLAZO (excepción de ${excepcion.excepcionPor}): ${excepcion.motivoExcepcion}`
+      : 'Tratamiento iniciado según el plan de remediación.';
+    return this.transicionar(id, 'iniciar-mitigacion', { tratamientoIniciadoEn: inicio }, motivo.slice(0, 5000), usuario);
   }
 
   aceptarRiesgo(id: number, dto: AceptarRiesgoDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {

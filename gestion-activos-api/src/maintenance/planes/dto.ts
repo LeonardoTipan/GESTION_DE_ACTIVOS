@@ -16,6 +16,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -65,6 +66,14 @@ export class ParametrosPlanMantenimientoDto {
   @MinLength(10)
   @MaxLength(2000)
   actividades: string;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 365, default: 7, description: 'Días de plazo de cada intervención desde su inicio previsto.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  plazoDias?: number;
 }
 
 /** Un plan por cada activo seleccionado, con los mismos parámetros. */
@@ -170,6 +179,12 @@ export class RegistrarVerificacionMantenimientoDto {
   @MaxLength(191)
   evidencia?: string;
 
+  @ApiPropertyOptional({ description: 'Fuera de la ventana prevista de verificación: justificación (solo admin).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
+
   @ApiProperty({ example: 'Mesa de Servicios' })
   @Trim()
   @IsString()
@@ -187,6 +202,9 @@ export class VerificacionMantenimientoDto extends RegistroDto {
   @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
   @ApiProperty() responsable: string;
   @ApiProperty() registradoPor: string;
+  @ApiProperty() fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
 }
 
 // ── Tablero ─────────────────────────────────────────────────────────────────

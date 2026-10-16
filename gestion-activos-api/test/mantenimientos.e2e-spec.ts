@@ -22,6 +22,10 @@ describe('Mantenimientos (e2e)', () => {
 
   const MANANA = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
   const AYER = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  // Intervalo previsto que contiene "ahora": el trabajo se puede iniciar en plazo.
+  const HACE_DOS_HORAS = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
+  const HACE_UNA_HORA = new Date(Date.now() - 3600 * 1000).toISOString();
+  const EN_UNA_SEMANA = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -86,7 +90,8 @@ describe('Mantenimientos (e2e)', () => {
           activoId,
           tipo: 'PREVENTIVO',
           actividad: 'Limpieza y actualización de firmware',
-          fecha: MANANA,
+          fecha: HACE_DOS_HORAS,
+          fechaLimite: EN_UNA_SEMANA,
           ...extra,
         })
         .expect(201)
@@ -109,7 +114,9 @@ describe('Mantenimientos (e2e)', () => {
           activoId,
           tipo: 'PREVENTIVO',
           actividad: '  Limpieza y actualización de firmware  ',
-          fecha: MANANA,
+          // Intervalo previsto que contiene "ahora": se inicia en plazo.
+          fecha: HACE_DOS_HORAS,
+          fechaLimite: EN_UNA_SEMANA,
         })
         .expect(201);
       expect(res.body).toMatchObject({
@@ -118,7 +125,9 @@ describe('Mantenimientos (e2e)', () => {
         fase: 'PROGRAMADO',
         vencido: false,
         actividad: 'Limpieza y actualización de firmware',
-        fecha: MANANA,
+        fecha: HACE_DOS_HORAS,
+        fechaLimite: EN_UNA_SEMANA,
+        fueraDePlazo: false,
         fechaInicio: null,
         fechaFin: null,
         estadoEquipo: null,
@@ -221,7 +230,7 @@ describe('Mantenimientos (e2e)', () => {
 
   describe('validaciones', () => {
     it('activo inexistente o dado de baja → 400', async () => {
-      const cuerpo = { tipo: 'PREVENTIVO', actividad: 'X', fecha: MANANA };
+      const cuerpo = { tipo: 'PREVENTIVO', actividad: 'X', fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
       await api(tokens.analista)
         .post('/api/mantenimientos', { ...cuerpo, activoId: 999999 })
         .expect(400);
@@ -232,7 +241,7 @@ describe('Mantenimientos (e2e)', () => {
     });
 
     it('tipo inválido o campos de otras fases al programar → 400', async () => {
-      const cuerpo = { activoId, actividad: 'X', fecha: MANANA };
+      const cuerpo = { activoId, actividad: 'X', fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
       await api(tokens.analista)
         .post('/api/mantenimientos', { ...cuerpo, tipo: 'PREDICTIVO' })
         .expect(400);
@@ -286,6 +295,7 @@ describe('Mantenimientos (e2e)', () => {
           tipo: 'PREVENTIVO',
           actividad: 'X',
           fecha: MANANA,
+          fechaLimite: EN_UNA_SEMANA,
         })
         .expect(403);
       await api(tokens.auditor)
@@ -301,7 +311,7 @@ describe('Mantenimientos (e2e)', () => {
     let vencidoId: number;
 
     beforeAll(async () => {
-      vencidoId = (await programar({ actividad: 'Atrasado', fecha: AYER })).id;
+      vencidoId = (await programar({ actividad: 'Atrasado', fecha: AYER, fechaLimite: HACE_UNA_HORA })).id;
     });
 
     it('marca como vencido un PROGRAMADO con fecha pasada, y lo filtra', async () => {
@@ -346,7 +356,8 @@ describe('Mantenimientos (e2e)', () => {
       const desde = encodeURIComponent(
         new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString(),
       );
-      const hasta = encodeURIComponent(new Date().toISOString());
+      // Hasta hace 3 h: deja fuera los programados hace 2 h.
+      const hasta = encodeURIComponent(new Date(Date.now() - 3 * 3600 * 1000).toISOString());
       const res = await api(tokens.auditor)
         .get(`/api/mantenimientos?desde=${desde}&hasta=${hasta}&order=asc`)
         .expect(200);

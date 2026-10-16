@@ -34,6 +34,7 @@ import {
   EditarVulnerabilidadDto,
   RegistrarVulnerabilidadDto,
 } from './dto/acciones.dto.js';
+import { IniciarTratamientoDto } from '../tratamiento/dto.js';
 import { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
 import {
   PaginatedVulnerabilidadDto,
@@ -122,9 +123,10 @@ export class VulnerabilidadesController {
   @Patch(':id/iniciar-mitigacion')
   iniciarMitigacion(
     @Param('id', ParseIntPipe) id: number,
+    @Body() dto: IniciarTratamientoDto,
     @CurrentUser() usuario: AuthUser,
   ): Promise<VulnerabilidadDto> {
-    return this.vulnerabilidades.iniciarMitigacion(id, usuario);
+    return this.vulnerabilidades.iniciarMitigacion(id, usuario, dto ?? {});
   }
 
   @ApiOperation({

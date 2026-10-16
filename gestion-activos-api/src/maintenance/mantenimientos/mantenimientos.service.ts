@@ -15,7 +15,10 @@ import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import type { ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
+import { exigirIntervalo, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
 import type {
+  AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
   EditarMantenimientoDto,
   FinalizarMantenimientoDto,
@@ -66,9 +69,12 @@ export class MantenimientosService {
     query: QueryMantenimientosDto,
   ): Promise<Paginated<MantenimientoDto>> {
     const ahora = new Date();
+    // Igual que estaVencido(): sin completar y con el límite pasado (sin límite, la fecha programada).
     const vencidos: Prisma.MantenimientoWhereInput = {
-      fase: 'PROGRAMADO',
-      fecha: { lt: ahora },
+      OR: [
+        { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] }, fechaLimite: { lt: ahora } },
+        { fase: 'PROGRAMADO', fechaLimite: null, fecha: { lt: ahora } },
+      ],
     };
     const filtros: Prisma.MantenimientoWhereInput[] = [
       {
@@ -140,6 +146,7 @@ export class MantenimientosService {
     // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos,
     // pero la regla no depende de ella.
     await this.activos.exigirOperativo(dto.activoId);
+    exigirIntervalo(dto.fecha, dto.fechaLimite, 'Mantenimiento');
     const mantenimiento = await this.prisma.mantenimiento.create({
       data: dto,
       include: INCLUDE,
@@ -147,15 +154,34 @@ export class MantenimientosService {
     return conVencido(mantenimiento);
   }
 
+  /**
+   * El inicio real se registra tal cual. Si cae fuera de [inicio previsto,
+   * límite], solo un admin puede registrarlo como excepción justificada; el
+   * plan no se toca. (Los registros sin límite, anteriores a los plazos, no se
+   * comprueban.)
+   */
   async iniciar(
     id: number,
     dto: IniciarMantenimientoDto,
+    usuario?: AuthUser,
   ): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     this.validarTransicion(actual, 'iniciar');
+    const fechaInicio = dto.fechaInicio ?? new Date();
+    const excepcion = actual.fechaLimite
+      ? plazoOExcepcion({
+          real: fechaInicio,
+          inicio: actual.fecha,
+          limite: actual.fechaLimite,
+          que: 'El inicio del mantenimiento',
+          motivoExcepcion: dto.motivoExcepcion,
+          usuario,
+        })
+      : SIN_EXCEPCION;
     return this.aplicar(id, 'iniciar', {
-      fechaInicio: dto.fechaInicio ?? new Date(),
+      fechaInicio,
       ...(dto.tecnico ? { tecnico: dto.tecnico } : {}),
+      ...(excepcion.fueraDePlazo ? excepcion : {}),
     });
   }
 
@@ -176,7 +202,26 @@ export class MantenimientosService {
     if (!tecnico) {
       throw new BadRequestException('Indique el técnico que realizó el mantenimiento.');
     }
+    // Terminar después del límite: excepción (salvo que ya se registrara una al iniciar).
+    const excepcion =
+      actual.fechaLimite && !actual.fueraDePlazo
+        ? plazoOExcepcion({
+            real: fechaFin,
+            limite: actual.fechaLimite,
+            que: 'El fin del mantenimiento',
+            motivoExcepcion: dto.motivoExcepcion,
+            usuario,
+          })
+        : SIN_EXCEPCION;
+    // Capa 3: ventana prevista de verificación, propia (no tiene que caber en el plazo de la ejecución).
+    if (dto.verificacionPrevista && dto.verificacionPrevista < fechaFin) {
+      throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
+    }
+    exigirIntervalo(dto.verificacionPrevista, dto.verificacionLimite, 'Verificación');
     const resultado = await this.aplicar(id, 'finalizar', {
+      ...(excepcion.fueraDePlazo ? excepcion : {}),
+      verificacionPrevista: dto.verificacionPrevista,
+      verificacionLimite: dto.verificacionLimite,
       resultado: dto.resultado,
       estadoEquipo: dto.estadoEquipo,
       fechaFin,
@@ -271,7 +316,73 @@ export class MantenimientosService {
         `El mantenimiento ${id} está en fase ${actual.fase}: solo se puede editar mientras está PROGRAMADO.`,
       );
     }
+    exigirIntervalo(datos.fecha ?? actual.fecha, datos.fechaLimite ?? actual.fechaLimite, 'Mantenimiento');
     await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: 'PROGRAMADO' });
+    return this.findOne(id);
+  }
+
+  /**
+   * Ampliación formal del plazo (solo admin, con motivo): de la ejecución, o de
+   * la verificación prevista. Se conserva el límite original y queda la traza.
+   */
+  async ampliarPlazo(id: number, dto: AmpliarPlazoMantenimientoDto, usuario: AuthUser): Promise<MantenimientoDto> {
+    const actual = await this.findOne(id);
+    if (actual.anuladoEn) throw new ConflictException(`El mantenimiento ${id} está anulado.`);
+    if (dto.campo === 'EJECUCION') {
+      if (actual.fase !== 'PROGRAMADO' && actual.fase !== 'EN_EJECUCION') {
+        throw new ConflictException(`El mantenimiento ${id} está ${actual.fase}: ya no tiene plazo de ejecución que ampliar.`);
+      }
+      if (!actual.fechaLimite) throw new ConflictException(`El mantenimiento ${id} no tiene fecha límite.`);
+      if (dto.nuevoLimite <= actual.fechaLimite) {
+        throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
+      }
+      await this.trazas.modificar(
+        'MANTENIMIENTO',
+        id,
+        { fechaLimite: dto.nuevoLimite, fechaLimiteOriginal: actual.fechaLimiteOriginal ?? actual.fechaLimite },
+        `Ampliación del plazo de ejecución: ${dto.motivo}`,
+        usuario.username,
+        { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] } },
+      );
+    } else {
+      if (actual.fase !== 'FINALIZADO' || actual.cierre === 'CERRADO') {
+        throw new ConflictException(`El mantenimiento ${id} no tiene una verificación pendiente.`);
+      }
+      if (!actual.verificacionLimite) throw new ConflictException(`El mantenimiento ${id} no tiene verificación programada.`);
+      if (dto.nuevoLimite <= actual.verificacionLimite) {
+        throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
+      }
+      await this.trazas.modificar(
+        'MANTENIMIENTO',
+        id,
+        { verificacionLimite: dto.nuevoLimite },
+        `Ampliación del plazo de verificación: ${dto.motivo}`,
+        usuario.username,
+        { fase: 'FINALIZADO' },
+      );
+    }
+    return this.findOne(id);
+  }
+
+  /** Capa 3: programa (o reprograma) la ventana de verificación de un mantenimiento finalizado. */
+  async programarVerificacion(id: number, dto: ProgramarVerificacionDto, usuario: AuthUser): Promise<MantenimientoDto> {
+    const actual = await this.findOne(id);
+    if (actual.anuladoEn) throw new ConflictException(`El mantenimiento ${id} está anulado.`);
+    if (actual.fase !== 'FINALIZADO' || actual.cierre === 'CERRADO') {
+      throw new ConflictException('Solo se programa la verificación de un mantenimiento finalizado y aún sin cerrar.');
+    }
+    if (actual.fechaFin && dto.prevista < actual.fechaFin) {
+      throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
+    }
+    exigirIntervalo(dto.prevista, dto.limite, 'Verificación');
+    await this.trazas.modificar(
+      'MANTENIMIENTO',
+      id,
+      { verificacionPrevista: dto.prevista, verificacionLimite: dto.limite },
+      'Verificación programada.',
+      usuario.username,
+      { fase: 'FINALIZADO' },
+    );
     return this.findOne(id);
   }
 

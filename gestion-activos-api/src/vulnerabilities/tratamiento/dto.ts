@@ -7,6 +7,7 @@ import {
   IsArray,
   IsDate,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -16,6 +17,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Trim } from '../../common/decorators/trim.decorator.js';
+import { AmpliarPlazoDto } from '../../common/dto/agenda.dto.js';
 import { RegistroDto } from '../../common/dto/registro.dto.js';
 import {
   NivelRiesgo,
@@ -67,11 +69,48 @@ export class EvaluarVulnerabilidadDto {
   @IsEnum(NivelRiesgo)
   nivelRiesgo?: NivelRiesgo;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Plazo (SLA) acordado.' })
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Límite de remediación (SLA). Fijarlo o adelantarlo; para ampliarlo se usa PATCH /plazo (admin).',
+  })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   fechaLimite?: Date;
+
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Inicio previsto del tratamiento (distinto de la detección): no anterior a la detección ni posterior al límite.',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  tratamientoPrevisto?: Date;
+}
+
+/** Iniciar el tratamiento: fuera de [inicio previsto, límite], excepción de admin. */
+export class IniciarTratamientoDto {
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Inicio real (por defecto, ahora).' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(AHORA_CON_MARGEN, { message: 'fecha no puede estar en el futuro' })
+  fecha?: Date;
+
+  @ApiPropertyOptional({ description: 'Fuera del intervalo previsto: justificación (solo admin).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
+}
+
+/** Ampliación formal del plazo de remediación o de verificación (solo admin). */
+export class AmpliarPlazoVulnerabilidadDto extends AmpliarPlazoDto {
+  @ApiProperty({ enum: ['REMEDIACION', 'VERIFICACION'] })
+  @IsIn(['REMEDIACION', 'VERIFICACION'])
+  campo: 'REMEDIACION' | 'VERIFICACION';
 }
 
 export class RegistrarAccionDto {
@@ -101,9 +140,18 @@ export class RegistrarAccionDto {
   @IsString()
   @MaxLength(191)
   evidencia?: string;
+
+  @ApiPropertyOptional({ description: 'Acción posterior al límite de remediación: justificación (solo admin).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
 }
 
 export class AccionRemediacionDto extends RegistroDto {
+  @ApiProperty() fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
   @ApiProperty() id: number;
   @ApiProperty() vulnerabilidadId: number;
   @ApiProperty({ type: String, format: 'date-time' }) fecha: Date;
@@ -149,9 +197,18 @@ export class RegistrarVerificacionVulnerabilidadDto {
   @MinLength(1)
   @MaxLength(191)
   responsable: string;
+
+  @ApiPropertyOptional({ description: 'Verificación fuera de su ventana prevista: justificación (solo admin).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
 }
 
 export class VerificacionVulnerabilidadDto extends RegistroDto {
+  @ApiProperty() fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
   @ApiProperty() id: number;
   @ApiProperty() vulnerabilidadId: number;
   @ApiProperty({ type: String, format: 'date-time' }) fecha: Date;

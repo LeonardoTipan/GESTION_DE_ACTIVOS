@@ -24,6 +24,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
+import { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
   CrearPlanesMantenimientoDto,
@@ -51,6 +52,16 @@ export class PlanesMantenimientoController {
     private readonly planes: PlanesMantenimientoService,
     private readonly verificaciones: VerificacionesMantenimientoService,
   ) {}
+
+  @ApiOperation({
+    summary: 'Agenda (calendario) de las tres capas',
+    description: 'Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado o verificado) en el rango, con filtros.',
+  })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get('agenda')
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.planes.agenda(q);
+  }
 
   @ApiOperation({ summary: 'Tablero: próximas intervenciones, vencidas, activos sin plan y pendientes de verificar' })
   @ApiOkResponse({ type: TableroMantenimientosDto })

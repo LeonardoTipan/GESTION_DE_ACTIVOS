@@ -30,6 +30,9 @@ import type {
   VerificacionMantenimientoDto,
 } from './dto.js';
 import { siguienteFecha } from './frecuencia.js';
+import { plazoOExcepcion } from '../../common/plazos/plazos.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
+import { agendaMantenimientos } from './agenda.js';
 
 const INCLUDE = { activo: SELECT_ACTIVO, _count: { select: { mantenimientos: true } } } as const;
 type PlanConActivo = Prisma.PlanMantenimientoGetPayload<{ include: typeof INCLUDE }>;
@@ -156,18 +159,64 @@ export class PlanesMantenimientoService {
       if (count === 0) {
         throw new ConflictException(`El plan ${id} cambió mientras se programaba; vuelve a consultarlo.`);
       }
+      // Intervalo previsto: desde el inicio, con el plazo del plan.
+      const inicio = fecha ?? prevista;
       const m = await tx.mantenimiento.create({
         data: {
           activoId: plan.activoId,
           planId: id,
           tipo: plan.tipo,
           actividad: plan.actividades.slice(0, 191),
-          fecha: fecha ?? prevista,
+          fecha: inicio,
+          fechaLimite: new Date(inicio.getTime() + (plan.plazoDias ?? 7) * 86_400_000),
         },
       });
       return m.id;
     });
     return { mantenimientoId, plan: await this.findOne(id) };
+  }
+
+  /** Agenda de las tres capas en un rango, con los filtros del calendario. */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const rango = { gte: q.desde, lte: q.hasta };
+    const deActivo = q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {};
+    const contiene = q.responsable ? { contains: q.responsable } : undefined;
+    const [mantenimientos, verificaciones, planes] = await Promise.all([
+      this.prisma.mantenimiento.findMany({
+        where: {
+          anuladoEn: null,
+          ...deActivo,
+          ...(contiene ? { tecnico: contiene } : {}),
+          OR: [
+            { fecha: { lte: q.hasta }, OR: [{ fechaLimite: { gte: q.desde } }, { fechaLimite: null, fecha: { gte: q.desde } }] },
+            { fechaInicio: rango },
+            { fechaFin: rango },
+            { verificacionPrevista: { lte: q.hasta }, OR: [{ verificacionLimite: { gte: q.desde } }, { verificacionLimite: null }] },
+          ],
+        },
+        include: { activo: SELECT_ACTIVO, verificaciones: { select: { resultado: true, anuladoEn: true }, orderBy: { id: 'asc' } } },
+        take: 2000,
+      }),
+      this.prisma.verificacionMantenimiento.findMany({
+        where: { anuladoEn: null, fecha: rango, mantenimiento: { anuladoEn: null, ...deActivo }, ...(contiene ? { responsable: contiene } : {}) },
+        include: { mantenimiento: { select: { activo: SELECT_ACTIVO } } },
+        take: 2000,
+      }),
+      this.prisma.planMantenimiento.findMany({
+        where: { ...VIGENTE, proximaFecha: { not: null, lte: q.hasta }, ...deActivo, ...(contiene ? { responsable: contiene } : {}) },
+        include: { activo: SELECT_ACTIVO },
+      }),
+    ]);
+    const eventos = agendaMantenimientos({
+      mantenimientos: mantenimientos.map((m) => ({ ...m, activo: activoBreve(m.activo) })),
+      verificaciones: verificaciones.map((v) => ({ ...v, activo: activoBreve(v.mantenimiento.activo) })),
+      planes: planes.map((p) => ({ ...p, activo: activoBreve(p.activo) })),
+      desde: q.desde,
+      hasta: q.hasta,
+      ahora: new Date(),
+      capa: q.capa,
+    });
+    return q.estado ? eventos.filter((e) => e.estado === q.estado) : eventos;
   }
 
   async tablero(): Promise<TableroMantenimientosDto> {
@@ -284,6 +333,15 @@ export class VerificacionesMantenimientoService {
     if (m.fechaFin && dto.fecha < m.fechaFin) {
       throw new BadRequestException('La verificación no puede ser anterior al fin del mantenimiento.');
     }
+    // Su propia ventana prevista (si se programó): fuera de ella, excepción de admin justificada.
+    const excepcion = plazoOExcepcion({
+      real: dto.fecha,
+      inicio: m.verificacionPrevista,
+      limite: m.verificacionLimite,
+      que: 'La verificación',
+      motivoExcepcion: dto.motivoExcepcion,
+      usuario: u,
+    });
     if (dto.fecha.getTime() > Date.now() + 5 * 60_000) {
       throw new BadRequestException('La fecha de la verificación no puede ser futura.');
     }
@@ -302,8 +360,9 @@ export class VerificacionesMantenimientoService {
       }
     }
     return this.prisma.$transaction(async (tx) => {
+      const { motivoExcepcion: _, ...datos } = dto;
       const v = await tx.verificacionMantenimiento.create({
-        data: { ...dto, mantenimientoId, registradoPor: u.username },
+        data: { ...datos, ...excepcion, mantenimientoId, registradoPor: u.username },
       });
       if (dto.resultado === 'NO_SATISFACTORIO') {
         await this.avisos.avisar(

@@ -1,4 +1,7 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import type { AmpliarPlazoDto, ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
+import { diaLocal, exigirExcepcion, exigirIntervalo, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
+import { dentroDeVentana, TEXTO_VENTANA } from './ventana-horaria.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import {
@@ -21,16 +24,16 @@ import type {
   RegistrarRestauracionDto,
   RestauracionDto,
 } from './dto/ejecucion.dto.js';
-import { hoyUtc, PlanesRespaldoService } from './planes.service.js';
+import { PlanesRespaldoService } from './planes.service.js';
 
 const INCLUDE = { activo: SELECT_ACTIVO } as const;
 type ConActivo<T> = T & { activo: Parameters<typeof activoBreve>[0] };
 const aDto = <T extends object>(r: ConActivo<T>) => ({ ...r, activo: activoBreve(r.activo) });
 
-/** Una fecha (día) no puede ser posterior a hoy. */
+/** Una fecha REAL no puede ser futura (5 min de margen por el reloj del equipo). */
 function exigirNoFutura(fecha: Date | undefined): void {
-  if (fecha && fecha.getTime() > hoyUtc().getTime() + 24 * 3_600_000 - 1) {
-    throw new BadRequestException('La fecha no puede ser futura.');
+  if (fecha && fecha.getTime() > Date.now() + 5 * 60_000) {
+    throw new BadRequestException('La fecha real no puede ser futura.');
   }
 }
 
@@ -82,13 +85,38 @@ export class EjecucionesRespaldoService {
     return aDto(r);
   }
 
-  async registrar(dto: RegistrarEjecucionDto): Promise<EjecucionRespaldoDto> {
+  /**
+   * Registra la ejecución REAL con su fecha y hora. Si cae antes del inicio del
+   * plan o fuera de su ventana horaria, solo un admin la registra como excepción
+   * justificada: la hora real se conserva y el plan no cambia.
+   */
+  async registrar(dto: RegistrarEjecucionDto, usuario?: AuthUser): Promise<EjecucionRespaldoDto> {
     exigirNoFutura(dto.fecha);
     const plan = await this.planes.exigirVigente(dto.planId);
     await this.activos.exigirOperativo(plan.activoId);
+    const { motivoExcepcion, ...datos } = dto;
+    const fuera =
+      diaLocal(dto.fecha) < diaLocal(plan.vigenteDesde)
+        ? `La ejecución es anterior al inicio previsto del plan (${diaLocal(plan.vigenteDesde)}).`
+        : !dentroDeVentana(plan.ventana, dto.fecha)
+          ? `La ejecución está fuera de la ventana ${TEXTO_VENTANA[plan.ventana]} del plan.`
+          : null;
+    const excepcion = fuera ? exigirExcepcion(fuera, motivoExcepcion, usuario) : SIN_EXCEPCION;
+    if (dto.pruebaPrevista && dto.pruebaPrevista < dto.fecha) {
+      throw new BadRequestException('La prueba de restauración prevista no puede ser anterior a la ejecución.');
+    }
+    exigirIntervalo(dto.pruebaPrevista, dto.pruebaLimite, 'Prueba de restauración');
+    // La misma corrida no se registra dos veces.
+    const repetida = await this.prisma.ejecucionRespaldo.findFirst({
+      where: { planId: dto.planId, fecha: dto.fecha, anuladoEn: null },
+      select: { id: true },
+    });
+    if (repetida) {
+      throw new ConflictException(`Esa ejecución ya está registrada (ejecución ${repetida.id}, misma fecha y hora).`);
+    }
     const r = await this.prisma.$transaction(async (tx) => {
       const creada = await tx.ejecucionRespaldo.create({
-        data: { ...dto, activoId: plan.activoId },
+        data: { ...datos, ...excepcion, activoId: plan.activoId },
         include: INCLUDE,
       });
       if (creada.resultado === 'FALLIDO') {
@@ -111,6 +139,43 @@ export class EjecucionesRespaldoService {
     const { motivoCambio, ...datos } = dto;
     exigirNoFutura(datos.fecha);
     await this.trazas.modificar('EJECUCION_RESPALDO', id, datos, motivoCambio, usuario.username);
+    return this.findOne(id);
+  }
+
+  /** Capa 3: programa (o reprograma) la ventana de la prueba de restauración de esta copia. */
+  async programarPrueba(id: number, dto: ProgramarVerificacionDto, usuario: AuthUser): Promise<EjecucionRespaldoDto> {
+    const e = await this.findOne(id);
+    if (e.anuladoEn || e.resultado === 'FALLIDO') {
+      throw new ConflictException(`La ejecución ${id} ${e.anuladoEn ? 'está anulada' : 'falló'}: no hay copia que probar.`);
+    }
+    if (dto.prevista < e.fecha) {
+      throw new BadRequestException('La prueba prevista no puede ser anterior a la ejecución.');
+    }
+    exigirIntervalo(dto.prevista, dto.limite, 'Prueba de restauración');
+    await this.trazas.modificar(
+      'EJECUCION_RESPALDO',
+      id,
+      { pruebaPrevista: dto.prevista, pruebaLimite: dto.limite },
+      'Prueba de restauración programada.',
+      usuario.username,
+    );
+    return this.findOne(id);
+  }
+
+  /** Amplía formalmente el plazo de la prueba (solo admin); el anterior queda en la traza. */
+  async ampliarPlazoPrueba(id: number, dto: AmpliarPlazoDto, usuario: AuthUser): Promise<EjecucionRespaldoDto> {
+    const e = await this.findOne(id);
+    if (!e.pruebaLimite) throw new ConflictException(`La ejecución ${id} no tiene prueba de restauración programada.`);
+    if (dto.nuevoLimite <= e.pruebaLimite) {
+      throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
+    }
+    await this.trazas.modificar(
+      'EJECUCION_RESPALDO',
+      id,
+      { pruebaLimite: dto.nuevoLimite },
+      `Ampliación del plazo de la prueba de restauración: ${dto.motivo}`,
+      usuario.username,
+    );
     return this.findOne(id);
   }
 
@@ -165,8 +230,9 @@ export class RestauracionesService {
     return aDto(r);
   }
 
-  async registrar(dto: RegistrarRestauracionDto): Promise<RestauracionDto> {
+  async registrar(dto: RegistrarRestauracionDto, usuario?: AuthUser): Promise<RestauracionDto> {
     exigirNoFutura(dto.fecha);
+    const { motivoExcepcion, ...datos } = dto;
     const origen = await this.prisma.ejecucionRespaldo.findUnique({
       where: { id: dto.ejecucionId },
     });
@@ -182,8 +248,33 @@ export class RestauracionesService {
       throw new BadRequestException('La restauración no puede ser anterior a la ejecución del respaldo.');
     }
     await this.activos.exigirOperativo(origen.activoId);
+    // Una prueba PROGRAMADA exige su ventana prevista y una sola por copia; una
+    // restauración real por incidente o solicitud no está programada.
+    let excepcion = SIN_EXCEPCION;
+    if (dto.motivo === 'PRUEBA_PROGRAMADA') {
+      if (!origen.pruebaPrevista) {
+        throw new ConflictException(
+          `La ejecución ${origen.id} no tiene una prueba de restauración programada: prográmela primero.`,
+        );
+      }
+      const previa = await this.prisma.restauracion.findFirst({
+        where: { ejecucionId: origen.id, motivo: 'PRUEBA_PROGRAMADA', anuladoEn: null },
+        select: { id: true },
+      });
+      if (previa) {
+        throw new ConflictException(`La prueba programada de esta copia ya está registrada (restauración ${previa.id}).`);
+      }
+      excepcion = plazoOExcepcion({
+        real: dto.fecha,
+        inicio: origen.pruebaPrevista,
+        limite: origen.pruebaLimite,
+        que: 'La prueba de restauración',
+        motivoExcepcion,
+        usuario,
+      });
+    }
     const r = await this.prisma.restauracion.create({
-      data: { ...dto, activoId: origen.activoId },
+      data: { ...datos, ...excepcion, activoId: origen.activoId },
       include: INCLUDE,
     });
     return aDto(r);

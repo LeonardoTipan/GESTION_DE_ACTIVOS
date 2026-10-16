@@ -26,10 +26,21 @@ export function puedeTransicionar(
   return TRANSICIONES[accion].desde.includes(fase);
 }
 
-/** Programado y con fecha ya pasada: el frontend lo marca como vencido. */
+/**
+ * Hasta cuándo debía completarse: su fecha límite prevista. Los registros
+ * anteriores a los plazos no la tienen: para ellos cuenta la fecha programada
+ * mientras no se haya iniciado.
+ */
+export function limiteEfectivo(m: { fase: FaseMantenimiento; fecha: Date; fechaLimite?: Date | null }): Date | null {
+  if (m.fechaLimite) return m.fechaLimite;
+  return m.fase === 'PROGRAMADO' ? m.fecha : null;
+}
+
+/** Sin completar (programado o en ejecución) y con el límite ya pasado. */
 export function estaVencido(
-  mantenimiento: { fase: FaseMantenimiento; fecha: Date },
+  mantenimiento: { fase: FaseMantenimiento; fecha: Date; fechaLimite?: Date | null },
   ahora = new Date(),
 ): boolean {
-  return mantenimiento.fase === 'PROGRAMADO' && mantenimiento.fecha < ahora;
+  const limite = limiteEfectivo(mantenimiento);
+  return (mantenimiento.fase === 'PROGRAMADO' || mantenimiento.fase === 'EN_EJECUCION') && !!limite && limite < ahora;
 }

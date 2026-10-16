@@ -77,8 +77,22 @@ export class VulnerabilidadDto {
   })
   fecha: Date;
 
-  @ApiProperty({ type: String, format: 'date-time', nullable: true })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite de remediación (≠ detección).' })
   fechaLimite: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite antes de ampliarlo.' })
+  fechaLimiteOriginal: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Inicio previsto del tratamiento.' })
+  tratamientoPrevisto: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Inicio real del tratamiento.' })
+  tratamientoIniciadoEn: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Capa 3: inicio previsto de la verificación.' })
+  verificacionPrevista: Date | null;
+
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) verificacionLimite: Date | null;
 
   @ApiProperty({
     type: String,

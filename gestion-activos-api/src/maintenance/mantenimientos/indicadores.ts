@@ -3,6 +3,7 @@ import {
   porcentaje,
   type IndicadorDto,
 } from '../../common/indicadores/indicador.js';
+import { estaVencido, limiteEfectivo } from './transiciones.js';
 
 /** Lo que necesitan los indicadores de un mantenimiento VIGENTE (no anulado). */
 export interface MantenimientoParaIndicador {
@@ -11,6 +12,7 @@ export interface MantenimientoParaIndicador {
   fase: string;
   estadoEquipo: string | null;
   fecha: Date;
+  fechaLimite?: Date | null;
   fechaInicio: Date | null;
   fechaFin: Date | null;
 }
@@ -25,10 +27,10 @@ export function indicadoresMantenimiento(
   ahora: Date,
 ): IndicadorDto[] {
   const activos = registros.filter((m) => m.fase !== 'CANCELADO');
-  // Exigibles: los que ya debían haberse hecho.
-  const exigibles = activos.filter((m) => m.fecha <= ahora);
+  // Exigibles: los que ya debían haberse hecho (venció su plazo).
+  const exigibles = activos.filter((m) => (limiteEfectivo(m as never) ?? m.fecha) <= ahora);
   const finalizados = exigibles.filter((m) => m.fase === 'FINALIZADO');
-  const vencidos = activos.filter((m) => m.fase === 'PROGRAMADO' && m.fecha < ahora);
+  const vencidos = activos.filter((m) => estaVencido(m as never, ahora));
   const cerrados = registros.filter((m) => m.fase === 'FINALIZADO');
   const operativos = cerrados.filter((m) => m.estadoEquipo === 'OPERATIVO');
   const preventivos = activos.filter((m) => m.tipo === 'PREVENTIVO');
@@ -54,13 +56,13 @@ export function indicadoresMantenimiento(
     }),
     indicador({
       id: 'MAN-02',
-      nombre: 'Mantenimientos vencidos sin iniciar',
+      nombre: 'Mantenimientos vencidos sin completar',
       control: 'A.7.13',
       unidad: '',
       valor: vencidos.length,
       meta: 0,
       direccion: 'bajar',
-      formula: `programados cuya fecha ya pasó = ${vencidos.length}`,
+      formula: `sin finalizar y con el límite previsto ya pasado = ${vencidos.length}`,
       hallazgo: `Vencidos: ${vencidos.map((m) => `#${m.id}`).join(', ')}.`,
     }),
     indicador({

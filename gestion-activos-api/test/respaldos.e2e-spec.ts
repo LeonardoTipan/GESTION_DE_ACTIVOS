@@ -16,6 +16,8 @@ import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 120_000;
 const diasAtras = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+// Hora REAL dentro de la ventana nocturna 22:00–02:00 de Quito: 03:30 UTC = 22:30 del día anterior en Quito.
+const nocheDe = (n: number) => `${diasAtras(n)}T03:30:00.000Z`;
 const MOTIVO = 'Corrección documentada en el acta de revisión PR-10/2026.';
 
 const PARAMETROS = {
@@ -29,6 +31,8 @@ const PARAMETROS = {
   rtoMinutos: 240,
   responsable: 'Coordinación de Infraestructura',
   justificacion: 'Base de datos institucional de criticidad alta con información reservada.',
+  // Inicio previsto del plan anterior a las ejecuciones que registran las pruebas.
+  vigenteDesde: new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10),
 };
 
 describe('Respaldos y restauración (e2e)', () => {
@@ -93,7 +97,7 @@ describe('Respaldos y restauración (e2e)', () => {
 
   const ejecucion = (extra: object = {}) => ({
     planId,
-    fecha: diasAtras(2),
+    fecha: nocheDe(2),
     tipo: 'COMPLETO',
     medio: 'CINTA_LTO8',
     volumenGb: 820,
@@ -226,7 +230,7 @@ describe('Respaldos y restauración (e2e)', () => {
 
     it('listado con filtros de período y resultado', async () => {
       await api(tokens.analista)
-        .post('/api/respaldos/ejecuciones', ejecucion({ fecha: diasAtras(1), resultado: 'FALLIDO', cifrado: false }))
+        .post('/api/respaldos/ejecuciones', ejecucion({ fecha: nocheDe(1), resultado: 'FALLIDO', cifrado: false }))
         .expect(201);
       const todas = await api(tokens.auditor).get('/api/respaldos/ejecuciones').expect(200);
       expect(todas.body.meta.total).toBe(2);
@@ -243,7 +247,7 @@ describe('Respaldos y restauración (e2e)', () => {
     const restauracion = (extra: object = {}) => ({
       ejecucionId,
       fecha: diasAtras(1),
-      motivo: 'PRUEBA_PROGRAMADA',
+      motivo: 'VERIFICACION_INTEGRIDAD',
       resultado: 'EXITOSO',
       tiempoRealMin: 96,
       rtoMinutos: 240,

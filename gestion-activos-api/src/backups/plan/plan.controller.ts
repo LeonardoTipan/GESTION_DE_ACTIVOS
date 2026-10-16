@@ -26,6 +26,7 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
+import { AmpliarPlazoDto, EventoAgendaDto, ProgramarVerificacionDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import {
   EjecucionRespaldoDto,
@@ -58,6 +59,23 @@ const errores = [
 const Errores = (): ClassDecorator => (target) => {
   for (const d of errores) d(target);
 };
+
+@ApiTags('respaldos')
+@Errores()
+@Controller('respaldos/agenda')
+export class AgendaRespaldosController {
+  constructor(private readonly tablero: TableroRespaldosService) {}
+
+  @ApiOperation({
+    summary: 'Agenda (calendario) de las tres capas',
+    description: 'Ventanas previstas, ejecuciones reales, pruebas previstas y restauraciones reales del rango, con filtros.',
+  })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get()
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.tablero.agenda(q);
+  }
+}
 
 @ApiTags('respaldos')
 @Errores()
@@ -164,8 +182,27 @@ export class EjecucionesRespaldoController {
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @Roles('admin', 'analista')
   @Post()
-  registrar(@Body() dto: RegistrarEjecucionDto): Promise<EjecucionRespaldoDto> {
-    return this.ejecuciones.registrar(dto);
+  registrar(@Body() dto: RegistrarEjecucionDto, @CurrentUser() u: AuthUser): Promise<EjecucionRespaldoDto> {
+    return this.ejecuciones.registrar(dto, u);
+  }
+
+  @ApiOperation({
+    summary: 'Programar la prueba de restauración (admin, analista)',
+    description: 'Capa 3: ventana prevista [prevista, límite] de la prueba de esta copia; tiene su propio plazo.',
+  })
+  @ApiOkResponse({ type: EjecucionRespaldoDto })
+  @Roles('admin', 'analista')
+  @Patch(':id/prueba')
+  programarPrueba(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarVerificacionDto, @CurrentUser() u: AuthUser) {
+    return this.ejecuciones.programarPrueba(id, dto, u);
+  }
+
+  @ApiOperation({ summary: 'Ampliar el plazo de la prueba de restauración (solo admin)' })
+  @ApiOkResponse({ type: EjecucionRespaldoDto })
+  @Roles('admin')
+  @Patch(':id/plazo-prueba')
+  ampliarPlazoPrueba(@Param('id', ParseIntPipe) id: number, @Body() dto: AmpliarPlazoDto, @CurrentUser() u: AuthUser) {
+    return this.ejecuciones.ampliarPlazoPrueba(id, dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar una ejecución con motivo (admin, analista)' })
@@ -221,8 +258,8 @@ export class RestauracionesController {
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @Roles('admin', 'analista')
   @Post()
-  registrar(@Body() dto: RegistrarRestauracionDto): Promise<RestauracionDto> {
-    return this.restauraciones.registrar(dto);
+  registrar(@Body() dto: RegistrarRestauracionDto, @CurrentUser() u: AuthUser): Promise<RestauracionDto> {
+    return this.restauraciones.registrar(dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar una restauración con motivo (admin, analista)' })

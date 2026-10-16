@@ -123,10 +123,31 @@ export class RegistrarEjecucionDto {
   @IsString()
   @MaxLength(2000)
   observaciones?: string;
+
+  @ApiPropertyOptional({
+    description: 'Fuera de la ventana horaria del plan o antes de su inicio: justificación de la excepción (solo admin).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: inicio previsto de la prueba de restauración.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  pruebaPrevista?: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: límite previsto de la prueba de restauración.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  pruebaLimite?: Date;
 }
 
+/** Corregir datos de una ejecución: ni la excepción ni la prueba prevista (tienen sus propias acciones). */
 export class ModificarEjecucionDto extends IntersectionType(
-  PartialType(OmitType(RegistrarEjecucionDto, ['planId'] as const)),
+  PartialType(OmitType(RegistrarEjecucionDto, ['planId', 'motivoExcepcion', 'pruebaPrevista', 'pruebaLimite'] as const)),
   MotivoCambioDto,
 ) {}
 
@@ -145,9 +166,14 @@ export class QueryEjecucionesDto extends QueryPeriodoDto {
 }
 
 export class EjecucionRespaldoDto extends IntersectionType(
-  OmitType(RegistrarEjecucionDto, ['evidencia', 'observaciones'] as const),
+  OmitType(RegistrarEjecucionDto, ['evidencia', 'observaciones', 'motivoExcepcion', 'pruebaPrevista', 'pruebaLimite'] as const),
   RegistroDto,
 ) {
+  @ApiProperty() fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) pruebaPrevista: Date | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) pruebaLimite: Date | null;
   @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
   @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
   @ApiProperty() id: number;
@@ -217,10 +243,16 @@ export class RegistrarRestauracionDto {
   @IsString()
   @MaxLength(2000)
   observaciones?: string;
+
+  @ApiPropertyOptional({ description: 'Prueba fuera de su ventana prevista: justificación de la excepción (solo admin).' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
 }
 
 export class ModificarRestauracionDto extends IntersectionType(
-  PartialType(OmitType(RegistrarRestauracionDto, ['ejecucionId'] as const)),
+  PartialType(OmitType(RegistrarRestauracionDto, ['ejecucionId', 'motivoExcepcion'] as const)),
   MotivoCambioDto,
 ) {}
 
@@ -244,10 +276,13 @@ export class QueryRestauracionesDto extends QueryPeriodoDto {
 }
 
 export class RestauracionDto extends IntersectionType(
-  OmitType(RegistrarRestauracionDto, ['observaciones'] as const),
+  OmitType(RegistrarRestauracionDto, ['observaciones', 'motivoExcepcion'] as const),
   RegistroDto,
 ) {
   @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
+  @ApiProperty() fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
   @ApiProperty() id: number;
   @ApiProperty() activoId: number;
   @ApiProperty({ type: ActivoBreveDto }) activo: ActivoBreveDto;

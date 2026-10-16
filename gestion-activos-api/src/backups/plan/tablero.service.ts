@@ -7,6 +7,10 @@ import { PrismaService } from '../../prisma/prisma.service.js';
 import { calcularTablero, type Tablero } from '../tablero/tablero.js';
 import type { FrecuenciaVentana } from '../tablero/ventanas.js';
 import { PLAN_VIGENTE } from './planes.service.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
+import { diaLocal } from '../../common/plazos/plazos.js';
+import { activoBreve, SELECT_ACTIVO } from './dto/comun.dto.js';
+import { agendaRespaldos } from './agenda.js';
 
 /** Niveles de criticidad que cuentan como "críticos" (CRITICIDADES_CRITICAS). */
 const CRITICAS_POR_DEFECTO = 'Alta,Crítica';
@@ -75,10 +79,14 @@ export class TableroRespaldosService {
     const fin = hasta ?? porDefecto.hasta;
     if (fin < ini) throw new BadRequestException('"hasta" no puede ser anterior a "desde".');
     const periodo = { ini: dia(ini), fin: dia(fin) };
+    // Margen de un día a cada lado: luego se filtra por el DÍA LOCAL (un respaldo
+    // a las 22:30 de Quito ya es el día siguiente en UTC, y cuenta en su día).
     const enPeriodo = {
       anuladoEn: null,
-      fecha: { gte: ini, lte: new Date(fin.getTime() + 24 * 3_600_000 - 1) },
+      fecha: { gte: new Date(ini.getTime() - 24 * 3_600_000), lte: new Date(fin.getTime() + 2 * 24 * 3_600_000) },
     };
+    const delPeriodo = <T extends { fecha: Date }>(xs: T[]) =>
+      xs.map((x) => ({ ...x, fecha: diaLocal(x.fecha) })).filter((x) => x.fecha >= periodo.ini && x.fecha <= periodo.fin);
     const criticidades = (this.config.get<string>('CRITICIDADES_CRITICAS') ?? CRITICAS_POR_DEFECTO)
       .split(',')
       .map((c) => c.trim())
@@ -112,9 +120,45 @@ export class TableroRespaldosService {
         frecuenciaPrueba: p.frecuenciaPrueba as FrecuenciaVentana,
         vigenteDesde: dia(p.vigenteDesde),
       })),
-      ejecuciones: ejecuciones.map((e) => ({ ...e, fecha: dia(e.fecha) })),
-      restauraciones: restauraciones.map((r) => ({ ...r, fecha: dia(r.fecha) })),
+      ejecuciones: delPeriodo(ejecuciones),
+      restauraciones: delPeriodo(restauraciones),
     });
     return { desde: periodo.ini, hasta: periodo.fin, ...tablero };
+  }
+
+  /** Agenda (calendario) de las tres capas en un rango, con filtros. */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const deActivo = q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {};
+    const contiene = q.responsable ? { responsable: { contains: q.responsable } } : {};
+    // Las ventanas se calculan desde el inicio del plan: se necesitan TODAS sus ejecuciones del rango (±1 día por la zona).
+    const fecha = { gte: new Date(q.desde.getTime() - 24 * 3_600_000), lte: new Date(q.hasta.getTime() + 24 * 3_600_000) };
+    const [planes, ejecuciones, restauraciones] = await Promise.all([
+      this.prisma.planRespaldo.findMany({
+        where: { ...PLAN_VIGENTE, activo: this.activos.filtroOperativo(), ...deActivo, ...contiene },
+        include: { activo: SELECT_ACTIVO },
+      }),
+      this.prisma.ejecucionRespaldo.findMany({
+        where: {
+          anuladoEn: null,
+          ...deActivo,
+          OR: [{ fecha }, { pruebaPrevista: { lte: q.hasta }, OR: [{ pruebaLimite: { gte: q.desde } }, { pruebaLimite: null }] }],
+        },
+        include: { activo: SELECT_ACTIVO },
+        take: 5000,
+      }),
+      this.prisma.restauracion.findMany({ where: { anuladoEn: null, ...deActivo, fecha }, include: { activo: SELECT_ACTIVO }, take: 5000 }),
+    ]);
+    const responsableCoincide = (r: string) => !q.responsable || r.toLowerCase().includes(q.responsable.toLowerCase());
+    const eventos = agendaRespaldos({
+      planes: planes.map((p) => ({ ...p, activo: activoBreve(p.activo) })),
+      // El filtro de responsable se aplica a cada registro (el plan ya viene filtrado).
+      ejecuciones: ejecuciones.map((e) => ({ ...e, activo: activoBreve(e.activo) })),
+      restauraciones: restauraciones.filter((r) => responsableCoincide(r.responsable)).map((r) => ({ ...r, activo: activoBreve(r.activo) })),
+      desde: q.desde,
+      hasta: q.hasta,
+      ahora: new Date(),
+      capa: q.capa,
+    }).filter((e) => !e.responsable || responsableCoincide(e.responsable));
+    return q.estado ? eventos.filter((e) => e.estado === q.estado) : eventos;
   }
 }

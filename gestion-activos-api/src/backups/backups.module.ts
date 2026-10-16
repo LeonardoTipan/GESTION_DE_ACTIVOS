@@ -6,6 +6,7 @@ import {
   EjecucionesRespaldoController,
   PlanesRespaldoController,
   RestauracionesController,
+  AgendaRespaldosController,
   TableroRespaldosController,
 } from './plan/plan.controller.js';
 import { PlanesRespaldoService } from './plan/planes.service.js';
@@ -24,6 +25,7 @@ import { RespaldosService } from './respaldos/respaldos.service.js';
 @Module({
   imports: [InventoryModule, AuditModule],
   controllers: [
+    AgendaRespaldosController,
     TableroRespaldosController,
     PlanesRespaldoController,
     EjecucionesRespaldoController,

@@ -310,7 +310,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
     };
     const operaciones = (id: number): [string, object][] => [
       ['/api/respaldos/planes', { ...PLAN, activoIds: [id] }],
-      ['/api/mantenimientos', { activoId: id, tipo: 'PREVENTIVO', actividad: 'Limpieza', fecha: MANANA }],
+      ['/api/mantenimientos', { activoId: id, tipo: 'PREVENTIVO', actividad: 'Limpieza', fecha: MANANA, fechaLimite: MANANA }],
       ['/api/vulnerabilidades', { activoId: id, descripcion: 'Parche pendiente', nivelRiesgo: 'ALTO', fecha: AYER }],
     ];
 

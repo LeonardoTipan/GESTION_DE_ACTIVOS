@@ -8,6 +8,7 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import {
   ApiConflictResponse,
@@ -23,9 +24,11 @@ import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
+import { EventoAgendaDto, ProgramarVerificacionDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import { VulnerabilidadDto } from '../vulnerabilidades/dto/vulnerabilidad.dto.js';
 import {
   AccionRemediacionDto,
+  AmpliarPlazoVulnerabilidadDto,
   EvaluarVulnerabilidadDto,
   RegistrarAccionDto,
   RegistrarLoteDto,
@@ -41,6 +44,38 @@ import { TratamientoVulnerabilidadService } from './tratamiento.service.js';
 @Controller('vulnerabilidades')
 export class TratamientoVulnerabilidadController {
   constructor(private readonly tratamiento: TratamientoVulnerabilidadService) {}
+
+  @ApiOperation({
+    summary: 'Agenda (calendario) de las tres capas',
+    description: 'Detecciones, tratamientos previstos, límites de remediación, acciones reales y verificaciones del rango, con filtros.',
+  })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get('agenda')
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.tratamiento.agenda(q);
+  }
+
+  @ApiOperation({
+    summary: 'Capa 3 · Programar la verificación (admin, analista)',
+    description: 'Ventana prevista [prevista, límite] para verificar la remediación: tiene su propio plazo.',
+  })
+  @ApiOkResponse({ type: VulnerabilidadDto })
+  @Roles('admin', 'analista')
+  @Patch(':id/verificacion-prevista')
+  programarVerificacion(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarVerificacionDto, @CurrentUser() u: AuthUser) {
+    return this.tratamiento.programarVerificacion(id, dto, u);
+  }
+
+  @ApiOperation({
+    summary: 'Ampliar el plazo (solo admin)',
+    description: 'Amplía formalmente el límite de remediación o de verificación, con motivo. Se conserva el original y queda la traza.',
+  })
+  @ApiOkResponse({ type: VulnerabilidadDto })
+  @Roles('admin')
+  @Patch(':id/plazo')
+  ampliarPlazo(@Param('id', ParseIntPipe) id: number, @Body() dto: AmpliarPlazoVulnerabilidadDto, @CurrentUser() u: AuthUser) {
+    return this.tratamiento.ampliarPlazo(id, dto, u);
+  }
 
   @ApiOperation({ summary: 'Capa 1 · Registrar la misma vulnerabilidad en varios activos (admin, analista)' })
   @ApiCreatedResponse({ type: [VulnerabilidadDto] })

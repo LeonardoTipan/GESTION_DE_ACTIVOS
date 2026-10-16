@@ -95,7 +95,8 @@ describe('Editar con motivo y anular (e2e)', () => {
         activoId,
         tipo: 'PREVENTIVO',
         actividad: 'Limpieza',
-        fecha: MANANA,
+        fecha: HACE_UNA_HORA,
+        fechaLimite: MANANA,
       });
 
     it('editar tipo, actividad y fecha mientras está PROGRAMADO → 200', async () => {
@@ -108,7 +109,7 @@ describe('Editar con motivo y anular (e2e)', () => {
         tipo: 'CORRECTIVO',
         actividad: 'Cambio de disco',
         fase: 'PROGRAMADO',
-        fecha: MANANA, // lo no enviado no cambia
+        fecha: HACE_UNA_HORA, // lo no enviado no cambia
       });
     });
 
@@ -280,7 +281,8 @@ describe('Editar con motivo y anular (e2e)', () => {
         activoId: otro.id,
         tipo: 'PREVENTIVO',
         actividad: 'Limpieza',
-        fecha: MANANA,
+        fecha: HACE_UNA_HORA,
+        fechaLimite: MANANA,
       });
 
       await api(tokens.admin).delete(`/api/activos/${otro.id}`).expect(204);

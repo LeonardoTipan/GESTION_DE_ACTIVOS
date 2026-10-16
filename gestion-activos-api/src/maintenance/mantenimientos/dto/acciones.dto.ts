@@ -8,6 +8,7 @@ import { Type } from 'class-transformer';
 import {
   IsDate,
   IsEnum,
+  IsIn,
   IsInt,
   IsNotEmpty,
   IsNumber,
@@ -20,6 +21,7 @@ import {
   MinLength,
 } from 'class-validator';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
+import { AmpliarPlazoDto } from '../../../common/dto/agenda.dto.js';
 import {
   EstadoEquipo,
   TipoMantenimiento,
@@ -53,11 +55,21 @@ export class ProgramarMantenimientoDto {
     type: String,
     format: 'date-time',
     example: '2026-10-15T08:00:00.000Z',
-    description: 'Fecha programada (puede ser futura).',
+    description: 'Inicio previsto (puede ser futuro).',
   })
   @Type(() => Date)
   @IsDate()
   fecha: Date;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    example: '2026-10-17T18:00:00.000Z',
+    description: 'Límite previsto para completarlo: no anterior al inicio previsto.',
+  })
+  @Type(() => Date)
+  @IsDate()
+  fechaLimite: Date;
 }
 
 /** Edición: tipo, actividad y fecha programada; solo mientras está PROGRAMADO. */
@@ -81,6 +93,14 @@ export class IniciarMantenimientoDto {
     message: 'fechaInicio no puede estar en el futuro',
   })
   fechaInicio?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
 
   @ApiPropertyOptional({ example: 'jperez', description: 'Técnico que realiza el trabajo.' })
   @IsOptional()
@@ -175,6 +195,33 @@ export class FinalizarMantenimientoDto {
   @IsString()
   @MaxLength(191)
   evidencia?: string;
+
+  @ApiPropertyOptional({
+    description: 'Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres).',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(2000)
+  motivoExcepcion?: string;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: inicio previsto de la verificación (no anterior al fin).' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  verificacionPrevista?: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: límite previsto de la verificación.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  verificacionLimite?: Date;
+}
+
+/** Ampliación formal del plazo de la ejecución o de la verificación (solo admin). */
+export class AmpliarPlazoMantenimientoDto extends AmpliarPlazoDto {
+  @ApiProperty({ enum: ['EJECUCION', 'VERIFICACION'] })
+  @IsIn(['EJECUCION', 'VERIFICACION'])
+  campo: 'EJECUCION' | 'VERIFICACION';
 }
 
 /** Cancelar: PROGRAMADO o EN_EJECUCION → CANCELADO. */

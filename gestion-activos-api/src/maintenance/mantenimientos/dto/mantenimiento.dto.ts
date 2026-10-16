@@ -91,6 +91,17 @@ export class MantenimientoDto {
   @ApiProperty({ type: String, nullable: true }) repuestos: string | null;
   @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
   @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite previsto de la ejecución.' })
+  fechaLimite: Date | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite antes de ampliarlo.' })
+  fechaLimiteOriginal: Date | null;
+  @ApiProperty({ description: 'Iniciado o terminado fuera del intervalo previsto, como excepción.' })
+  fueraDePlazo: boolean;
+  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
+  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Capa 3: inicio previsto de la verificación.' })
+  verificacionPrevista: Date | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true }) verificacionLimite: Date | null;
 
   @ApiProperty({
     enum: ['NO_APLICA', 'PENDIENTE_VERIFICACION', 'CERRADO', 'EN_SEGUIMIENTO', 'NO_SATISFACTORIO'],
