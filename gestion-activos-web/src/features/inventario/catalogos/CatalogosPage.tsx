@@ -16,13 +16,27 @@ const CATEGORIAS = {
   campos: [
     { clave: 'nombre', etiqueta: 'Nombre', requerido: true },
     { clave: 'descripcion', etiqueta: 'Descripción', requerido: false, multilinea: true },
+    {
+      clave: 'admiteAccesoLogico',
+      etiqueta: 'Acceso lógico',
+      requerido: false,
+      tipo: 'interruptor',
+      descripcion: 'Sus activos guardan o dan acceso a información: se ofrecen en las solicitudes de acceso lógico.',
+    },
+    {
+      clave: 'admiteAccesoFisico',
+      etiqueta: 'Acceso físico',
+      requerido: false,
+      tipo: 'interruptor',
+      descripcion: 'Sus activos son tangibles y se ofrecen en las solicitudes de acceso físico.',
+    },
   ],
   useLista: useCategorias,
   useGuardar: useGuardarCategoria,
   useEliminar: useEliminarCategoria,
 } satisfies ConfigCatalogo<
-  { id: number; nombre: string; descripcion: string },
-  { nombre: string; descripcion: string }
+  { id: number; nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean },
+  { nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean }
 >
 
 const CRITICIDADES = {
@@ -40,7 +54,8 @@ export function CatalogosPage() {
       <div>
         <Title order={2}>Catálogos</Title>
         <Text c="dimmed" size="sm">
-          Valores que se usan al clasificar los activos.
+          Valores que se usan al clasificar los activos. En cada categoría se indica si sus activos admiten
+          solicitudes de acceso lógico o físico (Control de acceso); la sincronización con GLPI no lo cambia.
         </Text>
       </div>
       <Tabs defaultValue="categorias" keepMounted={false}>

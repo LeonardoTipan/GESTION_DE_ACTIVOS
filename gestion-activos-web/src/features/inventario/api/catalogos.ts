@@ -6,7 +6,8 @@ import { claves } from './claves.ts'
 
 export type Categoria = components['schemas']['CategoriaDto']
 export type Criticidad = components['schemas']['CriticidadDto']
-type DatosCategoria = components['schemas']['CreateCategoriaDto']
+// El formulario de Catálogos siempre envía las dos marcas de Control de acceso.
+type DatosCategoria = Required<components['schemas']['CreateCategoriaDto']>
 type DatosCriticidad = components['schemas']['CreateCriticidadDto']
 
 /** Los catálogos cambian poco: se cachean 5 minutos. */

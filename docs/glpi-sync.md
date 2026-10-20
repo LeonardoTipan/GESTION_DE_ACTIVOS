@@ -63,6 +63,17 @@ Comprobado contra el GLPI 11 de la empresa (API v2.2), solo con lecturas:
 
 "Preparado" significa que el tipo se lee en cada sincronización y que la categoría existe, pero hoy GLPI no tiene elementos de ese tipo. En cuanto se registre uno, aparecerá en el inventario.
 
+**Servidores físicos y virtuales.** En GLPI un servidor es un `Computer` cuyo **tipo de equipo** (`type.name`) es «Servidor Físico» o «Servidor Virtual». Hoy son `HP-520` (`Computer #28`) y `VM-CONTABILIDAD` (`Computer #29`).
+
+- **Al crear:** tienen categoría propia, *Servidores físicos* y *Servidores virtuales* (`CATEGORIAS_POR_TIPO_DE_EQUIPO` en `config.ts`; la comparación ignora tildes y mayúsculas). Los demás `Computer` siguen en *Computadoras*. Si la categoría de servidor no existe, el activo se crea en la de su tipo y el informe lo deja «para revisión»; la sincronización no se aborta.
+- **Al actualizar:** la categoría no se cambia, porque es un dato local que el admin puede reasignar.
+- **Los dos ya importados:** los reclasificó una vez la migración `20261020120000_control_acceso`, con su entrada en la bitácora (responsable SISTEMA, categoría anterior y nueva). Conservan su id y su `origenGlpi`.
+- **Comprobado el 2026-10-20:**
+  - Sincronización completa en simulación sobre desarrollo: 455 leídos, 0 altas, 0 cambios y 0 errores; no los duplica ni les devuelve la categoría anterior.
+  - Sincronización real (`--aplicar`) sobre la base de pruebas vacía: los creó directamente en su categoría.
+
+**Control de acceso.** Cada categoría tiene dos marcas, *Acceso lógico* y *Acceso físico* (`admiteAccesoLogico` / `admiteAccesoFisico`). Las decide el admin en Catálogos y la sincronización no las toca. Ver [control-acceso.md](control-acceso.md).
+
 **No importados, con su motivo:**
 
 | Apartado | Motivo |

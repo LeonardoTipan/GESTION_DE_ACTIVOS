@@ -1387,6 +1387,159 @@ export interface paths {
         patch: operations["NotificacionesController_marcarLeida"];
         trace?: never;
     };
+    "/api/control-acceso": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar solicitudes
+         * @description Búsqueda y filtros por tipo, estado, tipo de solicitud, fechas deseadas y situación.
+         */
+        get: operations["ControlAccesoController_findAll"];
+        put?: never;
+        /**
+         * Registrar una solicitud
+         * @description Queda ABIERTA con su código CAL-/CAF-nnn, generado por el backend.
+         */
+        post: operations["ControlAccesoController_crear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/control-acceso/activos-elegibles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Activos elegibles para un tipo de acceso
+         * @description Vigentes y operativos, de categorías que admiten el tipo (Catálogos). Filtrados en el servidor.
+         */
+        get: operations["ControlAccesoController_activosElegibles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/control-acceso/categorias-elegibles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Categorías con activos elegibles (con su número) */
+        get: operations["ControlAccesoController_categoriasElegibles"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/control-acceso/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de una solicitud */
+        get: operations["ControlAccesoController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Modificar una solicitud no cerrada
+         * @description Cada campo cambiado queda en el historial.
+         */
+        patch: operations["ControlAccesoController_editar"];
+        trace?: never;
+    };
+    "/api/control-acceso/{id}/historial": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historial de auditoría (solo lectura) */
+        get: operations["ControlAccesoController_historial"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/control-acceso/{id}/pendiente": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** ABIERTO → PENDIENTE */
+        patch: operations["ControlAccesoController_pendiente"];
+        trace?: never;
+    };
+    "/api/control-acceso/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cerrar (ABIERTO o PENDIENTE → CERRADO)
+         * @description Exige la resolución; la fecha de atención es la del servidor.
+         */
+        patch: operations["ControlAccesoController_cerrar"];
+        trace?: never;
+    };
+    "/api/control-acceso/{id}/reabrir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Reabrir (CERRADO → PENDIENTE), solo admin, con motivo */
+        patch: operations["ControlAccesoController_reabrir"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1430,6 +1583,10 @@ export interface components {
             nombre: string;
             /** @example Equipos físicos: servidores, estaciones, periféricos. */
             descripcion: string;
+            /** @description Elegible para solicitudes de acceso lógico. */
+            admiteAccesoLogico: boolean;
+            /** @description Elegible para solicitudes de acceso físico. */
+            admiteAccesoFisico: boolean;
         };
         CriticidadDto: {
             /** @example 3 */
@@ -1822,12 +1979,20 @@ export interface components {
             nombre: string;
             /** @example Equipos físicos: servidores, estaciones, periféricos. */
             descripcion: string;
+            /** @description Control de acceso: sus activos admiten solicitudes de acceso LÓGICO (guardan o dan acceso a información). Falso si se omite. */
+            admiteAccesoLogico?: boolean;
+            /** @description Control de acceso: sus activos admiten solicitudes de acceso FÍSICO. Falso si se omite. */
+            admiteAccesoFisico?: boolean;
         };
         UpdateCategoriaDto: {
             /** @example Hardware */
             nombre?: string;
             /** @example Equipos físicos: servidores, estaciones, periféricos. */
             descripcion?: string;
+            /** @description Control de acceso: sus activos admiten solicitudes de acceso LÓGICO (guardan o dan acceso a información). Falso si se omite. */
+            admiteAccesoLogico?: boolean;
+            /** @description Control de acceso: sus activos admiten solicitudes de acceso FÍSICO. Falso si se omite. */
+            admiteAccesoFisico?: boolean;
         };
         CreateCriticidadDto: {
             /** @example Alta */
@@ -3398,6 +3563,142 @@ export interface components {
         ResumenNotificacionesDto: {
             /** @example 4 */
             noLeidas: number;
+        };
+        ControlAccesoDto: {
+            id: number;
+            /** @example CAL-001 */
+            codigoUnico: string;
+            /** @enum {string} */
+            tipoAcceso: "LOGICO" | "FISICO";
+            activoId: number | null;
+            activo: components["schemas"]["ActivoBreveDto"] | null;
+            recurso: string | null;
+            /** Format: date-time */
+            fechaSolicitud: string;
+            /** Format: date-time */
+            fechaAccesoDeseada: string;
+            nombreUsuarioBeneficiario: string;
+            departamento: string;
+            /** @enum {string} */
+            tipoSolicitud: "ACCESO" | "BAJA";
+            descripcion: string;
+            /** @enum {string} */
+            estado: "ABIERTO" | "PENDIENTE" | "CERRADO";
+            resolucion: string | null;
+            /** Format: date-time */
+            fechaCreacion: string;
+            /** Format: date-time */
+            fechaAtendido: string | null;
+            /** Format: date-time */
+            updatedAt: string;
+            /**
+             * @description Respecto a la fecha deseada; no cambia el estado.
+             * @enum {string}
+             */
+            situacion: "PROGRAMADA" | "PROXIMA" | "VENCIDA" | "ATENDIDA";
+        };
+        PaginatedControlAccesoDto: {
+            data: components["schemas"]["ControlAccesoDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        PaginatedActivoElegibleDto: {
+            data: components["schemas"]["ActivoBreveDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        CategoriaElegibleDto: {
+            categoriaId: number;
+            nombre: string;
+            /** @description Activos elegibles de la categoría. */
+            total: number;
+        };
+        HistorialControlAccesoDto: {
+            id: number;
+            /**
+             * @description Campo modificado, o CREACION.
+             * @example estado
+             */
+            campo: string;
+            valorAnterior: string | null;
+            valorNuevo: string | null;
+            /** @example analista.test */
+            usuario: string;
+            /** Format: date-time */
+            fecha: string;
+            motivo: string | null;
+        };
+        CrearControlAccesoDto: {
+            /** @enum {string} */
+            tipoAcceso: "LOGICO" | "FISICO";
+            /**
+             * @description ACCESO otorga el acceso; BAJA lo retira.
+             * @enum {string}
+             */
+            tipoSolicitud: "ACCESO" | "BAJA";
+            /** @description Activo inventariado, vigente y elegible para el tipo de acceso. Si se omite, se exige «recurso». */
+            activoId?: number;
+            /**
+             * @description Recurso no inventariado: obligatorio si no hay activo.
+             * @example Correo institucional
+             */
+            recurso?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se pidió (no futura).
+             */
+            fechaSolicitud: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se desea el acceso (o la baja); no anterior a la solicitud.
+             */
+            fechaAccesoDeseada: string;
+            /** @example María Pérez */
+            nombreUsuarioBeneficiario: string;
+            /** @example Contabilidad */
+            departamento: string;
+            /** @description Motivo o descripción. */
+            descripcion: string;
+        };
+        EditarControlAccesoDto: {
+            /** @enum {string} */
+            tipoAcceso?: "LOGICO" | "FISICO";
+            /**
+             * @description ACCESO otorga el acceso; BAJA lo retira.
+             * @enum {string}
+             */
+            tipoSolicitud?: "ACCESO" | "BAJA";
+            /**
+             * @description Recurso no inventariado: obligatorio si no hay activo.
+             * @example Correo institucional
+             */
+            recurso?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se pidió (no futura).
+             */
+            fechaSolicitud?: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se desea el acceso (o la baja); no anterior a la solicitud.
+             */
+            fechaAccesoDeseada?: string;
+            /** @example María Pérez */
+            nombreUsuarioBeneficiario?: string;
+            /** @example Contabilidad */
+            departamento?: string;
+            /** @description Motivo o descripción. */
+            descripcion?: string;
+            /** @description null quita el activo. */
+            activoId?: number | null;
+            /** @description Por qué se modifica (queda en el historial). */
+            motivo?: string;
+        };
+        CerrarControlAccesoDto: {
+            /** @description Qué se hizo: acceso otorgado (ACCESO) o retirado (BAJA). */
+            resolucion: string;
+        };
+        ReabrirControlAccesoDto: {
+            /** @description Por qué se reabre (solo admin; queda en el historial). */
+            motivo: string;
         };
     };
     responses: never;
@@ -8011,6 +8312,495 @@ export interface operations {
                 };
             };
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_findAll: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description Código, beneficiario, departamento, recurso o activo. */
+                q?: string;
+                tipoAcceso?: "LOGICO" | "FISICO";
+                estado?: "ABIERTO" | "PENDIENTE" | "CERRADO";
+                tipoSolicitud?: "ACCESO" | "BAJA";
+                /** @description Respecto a la fecha deseada (calculada). */
+                situacion?: "PROGRAMADA" | "PROXIMA" | "VENCIDA" | "ATENDIDA";
+                /** @description Fecha deseada desde. */
+                desde?: string;
+                /** @description Fecha deseada hasta. */
+                hasta?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedControlAccesoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_crear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearControlAccesoDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_activosElegibles: {
+        parameters: {
+            query: {
+                page?: number;
+                limit?: number;
+                tipoAcceso: "LOGICO" | "FISICO";
+                /** @description Código o nombre. */
+                q?: string;
+                categoriaId?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedActivoElegibleDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_categoriasElegibles: {
+        parameters: {
+            query: {
+                tipoAcceso: "LOGICO" | "FISICO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CategoriaElegibleDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_editar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditarControlAccesoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Cerrada, o cambió entre medias. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_historial: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HistorialControlAccesoDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_pendiente: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Transición no permitida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_cerrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CerrarControlAccesoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Transición no permitida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    ControlAccesoController_reabrir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReabrirControlAccesoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlAccesoDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description No está cerrada. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

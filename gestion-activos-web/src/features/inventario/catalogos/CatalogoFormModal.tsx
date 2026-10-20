@@ -1,13 +1,13 @@
-import { Button, Group, Modal, Stack, Textarea, TextInput } from '@mantine/core'
+import { Button, Group, Modal, Stack, Switch, Textarea, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useEffect } from 'react'
-import type { ConfigCatalogo } from './config-catalogo.ts'
+import type { ConfigCatalogo, ValorCatalogo } from './config-catalogo.ts'
 
 /** Alta (sin fila) o edición (con fila) de un elemento de catálogo. */
 export function CatalogoFormModal<
   TFila extends { id: number },
-  TDatos extends Record<string, string>,
+  TDatos extends Record<string, ValorCatalogo>,
 >({
   config,
   fila,
@@ -23,16 +23,22 @@ export function CatalogoFormModal<
 
   const valores = () =>
     Object.fromEntries(
-      config.campos.map((c) => [c.clave, fila ? String(fila[c.clave] ?? '') : '']),
-    ) as Record<string, string>
+      config.campos.map((c) =>
+        c.tipo === 'interruptor'
+          ? [c.clave, fila ? Boolean(fila[c.clave]) : false]
+          : [c.clave, fila ? String(fila[c.clave] ?? '') : ''],
+      ),
+    ) as Record<string, ValorCatalogo>
 
-  const form = useForm<Record<string, string>>({
+  const form = useForm<Record<string, ValorCatalogo>>({
     initialValues: valores(),
     validate: Object.fromEntries(
-      config.campos.map((c) => [
+      config.campos.filter((c) => c.tipo !== 'interruptor').map((c) => [
         c.clave,
-        (valor: string) =>
-          c.requerido && !valor.trim()
+        (valor: ValorCatalogo) =>
+          typeof valor !== 'string'
+            ? null
+            : c.requerido && !valor.trim()
             ? 'Campo obligatorio'
             : valor.trim().length > 191
               ? 'Máximo 191 caracteres'
@@ -51,7 +57,10 @@ export function CatalogoFormModal<
 
   const enviar = form.onSubmit((v) => {
     const datos = Object.fromEntries(
-      config.campos.map((c) => [c.clave, (v[c.clave] ?? '').trim()]),
+      config.campos.map((c) => {
+        const valor = v[c.clave]
+        return [c.clave, typeof valor === 'string' ? valor.trim() : Boolean(valor)]
+      }),
     ) as TDatos
     guardar.mutate(
       { id: fila?.id, datos },
@@ -60,7 +69,7 @@ export function CatalogoFormModal<
           notifications.show({
             color: 'green',
             title: fila ? 'Cambios guardados' : `Nueva ${config.singular} registrada`,
-            message: Object.values(datos)[0],
+            message: String(Object.values(datos)[0]),
           })
           onClose()
         },
@@ -79,7 +88,14 @@ export function CatalogoFormModal<
       <form onSubmit={enviar}>
         <Stack gap="sm">
           {config.campos.map((campo) =>
-            campo.multilinea ? (
+            campo.tipo === 'interruptor' ? (
+              <Switch
+                key={campo.clave}
+                label={campo.etiqueta}
+                description={campo.descripcion}
+                {...form.getInputProps(campo.clave, { type: 'checkbox' })}
+              />
+            ) : campo.multilinea ? (
               <Textarea
                 key={campo.clave}
                 label={campo.etiqueta}

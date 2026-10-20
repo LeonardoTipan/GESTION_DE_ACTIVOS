@@ -1,6 +1,7 @@
 import {
   ActionIcon,
   Alert,
+  Badge,
   Button,
   Center,
   Group,
@@ -15,12 +16,12 @@ import { notifications } from '@mantine/notifications'
 import { IconPencil, IconPlus, IconTrash } from '@tabler/icons-react'
 import { useState } from 'react'
 import { CatalogoFormModal } from './CatalogoFormModal.tsx'
-import type { ConfigCatalogo } from './config-catalogo.ts'
+import type { ConfigCatalogo, ValorCatalogo } from './config-catalogo.ts'
 
 /** Tabla con alta, edición y eliminación para cualquier catálogo. */
 export function TablaCatalogo<
   TFila extends { id: number },
-  TDatos extends Record<string, string>,
+  TDatos extends Record<string, ValorCatalogo>,
 >({ config }: { config: ConfigCatalogo<TFila, TDatos> }) {
   const { data: filas, isPending, error } = config.useLista()
   const eliminar = config.useEliminar()
@@ -94,18 +95,24 @@ export function TablaCatalogo<
               <Table.Tr key={fila.id}>
                 {config.campos.map((c) => (
                   <Table.Td key={c.clave} fw={c.clave === principal ? 500 : undefined}>
-                    {String(fila[c.clave] ?? '') || '—'}
+                    {c.tipo === 'interruptor' ? (
+                      <Badge size="sm" variant="light" color={fila[c.clave] ? 'green' : 'gray'}>
+                        {fila[c.clave] ? 'Sí' : 'No'}
+                      </Badge>
+                    ) : (
+                      String(fila[c.clave] ?? '') || '—'
+                    )}
                   </Table.Td>
                 ))}
                 <Table.Td>
                   <Group gap={4} justify="flex-end" wrap="nowrap">
                     <Tooltip label="Editar">
-                      <ActionIcon variant="subtle" onClick={() => setEditando(fila)}>
+                      <ActionIcon variant="subtle" aria-label={`Editar ${String(fila[principal])}`} onClick={() => setEditando(fila)}>
                         <IconPencil size={16} />
                       </ActionIcon>
                     </Tooltip>
                     <Tooltip label="Eliminar">
-                      <ActionIcon variant="subtle" color="red" onClick={() => confirmarEliminar(fila)}>
+                      <ActionIcon variant="subtle" color="red" aria-label={`Eliminar ${String(fila[principal])}`} onClick={() => confirmarEliminar(fila)}>
                         <IconTrash size={16} />
                       </ActionIcon>
                     </Tooltip>

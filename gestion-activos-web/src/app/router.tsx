@@ -6,6 +6,8 @@ import { ActivosPage } from '../features/inventario/activos/ActivosPage.tsx'
 import { CatalogosPage } from '../features/inventario/catalogos/CatalogosPage.tsx'
 import { ActivoFichaPage } from '../features/inventario/ficha/ActivoFichaPage.tsx'
 import { CalendarioPage } from '../features/calendario/CalendarioPage.tsx'
+import { ControlAccesoDetallePage } from '../features/control-acceso/ControlAccesoDetallePage.tsx'
+import { ControlAccesoPage } from '../features/control-acceso/ControlAccesoPage.tsx'
 import { MantenimientoPage } from '../features/mantenimientos/MantenimientoPage.tsx'
 import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPage.tsx'
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
@@ -32,6 +34,8 @@ export const router = createBrowserRouter([
       { path: 'mantenimientos/:id', element: <MantenimientoPage /> },
       { path: 'vulnerabilidades', element: <VulnerabilidadesPage /> },
       { path: 'vulnerabilidades/:id', element: <VulnerabilidadPage /> },
+      { path: 'control-acceso', element: <ControlAccesoPage /> },
+      { path: 'control-acceso/:id', element: <ControlAccesoDetallePage /> },
       { path: 'calendario', element: <CalendarioPage /> },
       {
         path: 'catalogos',

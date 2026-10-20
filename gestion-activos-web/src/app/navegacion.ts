@@ -2,6 +2,7 @@ import {
   IconCalendarMonth,
   IconCategory,
   IconDatabaseExport,
+  IconKey,
   IconLayoutDashboard,
   IconServer,
   IconShieldExclamation,
@@ -54,6 +55,13 @@ export const MENU: readonly ItemMenu[] = [
     ruta: '/vulnerabilidades',
     icono: IconShieldExclamation,
     descripcion: 'Riesgos, mitigación y plazos (SLA).',
+    roles: [],
+  },
+  {
+    etiqueta: 'Control de acceso',
+    ruta: '/control-acceso',
+    icono: IconKey,
+    descripcion: 'Solicitudes de acceso lógico y físico, con historial.',
     roles: [],
   },
   {
