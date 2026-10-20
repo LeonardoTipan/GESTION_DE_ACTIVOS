@@ -1,0 +1,7 @@
+-- AlterTable
+ALTER TABLE `activo` ADD COLUMN `contacto` VARCHAR(191) NULL,
+    ADD COLUMN `fechaAlta` DATETIME(3) NULL,
+    ADD COLUMN `modelo` VARCHAR(191) NULL,
+    ADD COLUMN `red` VARCHAR(191) NULL,
+    ADD COLUMN `tecnicoResponsable` VARCHAR(191) NULL,
+    ADD COLUMN `tipo` VARCHAR(191) NULL;
