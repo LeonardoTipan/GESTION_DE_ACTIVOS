@@ -27,6 +27,10 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     prisma.mantenimiento.deleteMany(),
     prisma.planMantenimiento.deleteMany(),
     prisma.vulnerabilidad.deleteMany(),
+    prisma.historialControlAcceso.deleteMany(),
+    prisma.controlAcceso.deleteMany(),
+    // Los contadores se conservan y vuelven a 0: los códigos empiezan en CAL-001 / CAF-001.
+    prisma.contadorControlAcceso.updateMany({ data: { ultimo: 0 } }),
     prisma.activo.deleteMany(),
     prisma.categoria.deleteMany(),
     prisma.criticidad.deleteMany(),

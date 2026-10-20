@@ -37,6 +37,27 @@ export const TIPOS_GLPI = {
 export type Itemtype = keyof typeof TIPOS_GLPI;
 export const ITEMTYPES = Object.keys(TIPOS_GLPI) as Itemtype[];
 
+/**
+ * Dentro de un tipo de GLPI, algunos tipos de equipo (type.name) tienen categoría
+ * propia: un servidor es un Computer para GLPI, pero no una «Computadora».
+ * Clave: el tipo de equipo normalizado (sin tildes ni mayúsculas).
+ */
+export const CATEGORIAS_POR_TIPO_DE_EQUIPO: Partial<Record<Itemtype, Record<string, string>>> = {
+  Computer: {
+    'servidor fisico': 'Servidores físicos',
+    'servidor virtual': 'Servidores virtuales',
+  },
+};
+
+const normalizar = (texto: string) =>
+  texto.normalize('NFD').replace(/\p{Diacritic}/gu, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** Categoría propia del tipo de equipo («Servidor Físico» → «Servidores físicos»), o null. */
+export function categoriaDeTipoDeEquipo(itemtype: Itemtype, tipoDeEquipo: string | null | undefined): string | null {
+  if (!tipoDeEquipo) return null;
+  return CATEGORIAS_POR_TIPO_DE_EQUIPO[itemtype]?.[normalizar(tipoDeEquipo)] ?? null;
+}
+
 /** Categoría local de cada tipo, salvo que GLPI_CATEGORIA_<TIPO> diga otra. */
 export const CATEGORIAS_POR_DEFECTO = Object.fromEntries(
   ITEMTYPES.map((t) => [t, TIPOS_GLPI[t].categoria]),

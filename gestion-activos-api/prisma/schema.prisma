@@ -16,9 +16,14 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Categoria {
-  id          Int    @id @default(autoincrement())
-  nombre      String @unique
-  descripcion String
+  id                 Int     @id @default(autoincrement())
+  nombre             String  @unique
+  descripcion        String
+  // Control de acceso: si los activos de la categoría admiten solicitudes de
+  // acceso lógico (contienen o dan acceso a información) o físico. Lo decide el
+  // admin en Catálogos; la sincronización con GLPI no lo toca.
+  admiteAccesoLogico Boolean @default(false)
+  admiteAccesoFisico Boolean @default(false)
 
   activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
 
@@ -99,6 +104,7 @@ model Activo {
   mantenimientos      Mantenimiento[] // "sigue ciclo de"
   vulnerabilidades    Vulnerabilidad[] // "presenta ciclo de"
   notificaciones      Notificacion[]
+  controlesAcceso     ControlAcceso[]
 
   @@index([updatedAt])
   // Filtro "activos / no activos" del inventario
@@ -758,4 +764,88 @@ model RegistroCambio {
 
   @@index([entidad, registroId])
   @@map("registro_cambio")
+}
+
+// ---------------------------------------------------------------------------
+// Control de acceso: solicitudes de acceso lógico y físico (una sola tabla)
+// ---------------------------------------------------------------------------
+
+model ControlAcceso {
+  id                        Int                 @id @default(autoincrement())
+  // CAL-001 (lógico) o CAF-001 (físico): lo genera el backend con un contador por tipo.
+  codigoUnico               String              @unique @db.VarChar(20)
+  tipoAcceso                TipoAcceso
+  // Activo inventariado al que se refiere; si no lo hay, `recurso` describe el
+  // recurso no inventariado (correo institucional, sala de servidores…).
+  activoId                  Int?
+  recurso                   String?             @db.VarChar(191)
+  fechaSolicitud            DateTime
+  fechaAccesoDeseada        DateTime
+  nombreUsuarioBeneficiario String              @db.VarChar(191)
+  departamento              String              @db.VarChar(191)
+  tipoSolicitud             TipoSolicitudAcceso
+  descripcion               String              @db.Text
+  // Flujo administrativo; si está programada, próxima o vencida se calcula aparte.
+  estado                    EstadoControlAcceso @default(ABIERTO)
+  // Qué se hizo al atenderla (acceso otorgado o retirado): obligatorio al cerrar.
+  resolucion                String?             @db.Text
+  fechaCreacion             DateTime            @default(now())
+  // Fecha y hora reales del cierre: la pone el backend al cerrar.
+  fechaAtendido             DateTime?
+  updatedAt                 DateTime            @updatedAt
+
+  activo    Activo?                  @relation(fields: [activoId], references: [id], onDelete: Restrict)
+  historial HistorialControlAcceso[]
+
+  @@index([tipoAcceso, estado])
+  @@index([fechaAccesoDeseada])
+  @@index([activoId])
+  @@map("control_acceso")
+}
+
+/// Auditoría de cada solicitud: un registro por campo modificado. Solo se escribe
+/// desde el backend, en la misma transacción que el cambio; no hay rutas para editarla.
+model HistorialControlAcceso {
+  id              Int      @id @default(autoincrement())
+  controlAccesoId Int
+  // Campo modificado, o CREACION al registrar la solicitud.
+  campo           String   @db.VarChar(64)
+  valorAnterior   String?  @db.Text
+  valorNuevo      String?  @db.Text
+  // Usuario autenticado (del token), nunca enviado por el cliente.
+  usuario         String
+  fecha           DateTime @default(now())
+  // Motivo del cambio (obligatorio al reabrir).
+  motivo          String?  @db.Text
+
+  controlAcceso ControlAcceso @relation(fields: [controlAccesoId], references: [id])
+
+  @@index([controlAccesoId, fecha])
+  @@map("historial_control_acceso")
+}
+
+/// Último correlativo emitido por tipo de acceso. Se incrementa con UPDATE dentro
+/// de la transacción que crea la solicitud: el bloqueo de fila de InnoDB serializa
+/// las peticiones simultáneas, sin count() + 1 ni contadores en memoria.
+model ContadorControlAcceso {
+  tipoAcceso TipoAcceso @id
+  ultimo     Int        @default(0)
+
+  @@map("contador_control_acceso")
+}
+
+enum TipoAcceso {
+  LOGICO
+  FISICO
+}
+
+enum TipoSolicitudAcceso {
+  ACCESO
+  BAJA
+}
+
+enum EstadoControlAcceso {
+  ABIERTO
+  PENDIENTE
+  CERRADO
 }

@@ -489,3 +489,44 @@ describe('política explícita: mejorar códigos de respaldo', () => {
     expect(foto(inv)).toBe(antes);
   });
 });
+
+describe('servidores: categoría según el tipo de equipo de GLPI', () => {
+  const servidores = (): DatosGlpiFalso => ({
+    elementos: {
+      Computer: [
+        { ...ordenador(28, '028', null), name: 'HP-520', type: { id: 7, name: 'Servidor Físico' } },
+        { ...ordenador(29, '029', null), name: 'VM-CONTABILIDAD', type: { id: 8, name: 'Servidor Virtual' } },
+        ordenador(30, '030', null),
+      ],
+      NetworkEquipment: [],
+    },
+  });
+
+  it('un Computer «Servidor Físico» o «Servidor Virtual» se crea en su categoría, sin duplicar y con su referencia', async () => {
+    const inv = new InventarioEnMemoria();
+    inv.categoriasExtra = new Map([['Servidores físicos', 103], ['Servidores virtuales', 104]]);
+    const { sincronizador } = montar(servidores(), {}, inv);
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores).toEqual([]);
+    const por = (ref: string) => inv.activos.find((a) => a.origenGlpi === ref)!;
+    expect(inv.categoriaDe.get(por('Computer #28').id)).toBe(103);
+    expect(inv.categoriaDe.get(por('Computer #29').id)).toBe(104);
+    expect(inv.categoriaDe.get(por('Computer #30').id)).toBe(1); // un portátil sigue en la categoría de Computer
+    expect(por('Computer #29')).toMatchObject({ nombre: 'VM-CONTABILIDAD', tipo: 'Servidor Virtual' });
+    // Repetir no crea nada.
+    const segunda = await sincronizador.ejecutar();
+    expect(segunda.totales.Computer).toMatchObject({ CREAR: 0 });
+    expect(inv.activos).toHaveLength(3);
+  });
+
+  it('si la categoría del servidor no existe, usa la del tipo y lo deja para revisión (no aborta)', async () => {
+    const inv = new InventarioEnMemoria();
+    const { sincronizador } = montar(servidores(), {}, inv);
+    const informe = await sincronizador.ejecutar();
+    expect(informe.errores).toEqual([]);
+    const vm = inv.activos.find((a) => a.origenGlpi === 'Computer #29')!;
+    expect(inv.categoriaDe.get(vm.id)).toBe(1);
+    const elemento = informe.elementos.find((e) => e.itemtype === 'Computer' && e.glpiId === 29)!;
+    expect(elemento.revision.join(' ')).toMatch(/«Servidores virtuales» no existe en el catálogo/);
+  });
+});

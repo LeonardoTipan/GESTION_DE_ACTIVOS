@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { AppController } from './app.controller.js';
+import { AccessControlModule } from './access-control/access-control.module.js';
 import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BackupsModule } from './backups/backups.module.js';
@@ -21,6 +22,7 @@ import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.
     MaintenanceModule,
     VulnerabilitiesModule,
     GlpiSyncModule,
+    AccessControlModule,
   ],
   controllers: [AppController],
   providers: [AppService],

@@ -108,3 +108,15 @@ describe('leerConfig', () => {
     expect(() => leerConfig({ ...BASE, GLPI_TIMEZONE: '' })).toThrow('Falta GLPI_TIMEZONE');
   });
 });
+
+describe('categoría por tipo de equipo', () => {
+  it('reconoce los servidores sin importar tildes, mayúsculas ni espacios', async () => {
+    const { categoriaDeTipoDeEquipo } = await import('./config.js');
+    expect(categoriaDeTipoDeEquipo('Computer', 'Servidor Físico')).toBe('Servidores físicos');
+    expect(categoriaDeTipoDeEquipo('Computer', '  servidor   fisico ')).toBe('Servidores físicos');
+    expect(categoriaDeTipoDeEquipo('Computer', 'SERVIDOR VIRTUAL')).toBe('Servidores virtuales');
+    expect(categoriaDeTipoDeEquipo('Computer', 'Laptop')).toBeNull();
+    expect(categoriaDeTipoDeEquipo('Computer', null)).toBeNull();
+    expect(categoriaDeTipoDeEquipo('Monitor', 'Servidor Físico')).toBeNull();
+  });
+});

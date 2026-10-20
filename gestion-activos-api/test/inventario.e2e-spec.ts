@@ -63,6 +63,9 @@ describe('Inventario (e2e)', () => {
         id: expect.any(Number),
         nombre: 'Hardware',
         descripcion: 'Equipos físicos',
+        // Control de acceso: una categoría nueva no es elegible hasta que el admin lo marque.
+        admiteAccesoLogico: false,
+        admiteAccesoFisico: false,
       });
       categoriaId = res.body.id;
     });

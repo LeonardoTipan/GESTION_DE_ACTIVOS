@@ -63,6 +63,10 @@ export class InventarioEnMemoria implements InventarioLocal {
   registrosHuerfanos: { tabla: string; cantidad: number }[] = [];
   /** Referencias de GLPI cuya escritura debe fallar (simula un fallo parcial). */
   fallarEn = new Set<string>();
+  /** Categorías además del catálogo corto (p. ej. las de servidores). */
+  categoriasExtra = new Map<string, number>();
+  /** Categoría con la que se dio de alta cada activo (id → categoriaId). */
+  categoriaDe = new Map<number, number>();
 
   huerfanos() {
     return Promise.resolve(this.registrosHuerfanos);
@@ -76,6 +80,7 @@ export class InventarioEnMemoria implements InventarioLocal {
         ['Red', 2],
         ['Software', 3],
         ...Object.values(CATEGORIAS_POR_DEFECTO).map((nombre, i): [string, number] => [nombre, 10 + i]),
+        ...this.categoriasExtra,
       ]),
       criticidades: new Map([['Baja', 1], ['Media', 2], ['Alta', 3]]),
     });
@@ -102,7 +107,7 @@ export class InventarioEnMemoria implements InventarioLocal {
     }
   }
 
-  async crear(glpi: ActivoGlpi, codigo: string): Promise<number> {
+  async crear(glpi: ActivoGlpi, codigo: string, ids?: { categoriaId: number }): Promise<number> {
     await Promise.resolve();
     this.comprobarFallo(glpi);
     if (
@@ -115,6 +120,7 @@ export class InventarioEnMemoria implements InventarioLocal {
       throw new ActivoDuplicadoError(glpi.referencia);
     }
     const id = this.siguienteId++;
+    if (ids) this.categoriaDe.set(id, ids.categoriaId);
     const { ultimaRevision: _, ...campos } = glpi.alCrear;
     this.activos.push({
       ...VACIOS,

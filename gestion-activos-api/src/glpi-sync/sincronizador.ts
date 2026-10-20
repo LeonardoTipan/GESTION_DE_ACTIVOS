@@ -1,4 +1,4 @@
-import { TIPOS_GLPI, type GlpiSyncConfig, type Itemtype } from './config.js';
+import { categoriaDeTipoDeEquipo, TIPOS_GLPI, type GlpiSyncConfig, type Itemtype } from './config.js';
 import type { GlpiClient, GlpiItem } from './glpi-client.js';
 import {
   ES_CAMBIO,
@@ -555,6 +555,18 @@ export class Sincronizador {
       elemento.revision = [...glpi.revision, ...plan.revision];
       elemento.activoId = plan.local?.id;
 
+      // Categoría al dar de alta: la del tipo de equipo (un servidor) si existe; si no, la del tipo de GLPI.
+      const porEquipo = categoriaDeTipoDeEquipo(itemtype, glpi.datos.tipo);
+      const categoriaId =
+        (porEquipo ? catalogos.categorias.get(porEquipo) : undefined) ??
+        // Verificada en catalogosQueFaltan() antes de conectar con GLPI.
+        catalogos.categorias.get(this.config.categoriaPorTipo[itemtype])!;
+      if (plan.accion === 'CREAR' && porEquipo && !catalogos.categorias.has(porEquipo)) {
+        elemento.revision.push(
+          `La categoría «${porEquipo}» no existe en el catálogo: se registró en «${this.config.categoriaPorTipo[itemtype]}».`,
+        );
+      }
+
       if (this.config.dryRun) continue;
       const extra = { ejecucionId: ejecucion.id, baja };
       try {
@@ -563,10 +575,7 @@ export class Sincronizador {
             glpi,
             plan.codigo,
             {
-              // Verificados en catalogosQueFaltan() antes de conectar con GLPI.
-              categoriaId: catalogos.categorias.get(
-                this.config.categoriaPorTipo[itemtype],
-              )!,
+              categoriaId,
               criticidadId: catalogos.criticidades.get(
                 this.config.criticidadPorDefecto,
               )!,
