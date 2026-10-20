@@ -297,4 +297,29 @@ describe('Control de acceso (e2e)', () => {
       expect(busqueda.data.map((s: { codigoUnico: string }) => s.codigoUnico)).toEqual(['CAL-001']);
     });
   });
+
+  describe('aislamiento del estado', () => {
+    it('el flujo completo de una solicitud no altera el activo (estado de GLPI, baja, categoría ni bitácora)', async () => {
+      // Un activo con condición física de GLPI, como los sincronizados.
+      await prisma.activo.update({ where: { id: ids.vm }, data: { estado: 'Malo' } });
+      const foto = async () => {
+        const a = await prisma.activo.findUniqueOrThrow({ where: { id: ids.vm } });
+        const bitacora = await prisma.bitacoraHistorial.count({ where: { activoId: ids.vm } });
+        return { ...a, bitacora };
+      };
+      const antes = await foto();
+
+      const { id } = (await crear({ activoId: ids.vm }).expect(201)).body;
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/pendiente`).expect(200);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso otorgado en la VM.' }).expect(200);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'Se revisa de nuevo el acceso concedido.' }).expect(200);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}`, { tipoSolicitud: 'BAJA', descripcion: 'Retirar el acceso: la usuaria cambió de área.' }).expect(200);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso retirado de la VM.' }).expect(200);
+
+      // La solicitud recorrió sus estados; el activo sigue exactamente igual (incluida updatedAt).
+      expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).estado).toBe('CERRADO');
+      expect(await foto()).toEqual(antes);
+      expect(antes).toMatchObject({ estado: 'Malo', deletedAt: null, inactivoDesde: null });
+    });
+  });
 });

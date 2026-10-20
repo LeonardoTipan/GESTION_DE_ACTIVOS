@@ -119,6 +119,17 @@ Cambiar el tipo de acceso de una solicitud (solo en `ABIERTO`) le asigna un cód
 | Próxima | No cerrada y la fecha deseada llega en las próximas 48 h |
 | Programada | No cerrada y la fecha deseada es posterior |
 
+### Aislamiento del estado de la solicitud y del activo
+
+El **estado de la solicitud** (`control_acceso.estado`: Abierto, Pendiente, Cerrado) y el **estado del activo** son datos distintos que no se cruzan. El del activo incluye la condición física de GLPI (`activo.estado`: Bueno, Regular, Malo…) y la baja (`deletedAt` / `inactivoDesde`).
+
+- **Columnas distintas en tablas distintas.** `control_acceso.estado` es un `ENUM`; `activo.estado` es texto que escribe la sincronización con GLPI.
+- **El módulo solo lee el inventario.** `access-control` hace `findUnique`, `count`, `findMany` y `groupBy` sobre `activo`, y ningún `create`, `update`, `upsert` ni `delete`. Tampoco escribe en la bitácora del activo.
+- **Una sola relación.** Es la clave foránea `control_acceso.activoId → activo.id`, con `ON DELETE RESTRICT` (un activo con solicitudes no se puede borrar físicamente; los activos nunca se borran, se dan de baja). Su `ON UPDATE CASCADE` solo actualizaría la solicitud si cambiara el *id* del activo, nunca al revés.
+- **Sin efectos ocultos.** No hay triggers en la base. Ningún otro módulo, ni la sincronización con GLPI, lee o escribe `control_acceso`.
+- **Las bajas solo se leen.** Un activo dado de baja deja de ser elegible para solicitudes nuevas, pero ni la solicitud cambia el activo ni el activo cambia las solicitudes ya registradas.
+- **Comprobado** por la prueba e2e «el flujo completo de una solicitud no altera el activo». Toma un activo en condición «Malo» y recorre alta → pendiente → cierre → reapertura → modificación a BAJA → cierre. Al final, la fila del activo (estado, baja, categoría y `updatedAt`) y su bitácora son idénticas a las de antes.
+
 **Concurrencia al modificar.** Cada cambio se aplica con una actualización condicional (mismo estado y misma `updatedAt`). Si otra petición se adelantó, responde 409 y no se pisa nada.
 
 ## Auditoría
@@ -185,7 +196,7 @@ Todo se valida en la API (`@Roles`); la interfaz además oculta los botones.
 | Tipo | Archivo | Resultado |
 |---|---|---|
 | Unitarias API | `reglas.spec.ts`, `glpi-sync/config.spec.ts`, `glpi-sync/sincronizador.spec.ts` (servidores) | 229/229 (toda la API) |
-| e2e API | `test/control-acceso.e2e-spec.ts` (16) y el resto de suites | 239/239 en 12 archivos |
+| e2e API | `test/control-acceso.e2e-spec.ts` (17, incluido el aislamiento del estado) y el resto de suites | 240/240 en 12 archivos |
 | Unitarias web | `features/control-acceso/textos.test.ts` y el resto | 105/105 |
 | Navegador real (Chrome) | Recorrido con admin, analista y auditor contra la base de pruebas | Todo correcto; capturas en `evidencias/2026-10-20-control-acceso/` (no se versiona) |
 | GLPI real | Simulación completa en desarrollo y `--aplicar` en la base de pruebas | Sin errores; servidores en su categoría, sin duplicados |
