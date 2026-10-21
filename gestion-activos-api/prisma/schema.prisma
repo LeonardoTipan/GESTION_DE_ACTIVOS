@@ -780,17 +780,22 @@ model ControlAcceso {
   activoId                  Int?
   recurso                   String?             @db.VarChar(191)
   fechaSolicitud            DateTime
-  fechaAccesoDeseada        DateTime
+  // Quién solicita o autoriza el trámite. Obligatorio en las solicitudes nuevas; null en
+  // las registradas antes de existir estos campos (no se inventan).
+  nombreSolicitante         String?             @db.VarChar(191)
+  cargoSolicitante          String?             @db.VarChar(191)
+  // Quién recibe (ALTA) o pierde (BAJA) el acceso: una persona distinta del solicitante.
   nombreUsuarioBeneficiario String              @db.VarChar(191)
   departamento              String              @db.VarChar(191)
   tipoSolicitud             TipoSolicitudAcceso
   descripcion               String              @db.Text
-  // Flujo administrativo; si está programada, próxima o vencida se calcula aparte.
+  // Flujo administrativo de la solicitud: NO es el estado del activo (no lo toca).
   estado                    EstadoControlAcceso @default(ABIERTO)
   // Qué se hizo al atenderla (acceso otorgado o retirado): obligatorio al cerrar.
   resolucion                String?             @db.Text
   fechaCreacion             DateTime            @default(now())
-  // Fecha y hora reales del cierre: la pone el backend al cerrar.
+  // Fecha y hora REALES en que se atendió: la indica quien cierra (puede ser histórica,
+  // anterior al registro). Obligatoria al cerrar; null mientras no esté cerrada.
   fechaAtendido             DateTime?
   updatedAt                 DateTime            @updatedAt
 
@@ -798,7 +803,7 @@ model ControlAcceso {
   historial HistorialControlAcceso[]
 
   @@index([tipoAcceso, estado])
-  @@index([fechaAccesoDeseada])
+  @@index([fechaSolicitud])
   @@index([activoId])
   @@map("control_acceso")
 }
@@ -815,7 +820,7 @@ model HistorialControlAcceso {
   // Usuario autenticado (del token), nunca enviado por el cliente.
   usuario         String
   fecha           DateTime @default(now())
-  // Motivo del cambio (obligatorio al reabrir).
+  // Motivo del cambio (obligatorio al reabrir y al corregir una solicitud cerrada).
   motivo          String?  @db.Text
 
   controlAcceso ControlAcceso @relation(fields: [controlAccesoId], references: [id])

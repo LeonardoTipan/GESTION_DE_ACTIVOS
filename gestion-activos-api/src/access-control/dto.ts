@@ -5,7 +5,6 @@ import { Trim } from '../common/decorators/trim.decorator.js';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto.js';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { ActivoBreveDto } from '../common/dto/registro.dto.js';
-import { SITUACIONES, type Situacion } from './reglas.js';
 
 export const TIPOS_ACCESO = ['LOGICO', 'FISICO'] as const;
 export const TIPOS_SOLICITUD = ['ACCESO', 'BAJA'] as const;
@@ -29,7 +28,7 @@ export class CrearControlAccesoDto {
   @IsIn(TIPOS_ACCESO)
   tipoAcceso: TipoAcceso;
 
-  @ApiProperty({ enum: TIPOS_SOLICITUD, description: 'ACCESO otorga el acceso; BAJA lo retira.' })
+  @ApiProperty({ enum: TIPOS_SOLICITUD, description: 'ACCESO = otorgamiento de acceso (ALTA); BAJA = desvinculación de acceso (BAJA). Ninguna modifica el activo.' })
   @IsIn(TIPOS_SOLICITUD)
   tipoSolicitud: TipoSolicitud;
 
@@ -53,12 +52,21 @@ export class CrearControlAccesoDto {
   @IsDate()
   fechaSolicitud: Date;
 
-  @ApiProperty({ type: String, format: 'date-time', description: 'Cuándo se desea el acceso (o la baja); no anterior a la solicitud.' })
-  @Type(() => Date)
-  @IsDate()
-  fechaAccesoDeseada: Date;
+  @ApiProperty({ maxLength: 191, example: 'Jorge Andrade', description: 'Quién solicita o autoriza el trámite.' })
+  @Trim()
+  @IsString()
+  @MinLength(3)
+  @MaxLength(191)
+  nombreSolicitante: string;
 
-  @ApiProperty({ maxLength: 191, example: 'María Pérez' })
+  @ApiProperty({ maxLength: 191, example: 'Jefe de Contabilidad', description: 'Cargo de quien solicita o autoriza.' })
+  @Trim()
+  @IsString()
+  @MinLength(2)
+  @MaxLength(191)
+  cargoSolicitante: string;
+
+  @ApiProperty({ maxLength: 191, example: 'María Pérez', description: 'Quién recibe (ALTA) o pierde (BAJA) el acceso.' })
   @Trim()
   @IsString()
   @MinLength(3)
@@ -82,7 +90,9 @@ export class CrearControlAccesoDto {
 
 /**
  * Modificación de los campos editables (no el estado, que tiene sus acciones).
- * `activoId: null` quita el activo (entonces se exige el recurso).
+ * `activoId: null` quita el activo (entonces se exige el recurso). Una solicitud
+ * cerrada solo la corrige un admin, con motivo; solo entonces se admiten
+ * `fechaAtendido` y `resolucion`.
  */
 export class EditarControlAccesoDto extends PartialType(OmitType(CrearControlAccesoDto, ['activoId'] as const)) {
   @ApiPropertyOptional({ type: Number, nullable: true, description: 'null quita el activo.' })
@@ -93,7 +103,21 @@ export class EditarControlAccesoDto extends PartialType(OmitType(CrearControlAcc
   @Min(1)
   activoId?: number | null;
 
-  @ApiPropertyOptional({ maxLength: 2000, description: 'Por qué se modifica (queda en el historial).' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Solo en una solicitud CERRADA (corrección del admin): fecha y hora reales de la atención.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaAtendido?: Date;
+
+  @ApiPropertyOptional({ minLength: 10, maxLength: 5000, description: 'Solo en una solicitud CERRADA (corrección del admin).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(10)
+  @MaxLength(5000)
+  resolucion?: string;
+
+  @ApiPropertyOptional({ maxLength: 2000, description: 'Por qué se modifica (queda en el historial). Obligatorio (≥20) al corregir una cerrada.' })
   @VacioANulo()
   @Trim()
   @IsOptional()
@@ -103,12 +127,21 @@ export class EditarControlAccesoDto extends PartialType(OmitType(CrearControlAcc
 }
 
 export class CerrarControlAccesoDto {
-  @ApiProperty({ minLength: 10, maxLength: 5000, description: 'Qué se hizo: acceso otorgado (ACCESO) o retirado (BAJA).' })
+  @ApiProperty({ minLength: 10, maxLength: 5000, description: 'Qué se hizo: acceso otorgado (ALTA) o retirado (BAJA).' })
   @Trim()
   @IsString()
   @MinLength(10)
   @MaxLength(5000)
   resolucion: string;
+
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    description: 'Fecha y hora REALES en que se atendió (obligatoria). Puede ser histórica; no futura ni anterior a la solicitud.',
+  })
+  @Type(() => Date)
+  @IsDate()
+  fechaAtendido: Date;
 }
 
 export class ReabrirControlAccesoDto {
@@ -121,7 +154,7 @@ export class ReabrirControlAccesoDto {
 }
 
 export class QueryControlAccesoDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ description: 'Código, beneficiario, departamento, recurso o activo.' })
+  @ApiPropertyOptional({ description: 'Código, solicitante, beneficiario, departamento, recurso o activo.' })
   @IsOptional()
   @IsString()
   @MaxLength(191)
@@ -142,18 +175,13 @@ export class QueryControlAccesoDto extends PaginationQueryDto {
   @IsIn(TIPOS_SOLICITUD)
   tipoSolicitud?: TipoSolicitud;
 
-  @ApiPropertyOptional({ enum: SITUACIONES, description: 'Respecto a la fecha deseada (calculada).' })
-  @IsOptional()
-  @IsIn(SITUACIONES)
-  situacion?: Situacion;
-
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha deseada desde.' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha de solicitud desde.' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   desde?: Date;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha deseada hasta.' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha de solicitud hasta.' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
@@ -195,7 +223,8 @@ export class ControlAccesoDto {
   @ApiProperty({ type: ActivoBreveDto, nullable: true }) activo: ActivoBreveDto | null;
   @ApiProperty({ type: String, nullable: true }) recurso: string | null;
   @ApiProperty({ type: String, format: 'date-time' }) fechaSolicitud: Date;
-  @ApiProperty({ type: String, format: 'date-time' }) fechaAccesoDeseada: Date;
+  @ApiProperty({ type: String, nullable: true, description: 'Null en solicitudes anteriores a este campo.' }) nombreSolicitante: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Null en solicitudes anteriores a este campo.' }) cargoSolicitante: string | null;
   @ApiProperty() nombreUsuarioBeneficiario: string;
   @ApiProperty() departamento: string;
   @ApiProperty({ enum: TIPOS_SOLICITUD }) tipoSolicitud: TipoSolicitud;
@@ -205,7 +234,6 @@ export class ControlAccesoDto {
   @ApiProperty({ type: String, format: 'date-time' }) fechaCreacion: Date;
   @ApiProperty({ type: String, format: 'date-time', nullable: true }) fechaAtendido: Date | null;
   @ApiProperty({ type: String, format: 'date-time' }) updatedAt: Date;
-  @ApiProperty({ enum: SITUACIONES, description: 'Respecto a la fecha deseada; no cambia el estado.' }) situacion: Situacion;
 }
 
 export class PaginatedControlAccesoDto extends PaginatedResponseDto(ControlAccesoDto) {}

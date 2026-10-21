@@ -1,4 +1,4 @@
-import { cambiosAuditables, codigoDe, puedeTransitar, situacionDe } from './reglas.js';
+import { cambiosAuditables, codigoDe, errorFechaAtendido, puedeTransitar } from './reglas.js';
 
 describe('control de acceso: reglas', () => {
   it('códigos con correlativo por tipo y al menos tres cifras', () => {
@@ -17,26 +17,30 @@ describe('control de acceso: reglas', () => {
     expect(puedeTransitar('reabrir', 'ABIERTO')).toBe(false);
   });
 
-  it('la situación se calcula por la fecha deseada sin tocar el estado', () => {
-    const ahora = new Date('2026-10-20T12:00:00Z');
-    expect(situacionDe('ABIERTO', new Date('2026-10-19T12:00:00Z'), ahora)).toBe('VENCIDA');
-    expect(situacionDe('PENDIENTE', new Date('2026-10-21T12:00:00Z'), ahora)).toBe('PROXIMA');
-    expect(situacionDe('ABIERTO', new Date('2026-10-30T12:00:00Z'), ahora)).toBe('PROGRAMADA');
-    expect(situacionDe('CERRADO', new Date('2026-10-19T12:00:00Z'), ahora)).toBe('ATENDIDA');
+  it('fecha atendida: histórica sí; futura, anterior a la solicitud o inválida, no', () => {
+    const ahora = new Date('2026-10-21T15:00:00Z');
+    const solicitud = new Date('2026-09-01T13:00:00Z');
+    expect(errorFechaAtendido(new Date('2026-09-02T14:00:00Z'), solicitud, ahora)).toBeNull(); // histórica
+    expect(errorFechaAtendido(new Date('2026-10-21T15:04:00Z'), solicitud, ahora)).toBeNull(); // margen del reloj
+    expect(errorFechaAtendido(new Date('2026-10-22T15:00:00Z'), solicitud, ahora)).toMatch(/futura/);
+    expect(errorFechaAtendido(new Date('2026-08-31T13:00:00Z'), solicitud, ahora)).toMatch(/anterior a la fecha de solicitud/);
+    expect(errorFechaAtendido(new Date('no es fecha'), solicitud, ahora)).toMatch(/no es una fecha válida/);
   });
 
   it('audita solo lo que cambia; fechas en ISO, nulos como null', () => {
-    const antes = { departamento: 'TIC', fechaAccesoDeseada: new Date('2026-10-21T13:00:00Z'), activoId: 5, recurso: null };
+    const antes = { departamento: 'TIC', fechaAtendido: new Date('2026-10-21T13:00:00Z'), activoId: 5, recurso: null, nombreSolicitante: null };
     const cambios = cambiosAuditables(antes, {
       departamento: 'TIC',
-      fechaAccesoDeseada: new Date('2026-10-22T13:00:00Z'),
+      fechaAtendido: new Date('2026-10-20T13:00:00Z'),
       activoId: null,
       recurso: 'Correo institucional',
+      nombreSolicitante: 'Ana Torres',
     });
     expect(cambios).toEqual([
       { campo: 'activoId', valorAnterior: '5', valorNuevo: null },
       { campo: 'recurso', valorAnterior: null, valorNuevo: 'Correo institucional' },
-      { campo: 'fechaAccesoDeseada', valorAnterior: '2026-10-21T13:00:00.000Z', valorNuevo: '2026-10-22T13:00:00.000Z' },
+      { campo: 'nombreSolicitante', valorAnterior: null, valorNuevo: 'Ana Torres' },
+      { campo: 'fechaAtendido', valorAnterior: '2026-10-21T13:00:00.000Z', valorNuevo: '2026-10-20T13:00:00.000Z' },
     ]);
   });
 });

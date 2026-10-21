@@ -1,4 +1,4 @@
-import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
 import { paginate, skipFor, type Paginated } from '../common/dto/paginated-response.dto.js';
 import { activoBreve, SELECT_ACTIVO, type ActivoBreveDto } from '../common/dto/registro.dto.js';
@@ -20,9 +20,9 @@ import type {
 import {
   cambiosAuditables,
   codigoDe,
-  HORAS_PROXIMA,
+  errorFechaAtendido,
+  MARGEN_FUTURO_MS,
   puedeTransitar,
-  situacionDe,
   TRANSICIONES,
   type AccionEstado,
   type Cambio,
@@ -33,8 +33,6 @@ const INCLUDE = { activo: SELECT_ACTIVO } as const;
 type Fila = Prisma.ControlAccesoGetPayload<{ include: typeof INCLUDE }>;
 
 const NOMBRE_TIPO: Record<TipoAcceso, string> = { LOGICO: 'lógico', FISICO: 'físico' };
-/** Margen para el reloj del equipo al validar que una fecha real no es futura. */
-const MARGEN_MS = 5 * 60_000;
 /** Reintentos si, aun así, un código chocara con uno existente (contador alterado a mano). */
 const INTENTOS_CODIGO = 3;
 /**
@@ -60,22 +58,16 @@ export class ControlAccesoService {
   // ── Consultas ─────────────────────────────────────────────────────────────
 
   async findAll(q: QueryControlAccesoDto): Promise<Paginated<ControlAccesoDto>> {
-    const ahora = new Date();
-    const proxima = new Date(ahora.getTime() + HORAS_PROXIMA * 3_600_000);
     const condiciones: Prisma.ControlAccesoWhereInput[] = [];
     if (q.tipoAcceso) condiciones.push({ tipoAcceso: q.tipoAcceso });
     if (q.estado) condiciones.push({ estado: q.estado });
     if (q.tipoSolicitud) condiciones.push({ tipoSolicitud: q.tipoSolicitud });
-    if (q.desde || q.hasta) condiciones.push({ fechaAccesoDeseada: { gte: q.desde, lte: q.hasta } });
-    // La situación se calcula con la fecha deseada; el estado no se toca.
-    if (q.situacion === 'ATENDIDA') condiciones.push({ estado: 'CERRADO' });
-    if (q.situacion === 'VENCIDA') condiciones.push({ estado: { not: 'CERRADO' }, fechaAccesoDeseada: { lt: ahora } });
-    if (q.situacion === 'PROXIMA') condiciones.push({ estado: { not: 'CERRADO' }, fechaAccesoDeseada: { gte: ahora, lte: proxima } });
-    if (q.situacion === 'PROGRAMADA') condiciones.push({ estado: { not: 'CERRADO' }, fechaAccesoDeseada: { gt: proxima } });
+    if (q.desde || q.hasta) condiciones.push({ fechaSolicitud: { gte: q.desde, lte: q.hasta } });
     if (q.q) {
       condiciones.push({
         OR: [
           { codigoUnico: { contains: q.q } },
+          { nombreSolicitante: { contains: q.q } },
           { nombreUsuarioBeneficiario: { contains: q.q } },
           { departamento: { contains: q.q } },
           { recurso: { contains: q.q } },
@@ -94,7 +86,7 @@ export class ControlAccesoService {
         take: q.limit,
       }),
     ]);
-    return paginate(filas.map((f) => this.aDto(f, ahora)), total, q);
+    return paginate(filas.map((f) => this.aDto(f)), total, q);
   }
 
   async findOne(id: number): Promise<ControlAccesoDto> {
@@ -164,7 +156,6 @@ export class ControlAccesoService {
       activoId: dto.activoId ?? null,
       recurso: dto.recurso ?? null,
       fechaSolicitud: dto.fechaSolicitud,
-      fechaAccesoDeseada: dto.fechaAccesoDeseada,
     });
     for (let intento = 1; ; intento++) {
       try {
@@ -178,7 +169,8 @@ export class ControlAccesoService {
               activoId: datos.activoId,
               recurso: datos.recurso,
               fechaSolicitud: dto.fechaSolicitud,
-              fechaAccesoDeseada: dto.fechaAccesoDeseada,
+              nombreSolicitante: dto.nombreSolicitante,
+              cargoSolicitante: dto.cargoSolicitante,
               nombreUsuarioBeneficiario: dto.nombreUsuarioBeneficiario,
               departamento: dto.departamento,
               descripcion: dto.descripcion,
@@ -208,14 +200,24 @@ export class ControlAccesoService {
   // ── Modificación ──────────────────────────────────────────────────────────
 
   /**
-   * Modifica los campos editables mientras no esté cerrada (para tocar una
-   * cerrada, un admin la reabre). Cambiar el tipo de acceso solo cabe en
-   * ABIERTO y le asigna un código de la otra serie; ambos cambios se auditan.
+   * Modifica los campos editables. Abierta o pendiente: admin y analista; la
+   * fecha atendida y la resolución todavía no existen. Cerrada: solo un admin la
+   * corrige, con motivo (≥20), incluidas la fecha atendida y la resolución.
+   * Cambiar el tipo de acceso solo cabe en ABIERTO y le asigna un código de la
+   * otra serie; todos los cambios se auditan con el usuario de la sesión.
    */
   async editar(id: number, dto: EditarControlAccesoDto, u: AuthUser): Promise<ControlAccesoDto> {
     const actual = await this.fila(id);
-    if (actual.estado === 'CERRADO') {
-      throw new ConflictException(`La solicitud ${actual.codigoUnico} está cerrada: un administrador debe reabrirla para modificarla.`);
+    const cerrada = actual.estado === 'CERRADO';
+    if (cerrada) {
+      if (!u.roles.includes('admin')) {
+        throw new ForbiddenException(`La solicitud ${actual.codigoUnico} está cerrada: solo un administrador puede corregirla.`);
+      }
+      if (!dto.motivo || dto.motivo.trim().length < 20) {
+        throw new BadRequestException('Corregir una solicitud cerrada exige el motivo del cambio (mínimo 20 caracteres).');
+      }
+    } else if (dto.fechaAtendido !== undefined || dto.resolucion !== undefined) {
+      throw new BadRequestException('La fecha atendida y la resolución se indican al cerrar la solicitud.');
     }
     const tipoAcceso = dto.tipoAcceso ?? actual.tipoAcceso;
     if (tipoAcceso !== actual.tipoAcceso && actual.estado !== 'ABIERTO') {
@@ -224,19 +226,29 @@ export class ControlAccesoService {
     // Activo y recurso se validan juntos: elegir un activo quita el recurso y viceversa.
     const activoId = dto.activoId !== undefined ? dto.activoId : dto.recurso ? null : actual.activoId;
     const recurso = dto.recurso !== undefined ? dto.recurso : activoId ? null : actual.recurso;
+    const fechaSolicitud = dto.fechaSolicitud ?? actual.fechaSolicitud;
     const datos = await this.validar({
       tipoAcceso,
       activoId,
       recurso,
-      fechaSolicitud: dto.fechaSolicitud ?? actual.fechaSolicitud,
-      fechaAccesoDeseada: dto.fechaAccesoDeseada ?? actual.fechaAccesoDeseada,
+      fechaSolicitud,
+      // Solo se revalida la elegibilidad si cambia el activo o el tipo: corregir otros datos de
+      // una solicitud antigua no falla porque su activo se diera de baja después.
+      revalidarActivo: activoId !== actual.activoId || tipoAcceso !== actual.tipoAcceso,
     });
+    const fechaAtendido = dto.fechaAtendido ?? actual.fechaAtendido;
+    if (cerrada && fechaAtendido) {
+      const error = errorFechaAtendido(fechaAtendido, fechaSolicitud);
+      if (error) throw new BadRequestException(error);
+    }
     const nuevos = {
       tipoAcceso,
       activoId: datos.activoId,
       recurso: datos.recurso,
-      fechaSolicitud: dto.fechaSolicitud ?? actual.fechaSolicitud,
-      fechaAccesoDeseada: dto.fechaAccesoDeseada ?? actual.fechaAccesoDeseada,
+      fechaSolicitud,
+      nombreSolicitante: dto.nombreSolicitante ?? actual.nombreSolicitante,
+      cargoSolicitante: dto.cargoSolicitante ?? actual.cargoSolicitante,
+      ...(cerrada ? { fechaAtendido, resolucion: dto.resolucion ?? actual.resolucion } : {}),
       nombreUsuarioBeneficiario: dto.nombreUsuarioBeneficiario ?? actual.nombreUsuarioBeneficiario,
       departamento: dto.departamento ?? actual.departamento,
       tipoSolicitud: dto.tipoSolicitud ?? actual.tipoSolicitud,
@@ -264,12 +276,24 @@ export class ControlAccesoService {
     return this.transitar(id, 'pendiente', u, () => ({}));
   }
 
-  /** Cerrar: la resolución es obligatoria y la fecha de atención la pone el backend (ahora). */
+  /**
+   * Cerrar: exige la resolución y la fecha REAL de la atención, que indica quien
+   * cierra (puede ser histórica, anterior al registro; no futura ni anterior a la
+   * solicitud). El backend no la sustituye por la hora actual.
+   */
   cerrar(id: number, dto: CerrarControlAccesoDto, u: AuthUser): Promise<ControlAccesoDto> {
-    return this.transitar(id, 'cerrar', u, () => ({ resolucion: dto.resolucion, fechaAtendido: new Date() }));
+    return this.transitar(id, 'cerrar', u, (actual) => {
+      const error = errorFechaAtendido(dto.fechaAtendido, actual.fechaSolicitud);
+      if (error) throw new BadRequestException(error);
+      return { resolucion: dto.resolucion, fechaAtendido: dto.fechaAtendido };
+    });
   }
 
-  /** Reabrir (solo admin, con motivo): vuelve a PENDIENTE; la atención anterior queda en el historial. */
+  /**
+   * Reabrir (solo admin, con motivo): vuelve a PENDIENTE, sin fecha atendida ni
+   * resolución porque ya no está atendida. La atención anterior no se pierde: su
+   * fecha y su resolución quedan en el historial, como valor anterior, junto al motivo.
+   */
   reabrir(id: number, dto: ReabrirControlAccesoDto, u: AuthUser): Promise<ControlAccesoDto> {
     return this.transitar(id, 'reabrir', u, () => ({ resolucion: null, fechaAtendido: null }), dto.motivo);
   }
@@ -278,7 +302,7 @@ export class ControlAccesoService {
     id: number,
     accion: AccionEstado,
     u: AuthUser,
-    extra: () => { resolucion?: string | null; fechaAtendido?: Date | null },
+    extra: (actual: Fila) => { resolucion?: string | null; fechaAtendido?: Date | null },
     motivo?: string,
   ): Promise<ControlAccesoDto> {
     const actual = await this.fila(id);
@@ -287,7 +311,7 @@ export class ControlAccesoService {
         `La solicitud ${actual.codigoUnico} está ${actual.estado}: no se puede ${accion === 'pendiente' ? 'pasar a PENDIENTE' : accion}.`,
       );
     }
-    const nuevos = { estado: TRANSICIONES[accion].hacia, ...extra() };
+    const nuevos = { estado: TRANSICIONES[accion].hacia, ...extra(actual) };
     const fila = await this.prisma.$transaction(async (tx) => {
       await this.actualizarSiNoCambio(tx, actual, nuevos);
       await this.auditar(tx, id, cambiosAuditables(actual, nuevos), u.username, motivo);
@@ -325,20 +349,18 @@ export class ControlAccesoService {
 
   /**
    * Un activo vigente y elegible para el tipo de acceso, o un recurso descrito;
-   * no los dos ni ninguno. La solicitud no es futura y lo deseado no es anterior a ella.
+   * no los dos ni ninguno. La fecha de solicitud no es futura.
    */
   private async validar(d: {
     tipoAcceso: TipoAcceso;
     activoId: number | null;
     recurso: string | null;
     fechaSolicitud: Date;
-    fechaAccesoDeseada: Date;
+    /** false = el activo no cambió: no se revalida su elegibilidad. */
+    revalidarActivo?: boolean;
   }): Promise<{ activoId: number | null; recurso: string | null }> {
-    if (d.fechaSolicitud.getTime() > Date.now() + MARGEN_MS) {
+    if (d.fechaSolicitud.getTime() > Date.now() + MARGEN_FUTURO_MS) {
       throw new BadRequestException('La fecha de solicitud no puede ser futura.');
-    }
-    if (d.fechaAccesoDeseada < d.fechaSolicitud) {
-      throw new BadRequestException('La fecha deseada no puede ser anterior a la fecha de solicitud.');
     }
     const recurso = d.recurso?.trim() || null;
     if (d.activoId && recurso) {
@@ -348,6 +370,7 @@ export class ControlAccesoService {
       if (!recurso) throw new BadRequestException('Seleccione un activo o describa el recurso (p. ej. «Correo institucional»).');
       return { activoId: null, recurso };
     }
+    if (d.revalidarActivo === false) return { activoId: d.activoId, recurso: null };
     const activo = await this.prisma.activo.findUnique({
       where: { id: d.activoId },
       select: { codigo: true, categoria: { select: { nombre: true } } },
@@ -369,7 +392,7 @@ export class ControlAccesoService {
     return fila;
   }
 
-  private aDto(f: Fila, ahora = new Date()): ControlAccesoDto {
-    return { ...f, activo: f.activo ? activoBreve(f.activo) : null, situacion: situacionDe(f.estado, f.fechaAccesoDeseada, ahora) };
+  private aDto(f: Fila): ControlAccesoDto {
+    return { ...f, activo: f.activo ? activoBreve(f.activo) : null };
   }
 }

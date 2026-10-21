@@ -27,21 +27,19 @@ export function puedeTransitar(accion: AccionEstado, estado: EstadoControlAcceso
   return (TRANSICIONES[accion].desde as readonly EstadoControlAcceso[]).includes(estado);
 }
 
-/**
- * Situación respecto a la fecha deseada, calculada aparte del estado (que no se
- * sobrescribe): ATENDIDA si está cerrada; si no, VENCIDA, PROXIMA (dentro de
- * HORAS_PROXIMA) o PROGRAMADA.
- */
-export const SITUACIONES = ['PROGRAMADA', 'PROXIMA', 'VENCIDA', 'ATENDIDA'] as const;
-export type Situacion = (typeof SITUACIONES)[number];
-export const HORAS_PROXIMA = 48;
+/** Margen para el reloj del equipo al validar que una fecha real no es futura. */
+export const MARGEN_FUTURO_MS = 5 * 60_000;
 
-export function situacionDe(estado: EstadoControlAcceso, fechaAccesoDeseada: Date, ahora = new Date()): Situacion {
-  if (estado === 'CERRADO') return 'ATENDIDA';
-  const t = fechaAccesoDeseada.getTime();
-  if (t < ahora.getTime()) return 'VENCIDA';
-  if (t <= ahora.getTime() + HORAS_PROXIMA * 3_600_000) return 'PROXIMA';
-  return 'PROGRAMADA';
+/**
+ * La fecha atendida es la fecha REAL de la atención: la indica quien cierra.
+ * Puede ser histórica (anterior incluso al registro), pero no futura ni anterior
+ * a la solicitud. Devuelve el motivo del rechazo, o null si es válida.
+ */
+export function errorFechaAtendido(fechaAtendido: Date, fechaSolicitud: Date, ahora = new Date()): string | null {
+  if (Number.isNaN(fechaAtendido.getTime())) return 'La fecha atendida no es una fecha válida.';
+  if (fechaAtendido.getTime() > ahora.getTime() + MARGEN_FUTURO_MS) return 'La fecha atendida no puede ser futura.';
+  if (fechaAtendido < fechaSolicitud) return 'La fecha atendida no puede ser anterior a la fecha de solicitud.';
+  return null;
 }
 
 /** Campos que se auditan, en el orden en que se registran. */
@@ -51,7 +49,8 @@ export const CAMPOS_AUDITADOS = [
   'activoId',
   'recurso',
   'fechaSolicitud',
-  'fechaAccesoDeseada',
+  'nombreSolicitante',
+  'cargoSolicitante',
   'nombreUsuarioBeneficiario',
   'departamento',
   'tipoSolicitud',

@@ -69,7 +69,8 @@ describe('Control de acceso (e2e)', () => {
     tipoAcceso: 'LOGICO',
     tipoSolicitud: 'ACCESO',
     fechaSolicitud: iso(Date.now() - HORA),
-    fechaAccesoDeseada: iso(Date.now() + 24 * HORA),
+    nombreSolicitante: 'Jorge Andrade',
+    cargoSolicitante: 'Jefe de Contabilidad',
     nombreUsuarioBeneficiario: 'María Pérez',
     departamento: 'Contabilidad',
     descripcion: 'Acceso al sistema contable para el cierre mensual.',
@@ -83,7 +84,16 @@ describe('Control de acceso (e2e)', () => {
       expect(res.body).toMatchObject({ codigoUnico: 'CAL-001', tipoAcceso: 'LOGICO', estado: 'ABIERTO', fechaAtendido: null, recurso: null, activoId: ids.vm });
       expect(res.body.activo).toMatchObject({ codigo: 'GLPI-PC-29', categoria: 'Servidores virtuales' });
       const fila = await prisma.controlAcceso.findUniqueOrThrow({ where: { id: res.body.id } });
-      expect(fila).toMatchObject({ codigoUnico: 'CAL-001', estado: 'ABIERTO', activoId: ids.vm, fechaAtendido: null });
+      // Solicitante (quien pide o autoriza) y beneficiario (quien recibe el acceso), por separado.
+      expect(fila).toMatchObject({
+        codigoUnico: 'CAL-001',
+        estado: 'ABIERTO',
+        activoId: ids.vm,
+        fechaAtendido: null,
+        nombreSolicitante: 'Jorge Andrade',
+        cargoSolicitante: 'Jefe de Contabilidad',
+        nombreUsuarioBeneficiario: 'María Pérez',
+      });
       expect(await historial(res.body.id)).toMatchObject([{ campo: 'CREACION', valorNuevo: 'CAL-001', usuario: 'analista.test' }]);
     });
 
@@ -105,9 +115,16 @@ describe('Control de acceso (e2e)', () => {
       await crear({ recurso: '   ' }).expect(400);
       await crear({ recurso: 'Correo', descripcion: 'corta' }).expect(400);
       await crear({ recurso: 'Correo', nombreUsuarioBeneficiario: undefined }).expect(400);
-      await crear({ recurso: 'Correo', fechaAccesoDeseada: iso(Date.now() - 2 * HORA) }).expect(400);
-      await crear({ recurso: 'Correo', fechaSolicitud: iso(Date.now() + 2 * HORA), fechaAccesoDeseada: iso(Date.now() + 3 * HORA) }).expect(400);
+      // Solicitante y su cargo: obligatorios en una solicitud nueva.
+      await crear({ recurso: 'Correo', nombreSolicitante: undefined }).expect(400);
+      await crear({ recurso: 'Correo', cargoSolicitante: undefined }).expect(400);
+      await crear({ recurso: 'Correo', nombreSolicitante: 'Jo' }).expect(400);
+      await crear({ recurso: 'Correo', cargoSolicitante: '   ' }).expect(400);
+      await crear({ recurso: 'Correo', fechaSolicitud: iso(Date.now() + 2 * HORA) }).expect(400);
+      await crear({ recurso: 'Correo', fechaSolicitud: 'ayer por la tarde' }).expect(400);
       await crear({ recurso: 'Correo', tipoAcceso: 'REMOTO' }).expect(400);
+      // La fecha deseada ya no existe en el modelo.
+      await crear({ recurso: 'Correo', fechaAccesoDeseada: iso(Date.now()) }).expect(400);
     });
 
     it('elegibilidad del activo según la categoría (Catálogos) y su vigencia', async () => {
@@ -161,25 +178,34 @@ describe('Control de acceso (e2e)', () => {
   });
 
   describe('estados y cierre', () => {
-    it('ABIERTO → PENDIENTE → CERRADO con la fecha de atención del servidor; transiciones inválidas → 409', async () => {
-      const { id } = (await crear({ recurso: 'Aplicación de nómina' }).expect(201)).body;
+    it('ABIERTO → PENDIENTE → CERRADO con la fecha atendida que se indica (no la del servidor); transiciones inválidas → 409', async () => {
+      const { id, fechaSolicitud } = (await crear({ recurso: 'Aplicación de nómina' }).expect(201)).body;
       await api(tokens.analista).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'Motivo suficientemente largo para reabrir.' }).expect(403);
       await api(tokens.admin).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'Motivo suficientemente largo para reabrir.' }).expect(409);
       await api(tokens.analista).patch(`/api/control-acceso/${id}/pendiente`).expect(200);
       await api(tokens.analista).patch(`/api/control-acceso/${id}/pendiente`).expect(409);
-      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'corta' }).expect(400);
-      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Cuenta creada en nómina.', fechaAtendido: iso(0) }).expect(400);
-      const antes = Date.now();
-      const res = await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Cuenta creada en nómina.' }).expect(200);
-      const despues = Date.now();
-      expect(res.body).toMatchObject({ estado: 'CERRADO', situacion: 'ATENDIDA', resolucion: 'Cuenta creada en nómina.' });
-      const atendido = new Date(res.body.fechaAtendido).getTime();
-      expect(atendido).toBeGreaterThanOrEqual(antes - 1000);
-      expect(atendido).toBeLessThanOrEqual(despues + 1000);
-      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Otra vez cerrada.' }).expect(409);
+      // La fecha de atención la pone quien cierra, no el sistema: sin ella o inválida, 400.
+      const cerrar = (cuerpo: object, token = tokens.analista) => api(token).patch(`/api/control-acceso/${id}/cerrar`, cuerpo);
+      await cerrar({ resolucion: 'Cuenta creada en nómina.' }).expect(400);
+      await cerrar({ resolucion: 'Cuenta creada en nómina.', fechaAtendido: 'mañana temprano' }).expect(400);
+      await cerrar({ resolucion: 'Cuenta creada en nómina.', fechaAtendido: '2026-02-30T25:00:00Z' }).expect(400);
+      expect((await cerrar({ resolucion: 'Cuenta creada en nómina.', fechaAtendido: iso(Date.now() + 2 * HORA) }).expect(400)).body.message).toMatch(/futura/);
+      expect(
+        (await cerrar({ resolucion: 'Cuenta creada en nómina.', fechaAtendido: iso(new Date(fechaSolicitud).getTime() - HORA) }).expect(400)).body.message,
+      ).toMatch(/anterior a la fecha de solicitud/);
+      await cerrar({ resolucion: 'corta', fechaAtendido: iso(Date.now() - 30 * 60_000) }).expect(400);
+      // Fecha histórica: anterior al registro de la solicitud (que se registró ahora).
+      const atendidoIso = iso(Date.now() - 30 * 60_000);
+      const res = await cerrar({ resolucion: 'Cuenta creada en nómina.', fechaAtendido: atendidoIso }).expect(200);
+      expect(res.body).toMatchObject({ estado: 'CERRADO', resolucion: 'Cuenta creada en nómina.', fechaAtendido: atendidoIso });
+      expect(new Date(res.body.fechaAtendido).getTime()).toBeLessThan(new Date(res.body.fechaCreacion).getTime());
+      // Persistida tal cual en MySQL; la fecha de creación no cambia.
+      const fila = await prisma.controlAcceso.findUniqueOrThrow({ where: { id } });
+      expect(fila.fechaAtendido?.toISOString()).toBe(atendidoIso);
+      expect(fila.fechaCreacion.toISOString()).toBe(res.body.fechaCreacion);
+      const atendido = new Date(atendidoIso).getTime();
+      await cerrar({ resolucion: 'Otra vez cerrada.', fechaAtendido: atendidoIso }).expect(409);
       await api(tokens.analista).patch(`/api/control-acceso/${id}/pendiente`).expect(409);
-      // Cerrada: no se modifica sin reabrir.
-      await api(tokens.analista).patch(`/api/control-acceso/${id}`, { departamento: 'Talento Humano' }).expect(409);
       // Reabrir: solo admin, con motivo; vuelve a PENDIENTE y quita la atención (queda en el historial).
       await api(tokens.admin).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'corto' }).expect(400);
       const re = await api(tokens.admin).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'El usuario no puede ingresar: se revisa de nuevo.' }).expect(200);
@@ -197,29 +223,130 @@ describe('Control de acceso (e2e)', () => {
       expect(fechas[1]).toMatchObject({ valorAnterior: new Date(atendido).toISOString(), valorNuevo: null, motivo: 'El usuario no puede ingresar: se revisa de nuevo.' });
     });
 
-    it('ABIERTO → CERRADO directamente, también para una BAJA', async () => {
-      const { id } = (await crear({ tipoSolicitud: 'BAJA', recurso: 'Correo institucional' }).expect(201)).body;
-      const res = await api(tokens.admin).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Cuenta de correo deshabilitada.' }).expect(200);
-      expect(res.body).toMatchObject({ estado: 'CERRADO', tipoSolicitud: 'BAJA' });
+    it('una solicitud de hace un mes se cierra con la fecha real en que se atendió (histórica)', async () => {
+      const haceUnMes = Date.now() - 30 * 24 * HORA;
+      const { id } = (await crear({ recurso: 'Sistema de nómina', fechaSolicitud: iso(haceUnMes) }).expect(201)).body;
+      const atendidoIso = iso(haceUnMes + 2 * 24 * HORA);
+      const res = await api(tokens.admin).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso otorgado el mismo mes.', fechaAtendido: atendidoIso }).expect(200);
+      expect(res.body.fechaAtendido).toBe(atendidoIso);
+      expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).fechaAtendido?.toISOString()).toBe(atendidoIso);
     });
 
-    it('la situación se calcula con la fecha deseada sin cambiar el estado', async () => {
-      const vencida = (await crear({ recurso: 'VPN', fechaSolicitud: iso(Date.now() - 5 * HORA), fechaAccesoDeseada: iso(Date.now() - 2 * HORA) }).expect(201)).body;
-      expect(vencida).toMatchObject({ estado: 'ABIERTO', situacion: 'VENCIDA' });
-      const lejana = (await crear({ recurso: 'VPN', fechaAccesoDeseada: iso(Date.now() + 10 * 24 * HORA) }).expect(201)).body;
-      expect(lejana).toMatchObject({ estado: 'ABIERTO', situacion: 'PROGRAMADA' });
-      const lista = (await api(tokens.auditor).get('/api/control-acceso?situacion=VENCIDA&limit=100').expect(200)).body;
-      expect(lista.data.map((s: { id: number }) => s.id)).toContain(vencida.id);
-      expect(lista.data.every((s: { situacion: string }) => s.situacion === 'VENCIDA')).toBe(true);
+    it('la fecha atendida y la resolución no se envían mientras no esté cerrada', async () => {
+      const { id } = (await crear({ recurso: 'VPN' }).expect(201)).body;
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: iso(Date.now()) }).expect(400);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { resolucion: 'Resolución adelantada.' }).expect(400);
+      expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).fechaAtendido).toBeNull();
+    });
+
+    it('filtro por fecha de solicitud (la fecha deseada ya no existe)', async () => {
+      const antigua = (await crear({ recurso: 'VPN', fechaSolicitud: iso(Date.now() - 60 * 24 * HORA) }).expect(201)).body;
+      const desde = iso(Date.now() - 61 * 24 * HORA);
+      const hasta = iso(Date.now() - 59 * 24 * HORA);
+      const lista = (await api(tokens.auditor).get(`/api/control-acceso?desde=${desde}&hasta=${hasta}&limit=100`).expect(200)).body;
+      expect(lista.data.map((s: { id: number }) => s.id)).toEqual([antigua.id]);
+      expect(lista.data[0]).not.toHaveProperty('fechaAccesoDeseada');
+      expect(lista.data[0]).not.toHaveProperty('situacion');
+    });
+  });
+
+  describe('corrección de solicitudes cerradas', () => {
+    it('solo el admin la corrige, con motivo; la fecha atendida corregida queda auditada', async () => {
+      const { id } = (await crear({ recurso: 'Correo institucional' }).expect(201)).body;
+      const primera = iso(Date.now() - 20 * 60_000);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Buzón creado.', fechaAtendido: primera }).expect(200);
+      // Analista: 403. Auditor: 403. Admin sin motivo suficiente: 400.
+      await api(tokens.analista).patch(`/api/control-acceso/${id}`, { departamento: 'Talento Humano', motivo: 'Corrección del departamento del beneficiario.' }).expect(403);
+      await api(tokens.auditor).patch(`/api/control-acceso/${id}`, { departamento: 'Talento Humano', motivo: 'Corrección del departamento del beneficiario.' }).expect(403);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: iso(Date.now() - 40 * 60_000) }).expect(400);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: iso(Date.now() - 40 * 60_000), motivo: 'corto' }).expect(400);
+      // Fecha corregida inválida: futura o anterior a la solicitud.
+      const motivo = 'El acta de entrega indica otra hora de atención.';
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: iso(Date.now() + 3 * HORA), motivo }).expect(400);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: iso(Date.now() - 5 * HORA), motivo }).expect(400);
+      // El tipo de acceso de una cerrada no cambia.
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { tipoAcceso: 'FISICO', motivo }).expect(409);
+      const corregida = iso(Date.now() - 40 * 60_000);
+      const res = await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: corregida, resolucion: 'Buzón creado y probado.', motivo }).expect(200);
+      expect(res.body).toMatchObject({ estado: 'CERRADO', fechaAtendido: corregida, resolucion: 'Buzón creado y probado.' });
+      const h = await historial(id);
+      expect(h.filter((x) => x.campo === 'fechaAtendido').at(-1)).toMatchObject({ valorAnterior: primera, valorNuevo: corregida, usuario: 'admin.test', motivo });
+      expect(h.filter((x) => x.campo === 'resolucion').at(-1)).toMatchObject({ valorAnterior: 'Buzón creado.', valorNuevo: 'Buzón creado y probado.' });
+      expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).fechaAtendido?.toISOString()).toBe(corregida);
+    });
+
+    it('registros anteriores sin solicitante: se muestran sin inventarlo y el admin puede completarlo', async () => {
+      // Como las solicitudes previas a la migración: sin solicitante ni cargo, ya cerradas,
+      // sobre un activo que después se dio de baja.
+      const contador = await prisma.contadorControlAcceso.update({ where: { tipoAcceso: 'LOGICO' }, data: { ultimo: { increment: 1 } } });
+      const antigua = await prisma.controlAcceso.create({
+        data: {
+          codigoUnico: `CAL-${String(contador.ultimo).padStart(3, '0')}`,
+          tipoAcceso: 'LOGICO',
+          tipoSolicitud: 'ACCESO',
+          activoId: ids.pcBaja,
+          fechaSolicitud: new Date(Date.now() - 10 * 24 * HORA),
+          nombreUsuarioBeneficiario: 'Luis Mora',
+          departamento: 'TIC',
+          descripcion: 'Solicitud registrada antes de existir el solicitante.',
+          estado: 'CERRADO',
+          resolucion: 'Acceso otorgado.',
+          fechaAtendido: new Date(Date.now() - 9 * 24 * HORA),
+        },
+      });
+      const vista = (await api(tokens.auditor).get(`/api/control-acceso/${antigua.id}`).expect(200)).body;
+      expect(vista).toMatchObject({ nombreSolicitante: null, cargoSolicitante: null, nombreUsuarioBeneficiario: 'Luis Mora' });
+      // Completar el solicitante no exige que su activo (ya dado de baja) siga siendo elegible.
+      const res = await api(tokens.admin)
+        .patch(`/api/control-acceso/${antigua.id}`, { nombreSolicitante: 'Rosa Vega', cargoSolicitante: 'Directora TIC', motivo: 'Se completa el solicitante con el oficio original.' })
+        .expect(200);
+      expect(res.body).toMatchObject({ nombreSolicitante: 'Rosa Vega', cargoSolicitante: 'Directora TIC', activoId: ids.pcBaja, estado: 'CERRADO' });
+      expect((await historial(antigua.id)).map((x) => [x.campo, x.valorAnterior, x.valorNuevo])).toEqual([
+        ['nombreSolicitante', null, 'Rosa Vega'],
+        ['cargoSolicitante', null, 'Directora TIC'],
+      ]);
+    });
+  });
+
+  describe('altas y bajas', () => {
+    it('ALTA (otorgamiento) y BAJA (desvinculación) se registran, filtran y cierran por separado', async () => {
+      const alta = (await crear({ tipoSolicitud: 'ACCESO', recurso: 'Sistema documental' }).expect(201)).body;
+      const baja = (await crear({ tipoSolicitud: 'BAJA', recurso: 'Sistema documental', nombreUsuarioBeneficiario: 'Pedro Salas' }).expect(201)).body;
+      expect([alta.tipoSolicitud, baja.tipoSolicitud]).toEqual(['ACCESO', 'BAJA']);
+      const soloBajas = (await api(tokens.auditor).get('/api/control-acceso?tipoSolicitud=BAJA&limit=100').expect(200)).body;
+      expect(soloBajas.data.every((s: { tipoSolicitud: string }) => s.tipoSolicitud === 'BAJA')).toBe(true);
+      expect(soloBajas.data.map((s: { id: number }) => s.id)).toContain(baja.id);
+      expect(soloBajas.data.map((s: { id: number }) => s.id)).not.toContain(alta.id);
+      const cerrada = (await api(tokens.analista)
+        .patch(`/api/control-acceso/${baja.id}/cerrar`, { resolucion: 'Cuenta de Pedro Salas deshabilitada.', fechaAtendido: iso(Date.now() - 10 * 60_000) })
+        .expect(200)).body;
+      expect(cerrada).toMatchObject({ estado: 'CERRADO', tipoSolicitud: 'BAJA' });
+      expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id: alta.id } })).estado).toBe('ABIERTO');
+    });
+
+    it('una BAJA sobre un activo no retira ni modifica el activo', async () => {
+      const antes = await prisma.activo.findUniqueOrThrow({ where: { id: ids.programa } });
+      const { id } = (await crear({ tipoSolicitud: 'BAJA', activoId: ids.programa }).expect(201)).body;
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso al sistema contable retirado.', fechaAtendido: iso(Date.now() - 5 * 60_000) }).expect(200);
+      expect(await prisma.activo.findUniqueOrThrow({ where: { id: ids.programa } })).toEqual(antes);
     });
   });
 
   describe('auditoría', () => {
     it('cada campo modificado queda con su valor anterior y nuevo, y el usuario del token', async () => {
       const { id } = (await crear({ recurso: 'Correo institucional' }).expect(201)).body;
-      const nuevaFecha = iso(Date.now() + 48 * HORA);
+      const nuevaFecha = iso(Date.now() - 3 * HORA);
       await api(tokens.analista)
-        .patch(`/api/control-acceso/${id}`, { departamento: 'Talento Humano', fechaAccesoDeseada: nuevaFecha, activoId: ids.programa, motivo: 'Se precisa el sistema, no el correo.' })
+        .patch(`/api/control-acceso/${id}`, {
+          departamento: 'Talento Humano',
+          fechaSolicitud: nuevaFecha,
+          activoId: ids.programa,
+          nombreSolicitante: 'Elena Ruiz',
+          cargoSolicitante: 'Directora de Talento Humano',
+          nombreUsuarioBeneficiario: 'Mario Pérez',
+          tipoSolicitud: 'BAJA',
+          motivo: 'Se precisa el sistema, no el correo.',
+        })
         .expect(200);
       // El usuario del historial no lo puede fijar el cliente.
       await api(tokens.analista).patch(`/api/control-acceso/${id}`, { departamento: 'TIC', usuario: 'otra.persona' }).expect(400);
@@ -230,7 +357,12 @@ describe('Control de acceso (e2e)', () => {
       const h = await historial(id);
       const por = (campo: string) => h.filter((x) => x.campo === campo);
       expect(por('departamento')[0]).toMatchObject({ valorAnterior: 'Contabilidad', valorNuevo: 'Talento Humano', usuario: 'analista.test', motivo: 'Se precisa el sistema, no el correo.' });
-      expect(por('fechaAccesoDeseada')[0].valorNuevo).toBe(nuevaFecha);
+      expect(por('fechaSolicitud')[0].valorNuevo).toBe(nuevaFecha);
+      // Solicitante, beneficiario y tipo de solicitud: cada uno con su entrada.
+      expect(por('nombreSolicitante')[0]).toMatchObject({ valorAnterior: 'Jorge Andrade', valorNuevo: 'Elena Ruiz', usuario: 'analista.test' });
+      expect(por('cargoSolicitante')[0]).toMatchObject({ valorAnterior: 'Jefe de Contabilidad', valorNuevo: 'Directora de Talento Humano' });
+      expect(por('nombreUsuarioBeneficiario')[0]).toMatchObject({ valorAnterior: 'María Pérez', valorNuevo: 'Mario Pérez' });
+      expect(por('tipoSolicitud')[0]).toMatchObject({ valorAnterior: 'ACCESO', valorNuevo: 'BAJA' });
       expect(por('activoId')[0]).toMatchObject({ valorAnterior: null, valorNuevo: String(ids.programa) });
       expect(por('recurso')[0]).toMatchObject({ valorAnterior: 'Correo institucional', valorNuevo: null });
       expect(por('tipoAcceso')[0]).toMatchObject({ valorAnterior: 'LOGICO', valorNuevo: 'FISICO' });
@@ -282,7 +414,7 @@ describe('Control de acceso (e2e)', () => {
       await crear({ recurso: 'Correo' }, tokens.auditor).expect(403);
       await api(tokens.auditor).patch(`/api/control-acceso/${id}`, { departamento: 'X' }).expect(403);
       await api(tokens.auditor).patch(`/api/control-acceso/${id}/pendiente`).expect(403);
-      await api(tokens.auditor).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso concedido hoy.' }).expect(403);
+      await api(tokens.auditor).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso concedido hoy.', fechaAtendido: iso(Date.now()) }).expect(403);
       await api(tokens.auditor).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'Motivo suficientemente largo.' }).expect(403);
       await request(app.getHttpServer()).get('/api/control-acceso').expect(401);
       expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).estado).toBe('ABIERTO');
@@ -292,7 +424,8 @@ describe('Control de acceso (e2e)', () => {
       const fisicas = (await api(tokens.auditor).get('/api/control-acceso?tipoAcceso=FISICO&limit=100').expect(200)).body;
       expect(fisicas.data.every((s: { codigoUnico: string }) => s.codigoUnico.startsWith('CAF-'))).toBe(true);
       const bajas = (await api(tokens.auditor).get('/api/control-acceso?tipoSolicitud=BAJA&estado=CERRADO').expect(200)).body;
-      expect(bajas.meta.total).toBe(1);
+      expect(bajas.meta.total).toBe(await prisma.controlAcceso.count({ where: { tipoSolicitud: 'BAJA', estado: 'CERRADO' } }));
+      expect(bajas.meta.total).toBeGreaterThan(0);
       const busqueda = (await api(tokens.auditor).get('/api/control-acceso?q=VM-CONTAB').expect(200)).body;
       expect(busqueda.data.map((s: { codigoUnico: string }) => s.codigoUnico)).toEqual(['CAL-001']);
     });
@@ -311,10 +444,12 @@ describe('Control de acceso (e2e)', () => {
 
       const { id } = (await crear({ activoId: ids.vm }).expect(201)).body;
       await api(tokens.analista).patch(`/api/control-acceso/${id}/pendiente`).expect(200);
-      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso otorgado en la VM.' }).expect(200);
+      const hace = (min: number) => iso(Date.now() - min * 60_000);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso otorgado en la VM.', fechaAtendido: hace(5) }).expect(200);
+      await api(tokens.admin).patch(`/api/control-acceso/${id}`, { fechaAtendido: hace(10), motivo: 'Se corrige la hora con el acta de entrega.' }).expect(200);
       await api(tokens.admin).patch(`/api/control-acceso/${id}/reabrir`, { motivo: 'Se revisa de nuevo el acceso concedido.' }).expect(200);
       await api(tokens.analista).patch(`/api/control-acceso/${id}`, { tipoSolicitud: 'BAJA', descripcion: 'Retirar el acceso: la usuaria cambió de área.' }).expect(200);
-      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso retirado de la VM.' }).expect(200);
+      await api(tokens.analista).patch(`/api/control-acceso/${id}/cerrar`, { resolucion: 'Acceso retirado de la VM.', fechaAtendido: hace(1) }).expect(200);
 
       // La solicitud recorrió sus estados; el activo sigue exactamente igual (incluida updatedAt).
       expect((await prisma.controlAcceso.findUniqueOrThrow({ where: { id } })).estado).toBe('CERRADO');

@@ -34,7 +34,8 @@ import {
 
 /**
  * Permisos: consultar (incluido el historial), todos los roles; registrar,
- * modificar, pasar a pendiente y cerrar, admin y analista; reabrir, solo admin.
+ * modificar, pasar a pendiente y cerrar, admin y analista; reabrir y corregir
+ * una solicitud cerrada, solo admin.
  * El historial no tiene rutas de escritura: solo lo escribe el propio servicio.
  */
 @ApiTags('control-acceso')
@@ -44,7 +45,7 @@ import {
 export class ControlAccesoController {
   constructor(private readonly servicio: ControlAccesoService) {}
 
-  @ApiOperation({ summary: 'Listar solicitudes', description: 'Búsqueda y filtros por tipo, estado, tipo de solicitud, fechas deseadas y situación.' })
+  @ApiOperation({ summary: 'Listar solicitudes', description: 'Búsqueda y filtros por tipo de acceso, estado, tipo de solicitud (ALTA o BAJA) y fecha de solicitud.' })
   @ApiOkResponse({ type: PaginatedControlAccesoDto })
   @Get()
   findAll(@Query() q: QueryControlAccesoDto): Promise<Paginated<ControlAccesoDto>> {
@@ -94,10 +95,12 @@ export class ControlAccesoController {
     return this.servicio.crear(dto, u);
   }
 
-  @ApiOperation({ summary: 'Modificar una solicitud no cerrada', description: 'Cada campo cambiado queda en el historial.' })
+  @ApiOperation({ summary: 'Modificar una solicitud',
+    description:
+      'Abierta o pendiente: admin y analista. Cerrada: solo admin, con motivo (≥20), incluidas la fecha atendida y la resolución. Cada campo cambiado queda en el historial.', })
   @ApiOkResponse({ type: ControlAccesoDto })
   @ApiBadRequestResponse({ type: ApiErrorDto })
-  @ApiConflictResponse({ type: ApiErrorDto, description: 'Cerrada, o cambió entre medias.' })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Tipo de acceso fuera de ABIERTO, o cambió entre medias.' })
   @Roles('admin', 'analista')
   @Patch(':id')
   editar(@Param('id', ParseIntPipe) id: number, @Body() dto: EditarControlAccesoDto, @CurrentUser() u: AuthUser): Promise<ControlAccesoDto> {
@@ -113,7 +116,8 @@ export class ControlAccesoController {
     return this.servicio.marcarPendiente(id, u);
   }
 
-  @ApiOperation({ summary: 'Cerrar (ABIERTO o PENDIENTE → CERRADO)', description: 'Exige la resolución; la fecha de atención es la del servidor.' })
+  @ApiOperation({ summary: 'Cerrar (ABIERTO o PENDIENTE → CERRADO)',
+    description: 'Exige la resolución y la fecha REAL de la atención (puede ser histórica; no futura ni anterior a la solicitud).', })
   @ApiOkResponse({ type: ControlAccesoDto })
   @ApiConflictResponse({ type: ApiErrorDto, description: 'Transición no permitida.' })
   @Roles('admin', 'analista')
