@@ -9,7 +9,6 @@ export type EntradaHistorial = S['HistorialControlAccesoDto']
 export type TipoAcceso = Solicitud['tipoAcceso']
 export type TipoSolicitud = Solicitud['tipoSolicitud']
 export type EstadoSolicitud = Solicitud['estado']
-export type Situacion = Solicitud['situacion']
 export type DatosCrear = S['CrearControlAccesoDto']
 export type DatosEditar = S['EditarControlAccesoDto']
 export type FiltrosSolicitudes = NonNullable<paths['/api/control-acceso']['get']['parameters']['query']>
@@ -96,8 +95,8 @@ export function usePasarAPendiente() {
 export function useCerrarSolicitud() {
   const invalidar = useInvalidar()
   return useMutation({
-    mutationFn: ({ id, resolucion }: { id: number; resolucion: string }) =>
-      ejecutar(api.PATCH('/api/control-acceso/{id}/cerrar', { params: { path: { id } }, body: { resolucion } })),
+    mutationFn: ({ id, datos }: { id: number; datos: S['CerrarControlAccesoDto'] }) =>
+      ejecutar(api.PATCH('/api/control-acceso/{id}/cerrar', { params: { path: { id } }, body: datos })),
     onSuccess: invalidar,
   })
 }

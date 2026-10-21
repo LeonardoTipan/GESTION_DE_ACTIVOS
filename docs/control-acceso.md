@@ -1,6 +1,13 @@
 # Control de acceso
 
-Solicitudes de acceso **lógico** (sistemas, información) y **físico** (equipos, salas). Cada solicitud es un **alta** (`ACCESO`) o una **baja** (`BAJA`) del acceso. Sigue un flujo de atención y cada cambio queda auditado.
+Solicitudes de acceso **lógico** (sistemas, información) y **físico** (equipos, salas). Sigue un flujo de atención y cada cambio queda auditado.
+
+Cada solicitud es de uno de dos tipos. En formularios, tablas, detalle e insignias se muestran así:
+
+- **ALTA · Otorgamiento de acceso** (`ACCESO`): concede el acceso a una persona.
+- **BAJA · Desvinculación de acceso** (`BAJA`): se lo retira.
+
+Ninguna de las dos modifica el activo ni lo retira de GLPI.
 
 El módulo forma parte de la misma aplicación:
 
@@ -12,7 +19,7 @@ Normas ISO/IEC 27001:2022 de referencia: A.5.15 Control de acceso, A.5.18 Derech
 
 ## Modelo de datos
 
-Una sola tabla principal para los dos tipos, con `tipoAcceso` como discriminador (migración `20261020120000_control_acceso`).
+Una sola tabla principal para los dos tipos, con `tipoAcceso` como discriminador. La creó la migración `20261020120000_control_acceso`; la de `20261021120000_mejora_control_acceso` añadió el solicitante y retiró la fecha deseada.
 
 **`control_acceso`**
 
@@ -24,14 +31,16 @@ Una sola tabla principal para los dos tipos, con `tipoAcceso` como discriminador
 | `activoId` | INT, opcional | Clave foránea a `activo` (`ON DELETE RESTRICT`) |
 | `recurso` | VARCHAR(191), opcional | Recurso no inventariado (correo institucional, sala de servidores…) |
 | `fechaSolicitud` | DATETIME | Cuándo se pidió; no futura |
-| `fechaAccesoDeseada` | DATETIME | Cuándo se espera el acceso o la baja; no anterior a la solicitud |
-| `nombreUsuarioBeneficiario`, `departamento` | VARCHAR(191) | |
-| `tipoSolicitud` | ENUM `ACCESO`, `BAJA` | |
+| `nombreSolicitante`, `cargoSolicitante` | VARCHAR(191), opcional en la base | **Quién solicita o autoriza** el trámite. Obligatorios al registrar una solicitud nueva; `NULL` en las anteriores al 2026-10-21 (no se inventan) |
+| `nombreUsuarioBeneficiario`, `departamento` | VARCHAR(191) | **Quién recibe (ALTA) o pierde (BAJA)** el acceso |
+| `tipoSolicitud` | ENUM `ACCESO`, `BAJA` | ALTA · Otorgamiento / BAJA · Desvinculación |
 | `descripcion` | TEXT | Motivo (mínimo 10 caracteres) |
 | `estado` | ENUM `ABIERTO`, `PENDIENTE`, `CERRADO` | `ABIERTO` al crear (lo pone el backend) |
 | `resolucion` | TEXT, opcional | Qué se hizo; obligatoria al cerrar |
-| `fechaCreacion` | DATETIME | Automática; no editable |
-| `fechaAtendido` | DATETIME, opcional | Fecha real del cierre; la pone el backend |
+| `fechaCreacion` | DATETIME | Registro en el sistema: automática, **no editable** e independiente de la fecha atendida |
+| `fechaAtendido` | DATETIME, opcional | Fecha y hora **reales** de la atención. La indica quien cierra; es obligatoria al cerrar y puede ser **histórica**, anterior al registro. No puede ser futura ni anterior a la solicitud. `NULL` mientras no está cerrada |
+
+`fechaAccesoDeseada` **se retiró** el 2026-10-21; ver «Migración» para cómo se conservaron sus valores.
 
 **Activo o recurso, nunca ninguno ni los dos.**
 
@@ -104,20 +113,16 @@ Cambiar el tipo de acceso de una solicitud (solo en `ABIERTO`) le asigna un cód
 |---|---|---|---|---|
 | Registrar | — | `ABIERTO` | admin, analista | El cliente no puede enviar estado, código, fechas de atención ni usuario (400) |
 | Pasar a pendiente | `ABIERTO` | `PENDIENTE` | admin, analista | |
-| Cerrar | `ABIERTO` o `PENDIENTE` | `CERRADO` | admin, analista | Resolución (≥10 caracteres); `fechaAtendido` = ahora, en el servidor |
-| Reabrir | `CERRADO` | `PENDIENTE` | **solo admin** | Motivo (≥20); quita la resolución y la fecha de atención (quedan en el historial) |
-| Modificar | `ABIERTO` o `PENDIENTE` | — | admin, analista | Una cerrada se reabre primero; el tipo de acceso, solo en `ABIERTO` |
+| Cerrar | `ABIERTO` o `PENDIENTE` | `CERRADO` | admin, analista | Resolución (≥10) y **`fechaAtendido` válida** (obligatoria; puede ser histórica; no futura ni anterior a la solicitud). El backend **no** la sustituye por la hora actual |
+| Reabrir | `CERRADO` | `PENDIENTE` | **solo admin** | Motivo (≥20). Quita la fecha atendida y la resolución; la atención anterior se conserva (ver abajo) |
+| Modificar | `ABIERTO` o `PENDIENTE` | — | admin, analista | Sin fecha atendida ni resolución (400); el tipo de acceso, solo en `ABIERTO` |
+| Corregir una cerrada | `CERRADO` | — | **solo admin** (analista: 403) | Motivo (≥20). Admite corregir la fecha atendida y la resolución, con las mismas validaciones; el tipo de acceso no cambia (409) |
 
 - Cualquier otra transición devuelve **409**.
-- **Bajas:** una `BAJA` sigue el mismo flujo; al cerrarla, la resolución describe cómo se **retiró** el acceso.
-- **El estado no depende de la fecha.** La situación se calcula aparte y no sobrescribe el estado:
-
-| Situación | Cuándo |
-|---|---|
-| Atendida | Está cerrada |
-| Vencida | No cerrada y la fecha deseada ya pasó |
-| Próxima | No cerrada y la fecha deseada llega en las próximas 48 h |
-| Programada | No cerrada y la fecha deseada es posterior |
+- **Bajas:** una `BAJA` sigue el mismo flujo; al cerrarla, la resolución describe cómo se **retiró** el acceso. No da de baja el activo.
+- **Reapertura sin perder información.** Al reabrir, la fecha atendida y la resolución vigentes pasan al historial como «valor anterior», con el usuario, la fecha y el motivo de la reapertura. El detalle las muestra en «Atenciones anteriores». Si la solicitud se vuelve a cerrar, la nueva atención no pisa la anterior.
+- **Elegibilidad al corregir.** Solo se revalida si cambian el activo o el tipo de acceso. Así se puede corregir una solicitud antigua aunque su activo se haya dado de baja después.
+- **Sin fecha deseada, ya no hay «situación»** (programada, próxima o vencida).
 
 ### Aislamiento del estado de la solicitud y del activo
 
@@ -137,12 +142,14 @@ El **estado de la solicitud** (`control_acceso.estado`: Abierto, Pendiente, Cerr
 - **Qué se registra:** cada campo modificado, con valor anterior y nuevo. Las fechas se guardan en ISO (UTC) y la interfaz las muestra en hora de Guayaquil. Al crear se registra `CREACION` con el código.
 - **Campos auditados:**
   - identificación: `codigoUnico`, `tipoAcceso`, `activoId`, `recurso`;
-  - fechas: `fechaSolicitud`, `fechaAccesoDeseada`, `fechaAtendido`;
+  - fechas: `fechaSolicitud`, `fechaAtendido`;
+  - solicitante: `nombreSolicitante`, `cargoSolicitante`;
   - beneficiario: `nombreUsuarioBeneficiario`, `departamento`;
   - contenido: `tipoSolicitud`, `descripcion`;
   - flujo: `estado`, `resolucion`.
-- **Usuario:** sale del token de Keycloak (`preferred_username`). El cliente no lo puede enviar.
-- **Motivo:** opcional al modificar y obligatorio al reabrir.
+- **Usuario:** sale del token de Keycloak (`preferred_username`). El cliente no lo puede enviar (400).
+- **Motivo:** opcional al modificar y obligatorio al reabrir y al corregir una cerrada.
+- **Entradas de la migración:** las entradas `fechaAccesoDeseada` con usuario `SISTEMA` conservan el último valor de ese campo retirado.
 - **Misma transacción.** El cambio y su historial se escriben juntos; si falla la auditoría, el cambio se revierte (lo prueba un e2e).
 - **Solo lectura.** No hay rutas para crear, modificar ni borrar el historial (`POST`, `PATCH` y `DELETE /control-acceso/:id/historial` → 404), ni para borrar solicitudes.
 
@@ -151,21 +158,21 @@ El **estado de la solicitud** (`control_acceso.estado`: Abierto, Pendiente, Cerr
 | Operación | admin | analista | auditor |
 |---|---|---|---|
 | Listar, ver detalle e historial, activos elegibles | ✔ | ✔ | ✔ |
-| Registrar, modificar, pasar a pendiente, cerrar | ✔ | ✔ | 403 |
-| Reabrir | ✔ | 403 | 403 |
+| Registrar, modificar (no cerrada), pasar a pendiente, cerrar | ✔ | ✔ | 403 |
+| Corregir una cerrada (incluida la fecha atendida) y reabrir | ✔ | 403 | 403 |
 | Marcar categorías en Catálogos | ✔ | 403 | 403 |
 
-Todo se valida en la API (`@Roles`); la interfaz además oculta los botones.
+Todo se valida en la API: `@Roles` en el controlador y, para corregir una cerrada, una comprobación de admin en el servicio. La interfaz además oculta los botones.
 
 ## API
 
 | Método y ruta | Uso |
 |---|---|
-| `GET /api/control-acceso` | Listado paginado. Filtros: `q`, `tipoAcceso`, `estado`, `tipoSolicitud`, `situacion`, `desde`, `hasta` (fecha deseada) |
+| `GET /api/control-acceso` | Listado paginado. Filtros: `q` (también busca el solicitante), `tipoAcceso`, `estado`, `tipoSolicitud`, `desde`, `hasta` (fecha de solicitud) |
 | `GET /api/control-acceso/:id` · `/:id/historial` | Detalle · auditoría |
-| `POST /api/control-acceso` | Registrar |
-| `PATCH /api/control-acceso/:id` | Modificar |
-| `PATCH /api/control-acceso/:id/pendiente` · `/cerrar` · `/reabrir` | Transiciones |
+| `POST /api/control-acceso` | Registrar (exige `nombreSolicitante` y `cargoSolicitante`) |
+| `PATCH /api/control-acceso/:id` | Modificar; en una cerrada, corrección del admin (`fechaAtendido`, `resolucion`, `motivo`) |
+| `PATCH /api/control-acceso/:id/pendiente` · `/cerrar` (`{ resolucion, fechaAtendido }`) · `/reabrir` | Transiciones |
 | `GET /api/control-acceso/activos-elegibles` · `/categorias-elegibles` | Filtro de activos |
 
 **Código:** `gestion-activos-api/src/access-control/`. Es un módulo NestJS independiente que solo usa `ActivosService` del inventario. Las reglas puras están en `reglas.ts`.
@@ -191,6 +198,57 @@ Todo se valida en la API (`@Roles`); la interfaz además oculta los botones.
   3. Se quitó el `CHECK`: la regla queda en el backend.
   4. Se volvió a aplicar.
 
+### Mejora del 2026-10-21: solicitante, fecha atendida y retirada de la fecha deseada
+
+Migración `20261021120000_mejora_control_acceso`, incremental. No borra solicitudes ni la base.
+
+1. **Datos previos.** En desarrollo había **3 solicitudes** (CAL-001, CAF-001, CAL-002), las 3 cerradas, con `fechaAccesoDeseada` y con `fechaAtendido`. En pruebas no había ninguna.
+2. **Conservación de `fechaAccesoDeseada` antes de retirarla:**
+   - Respaldo completo verificado (restaurado en una base temporal con los mismos conteos y luego eliminada): `C:\Users\adminqt\gestion-activos-respaldos\gestion_activos_db-antes-mejora-control-acceso-20261021-100613.sql`.
+   - Exportación CSV de los 3 valores: `C:\Users\adminqt\gestion-activos-respaldos\control_acceso-fechaAccesoDeseada-20261021-100613.csv`.
+   - La propia migración, **antes** de retirar la columna, inserta en `historial_control_acceso` una entrada por solicitud: campo `fechaAccesoDeseada`, su valor en ISO UTC, usuario `SISTEMA` y el motivo. El detalle lo muestra como «Fecha deseada (campo retirado)».
+3. **Solicitante:** se añaden `nombreSolicitante` y `cargoSolicitante` como `NULL`. En los registros antiguos no se rellenan (no se inventan) y la interfaz muestra «No registrado». Un admin puede completarlos con motivo si constan en un documento.
+4. **Registros antiguos y nulos:**
+   - Las 3 solicitudes existentes ya tenían `fechaAtendido`, así que la nueva regla de cierre no deja ninguna en un estado inválido.
+   - Los nuevos campos son opcionales en la base; solo se exigen al registrar solicitudes nuevas.
+5. **Prueba de la migración con datos reales.** Se restauró el respaldo en una base temporal, se aplicó allí el SQL y se comprobó:
+   - las 3 fechas en el historial, iguales al CSV;
+   - la columna retirada;
+   - el solicitante en `NULL`;
+   - los 455 activos y las 3 solicitudes intactos.
+
+   Después se eliminó la temporal y se aplicó en pruebas y en desarrollo con el mismo resultado.
+
+**Comandos** (PowerShell, en `gestion-activos-api`):
+
+```powershell
+# Desarrollo (DATABASE_URL del .env)
+npx prisma migrate deploy --config prisma7.config.ts
+npx prisma generate
+```
+
+## Pruebas (2026-10-21)
+
+| Tipo | Archivo | Resultado |
+|---|---|---|
+| Unitarias API | `reglas.spec.ts` (fecha atendida histórica, futura, anterior a la solicitud e inválida) y el resto | 229/229 |
+| e2e API | `test/control-acceso.e2e-spec.ts` (22) y el resto de suites | 245/245 en 12 archivos |
+| Unitarias web | `features/control-acceso/textos.test.ts` (ALTA/BAJA, «No registrado», atenciones anteriores) y el resto | 108/108 |
+| Migración | Sobre una copia temporal del respaldo de desarrollo | Correcta (ver arriba) |
+| Navegador real (Chrome) | Analista, admin y auditor contra la base de pruebas | Todo correcto; capturas en `evidencias/2026-10-21-mejora-control-acceso/` (no se versiona) |
+
+**Lo que añadieron estas e2e:**
+
+- no se puede cerrar sin fecha atendida, ni con una fecha mal formada (`«mañana temprano»`, `2026-02-30T25:00Z`), futura o anterior a la solicitud;
+- se cierra con una fecha histórica, y se cierra hoy una solicitud de hace un mes con su fecha real;
+- la fecha de creación no cambia;
+- la fecha atendida y la resolución no se aceptan mientras la solicitud no está cerrada;
+- corrección de solicitudes cerradas: admin con motivo (200, auditada); analista y auditor (403); sin motivo (400);
+- solicitante y beneficiario separados y auditados;
+- solicitudes antiguas sin solicitante;
+- altas y bajas por separado, y una baja que no toca el activo;
+- persistencia en MySQL.
+
 ## Pruebas (2026-10-20)
 
 | Tipo | Archivo | Resultado |
@@ -207,7 +265,7 @@ Todo se valida en la API (`@Roles`); la interfaz además oculta los botones.
 - códigos por tipo, y 20 altas simultáneas sin repetir;
 - campos obligatorios y elegibilidad;
 - filtro de activos por tipo y cambio de las marcas desde Catálogos;
-- transiciones válidas e inválidas, y cierre con la fecha del servidor;
+- transiciones válidas e inválidas, y cierre (desde el 2026-10-21, con la fecha atendida indicada);
 - auditoría de estados, fechas y demás campos, con el usuario del token;
 - reversión conjunta si falla el historial;
 - historial sin rutas de escritura;
@@ -218,5 +276,7 @@ Todo se valida en la API (`@Roles`); la interfaz además oculta los botones.
 
 - **La elegibilidad es por categoría, no por activo.** Si una categoría mezcla activos que guardan información con otros que no, la marca vale para todos.
 - **La categoría de servidor solo se asigna al crear el activo.** Si alguien cambia en GLPI el tipo de equipo de un activo ya importado, hay que reclasificarlo a mano en el inventario.
-- **Las solicitudes no figuran todavía en el calendario general**, aunque tienen fecha deseada y fecha de atención.
+- **Las solicitudes no figuran todavía en el calendario general**, aunque tienen fecha de solicitud y fecha atendida.
+- **Sin fecha deseada no hay avisos de solicitudes «próximas» o «vencidas».** Si se quiere un plazo de atención, habría que definirlo (por ejemplo, días desde la solicitud) como una regla nueva.
+- **Las 3 solicitudes anteriores al 2026-10-21 no tienen solicitante.** Solo un admin puede completarlo, con motivo y a partir de un documento.
 - **La aplicación registra la solicitud y su atención, pero no otorga ni retira el acceso por sí misma** (por ejemplo, en un directorio o un control de puertas).

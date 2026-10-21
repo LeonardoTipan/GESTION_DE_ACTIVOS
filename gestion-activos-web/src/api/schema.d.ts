@@ -1396,7 +1396,7 @@ export interface paths {
         };
         /**
          * Listar solicitudes
-         * @description Búsqueda y filtros por tipo, estado, tipo de solicitud, fechas deseadas y situación.
+         * @description Búsqueda y filtros por tipo de acceso, estado, tipo de solicitud (ALTA o BAJA) y fecha de solicitud.
          */
         get: operations["ControlAccesoController_findAll"];
         put?: never;
@@ -1463,8 +1463,8 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Modificar una solicitud no cerrada
-         * @description Cada campo cambiado queda en el historial.
+         * Modificar una solicitud
+         * @description Abierta o pendiente: admin y analista. Cerrada: solo admin, con motivo (≥20), incluidas la fecha atendida y la resolución. Cada campo cambiado queda en el historial.
          */
         patch: operations["ControlAccesoController_editar"];
         trace?: never;
@@ -1518,7 +1518,7 @@ export interface paths {
         head?: never;
         /**
          * Cerrar (ABIERTO o PENDIENTE → CERRADO)
-         * @description Exige la resolución; la fecha de atención es la del servidor.
+         * @description Exige la resolución y la fecha REAL de la atención (puede ser histórica; no futura ni anterior a la solicitud).
          */
         patch: operations["ControlAccesoController_cerrar"];
         trace?: never;
@@ -3575,8 +3575,10 @@ export interface components {
             recurso: string | null;
             /** Format: date-time */
             fechaSolicitud: string;
-            /** Format: date-time */
-            fechaAccesoDeseada: string;
+            /** @description Null en solicitudes anteriores a este campo. */
+            nombreSolicitante: string | null;
+            /** @description Null en solicitudes anteriores a este campo. */
+            cargoSolicitante: string | null;
             nombreUsuarioBeneficiario: string;
             departamento: string;
             /** @enum {string} */
@@ -3591,11 +3593,6 @@ export interface components {
             fechaAtendido: string | null;
             /** Format: date-time */
             updatedAt: string;
-            /**
-             * @description Respecto a la fecha deseada; no cambia el estado.
-             * @enum {string}
-             */
-            situacion: "PROGRAMADA" | "PROXIMA" | "VENCIDA" | "ATENDIDA";
         };
         PaginatedControlAccesoDto: {
             data: components["schemas"]["ControlAccesoDto"][];
@@ -3630,7 +3627,7 @@ export interface components {
             /** @enum {string} */
             tipoAcceso: "LOGICO" | "FISICO";
             /**
-             * @description ACCESO otorga el acceso; BAJA lo retira.
+             * @description ACCESO = otorgamiento de acceso (ALTA); BAJA = desvinculación de acceso (BAJA). Ninguna modifica el activo.
              * @enum {string}
              */
             tipoSolicitud: "ACCESO" | "BAJA";
@@ -3647,11 +3644,19 @@ export interface components {
              */
             fechaSolicitud: string;
             /**
-             * Format: date-time
-             * @description Cuándo se desea el acceso (o la baja); no anterior a la solicitud.
+             * @description Quién solicita o autoriza el trámite.
+             * @example Jorge Andrade
              */
-            fechaAccesoDeseada: string;
-            /** @example María Pérez */
+            nombreSolicitante: string;
+            /**
+             * @description Cargo de quien solicita o autoriza.
+             * @example Jefe de Contabilidad
+             */
+            cargoSolicitante: string;
+            /**
+             * @description Quién recibe (ALTA) o pierde (BAJA) el acceso.
+             * @example María Pérez
+             */
             nombreUsuarioBeneficiario: string;
             /** @example Contabilidad */
             departamento: string;
@@ -3662,7 +3667,7 @@ export interface components {
             /** @enum {string} */
             tipoAcceso?: "LOGICO" | "FISICO";
             /**
-             * @description ACCESO otorga el acceso; BAJA lo retira.
+             * @description ACCESO = otorgamiento de acceso (ALTA); BAJA = desvinculación de acceso (BAJA). Ninguna modifica el activo.
              * @enum {string}
              */
             tipoSolicitud?: "ACCESO" | "BAJA";
@@ -3677,11 +3682,19 @@ export interface components {
              */
             fechaSolicitud?: string;
             /**
-             * Format: date-time
-             * @description Cuándo se desea el acceso (o la baja); no anterior a la solicitud.
+             * @description Quién solicita o autoriza el trámite.
+             * @example Jorge Andrade
              */
-            fechaAccesoDeseada?: string;
-            /** @example María Pérez */
+            nombreSolicitante?: string;
+            /**
+             * @description Cargo de quien solicita o autoriza.
+             * @example Jefe de Contabilidad
+             */
+            cargoSolicitante?: string;
+            /**
+             * @description Quién recibe (ALTA) o pierde (BAJA) el acceso.
+             * @example María Pérez
+             */
             nombreUsuarioBeneficiario?: string;
             /** @example Contabilidad */
             departamento?: string;
@@ -3689,12 +3702,24 @@ export interface components {
             descripcion?: string;
             /** @description null quita el activo. */
             activoId?: number | null;
-            /** @description Por qué se modifica (queda en el historial). */
+            /**
+             * Format: date-time
+             * @description Solo en una solicitud CERRADA (corrección del admin): fecha y hora reales de la atención.
+             */
+            fechaAtendido?: string;
+            /** @description Solo en una solicitud CERRADA (corrección del admin). */
+            resolucion?: string;
+            /** @description Por qué se modifica (queda en el historial). Obligatorio (≥20) al corregir una cerrada. */
             motivo?: string;
         };
         CerrarControlAccesoDto: {
-            /** @description Qué se hizo: acceso otorgado (ACCESO) o retirado (BAJA). */
+            /** @description Qué se hizo: acceso otorgado (ALTA) o retirado (BAJA). */
             resolucion: string;
+            /**
+             * Format: date-time
+             * @description Fecha y hora REALES en que se atendió (obligatoria). Puede ser histórica; no futura ni anterior a la solicitud.
+             */
+            fechaAtendido: string;
         };
         ReabrirControlAccesoDto: {
             /** @description Por qué se reabre (solo admin; queda en el historial). */
@@ -8326,16 +8351,14 @@ export interface operations {
             query?: {
                 page?: number;
                 limit?: number;
-                /** @description Código, beneficiario, departamento, recurso o activo. */
+                /** @description Código, solicitante, beneficiario, departamento, recurso o activo. */
                 q?: string;
                 tipoAcceso?: "LOGICO" | "FISICO";
                 estado?: "ABIERTO" | "PENDIENTE" | "CERRADO";
                 tipoSolicitud?: "ACCESO" | "BAJA";
-                /** @description Respecto a la fecha deseada (calculada). */
-                situacion?: "PROGRAMADA" | "PROXIMA" | "VENCIDA" | "ATENDIDA";
-                /** @description Fecha deseada desde. */
+                /** @description Fecha de solicitud desde. */
                 desde?: string;
-                /** @description Fecha deseada hasta. */
+                /** @description Fecha de solicitud hasta. */
                 hasta?: string;
             };
             header?: never;
@@ -8600,7 +8623,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            /** @description Cerrada, o cambió entre medias. */
+            /** @description Tipo de acceso fuera de ABIERTO, o cambió entre medias. */
             409: {
                 headers: {
                     [name: string]: unknown;

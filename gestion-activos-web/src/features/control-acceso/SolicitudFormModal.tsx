@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { Alert, Button, Divider, Group, Modal, SegmentedControl, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDebouncedValue } from '@mantine/hooks'
@@ -11,6 +11,7 @@ import {
   useCategoriasElegibles,
   useCrearSolicitud,
   useEditarSolicitud,
+  type DatosEditar,
   type Solicitud,
   type TipoAcceso,
   type TipoSolicitud,
@@ -26,14 +27,24 @@ interface Valores {
   activoId: string | null
   recurso: string
   fechaSolicitud: string | null
-  fechaAccesoDeseada: string | null
+  nombreSolicitante: string
+  cargoSolicitante: string
   nombreUsuarioBeneficiario: string
   departamento: string
   descripcion: string
+  /** Solo al corregir una cerrada (admin). */
+  fechaAtendido: string | null
+  resolucion: string
   motivo: string
 }
 
-/** Alta (sin solicitud) o modificación (con ella) de una solicitud de acceso. */
+const largo = (min: number, max: number, mensaje: string) => (v: string) =>
+  v.trim().length < min ? mensaje : v.length > max ? `Máximo ${max} caracteres.` : null
+
+/**
+ * Alta (sin solicitud), modificación (abierta o pendiente) o corrección de una
+ * cerrada (solo admin, con motivo: incluye la fecha atendida y la resolución).
+ */
 export function SolicitudFormModal({
   abierto,
   onCerrar,
@@ -45,8 +56,13 @@ export function SolicitudFormModal({
   solicitud?: Solicitud
   onGuardada?: (s: Solicitud) => void
 }) {
+  const titulo = !solicitud
+    ? 'Nueva solicitud de acceso'
+    : solicitud.estado === 'CERRADO'
+      ? `Corregir ${solicitud.codigoUnico} (cerrada)`
+      : `Modificar ${solicitud.codigoUnico}`
   return (
-    <Modal opened={abierto} onClose={onCerrar} size="xl" title={solicitud ? `Modificar ${solicitud.codigoUnico}` : 'Nueva solicitud de acceso'}>
+    <Modal opened={abierto} onClose={onCerrar} size="xl" title={titulo}>
       {abierto && <Formulario solicitud={solicitud} onCerrar={onCerrar} onGuardada={onGuardada} />}
     </Modal>
   )
@@ -55,6 +71,10 @@ export function SolicitudFormModal({
 function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solicitud; onCerrar: () => void; onGuardada?: (s: Solicitud) => void }) {
   const crear = useCrearSolicitud()
   const editar = useEditarSolicitud()
+  const cerrada = s?.estado === 'CERRADO'
+  // En una solicitud anterior a estos campos el solicitante puede faltar: no se exige
+  // completarlo para corregir otra cosa (y nunca se inventa).
+  const solicitanteObligatorio = !s || Boolean(s.nombreSolicitante)
   const form = useForm<Valores>({
     initialValues: {
       tipoAcceso: s?.tipoAcceso ?? 'LOGICO',
@@ -63,10 +83,13 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
       activoId: s?.activoId ? String(s.activoId) : null,
       recurso: s?.recurso ?? '',
       fechaSolicitud: s ? isoAFechaHoraLocal(s.fechaSolicitud) : ahoraLocal(),
-      fechaAccesoDeseada: s ? isoAFechaHoraLocal(s.fechaAccesoDeseada) : null,
+      nombreSolicitante: s?.nombreSolicitante ?? '',
+      cargoSolicitante: s?.cargoSolicitante ?? '',
       nombreUsuarioBeneficiario: s?.nombreUsuarioBeneficiario ?? '',
       departamento: s?.departamento ?? '',
       descripcion: s?.descripcion ?? '',
+      fechaAtendido: s?.fechaAtendido ? isoAFechaHoraLocal(s.fechaAtendido) : null,
+      resolucion: s?.resolucion ?? '',
       motivo: '',
     },
     validate: {
@@ -74,15 +97,29 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
       recurso: (v, x) =>
         x.destino === 'recurso' && !v.trim() ? 'Describa el recurso (p. ej. «Correo institucional»).' : v.length > 191 ? 'Máximo 191 caracteres.' : null,
       fechaSolicitud: (v) => (!v ? 'Indique cuándo se solicitó.' : instante(v).isAfter(instante(ahoraLocal()).add(5, 'minute')) ? 'No puede ser futura.' : null),
-      fechaAccesoDeseada: (v, x) =>
-        !v ? 'Indique la fecha deseada.' : x.fechaSolicitud && instante(v).isBefore(instante(x.fechaSolicitud)) ? 'No puede ser anterior a la solicitud.' : null,
-      nombreUsuarioBeneficiario: (v) => (v.trim().length < 3 ? 'Mínimo 3 caracteres.' : v.length > 191 ? 'Máximo 191.' : null),
-      departamento: (v) => (v.trim().length < 2 ? 'Indique el departamento.' : v.length > 191 ? 'Máximo 191.' : null),
-      descripcion: (v) => (v.trim().length < 10 ? 'Mínimo 10 caracteres.' : v.length > 5000 ? 'Máximo 5000.' : null),
+      nombreSolicitante: (v) =>
+        !solicitanteObligatorio && !v.trim() ? null : largo(3, 191, 'Indique quién solicita o autoriza (mínimo 3 caracteres).')(v),
+      cargoSolicitante: (v, x) =>
+        !solicitanteObligatorio && !v.trim() && !x.nombreSolicitante.trim() ? null : largo(2, 191, 'Indique el cargo de quien solicita.')(v),
+      nombreUsuarioBeneficiario: largo(3, 191, 'Indique quién recibe o pierde el acceso (mínimo 3 caracteres).'),
+      departamento: largo(2, 191, 'Indique el departamento.'),
+      descripcion: largo(10, 5000, 'Mínimo 10 caracteres.'),
+      fechaAtendido: (v, x) =>
+        !cerrada
+          ? null
+          : !v
+            ? 'Una solicitud cerrada exige la fecha atendida.'
+            : instante(v).isAfter(instante(ahoraLocal()).add(5, 'minute'))
+              ? 'No puede ser futura.'
+              : x.fechaSolicitud && instante(v).isBefore(instante(x.fechaSolicitud))
+                ? 'No puede ser anterior a la fecha de solicitud.'
+                : null,
+      resolucion: (v) => (cerrada ? largo(10, 5000, 'Mínimo 10 caracteres.')(v) : null),
+      motivo: (v) => (cerrada && v.trim().length < 20 ? 'Corregir una solicitud cerrada exige el motivo (mínimo 20 caracteres).' : null),
     },
   })
   const v = form.values
-  // El tipo solo se cambia en ABIERTO (la API lo exige): cambia la serie del código.
+  // El tipo de acceso solo se cambia en ABIERTO (la API lo exige): cambia la serie del código.
   const tipoBloqueado = Boolean(s && s.estado !== 'ABIERTO')
 
   const enviar = form.onSubmit((x) => {
@@ -90,11 +127,13 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
       tipoAcceso: x.tipoAcceso,
       tipoSolicitud: x.tipoSolicitud,
       fechaSolicitud: fechaHoraLocalAIso(x.fechaSolicitud!),
-      fechaAccesoDeseada: fechaHoraLocalAIso(x.fechaAccesoDeseada!),
       nombreUsuarioBeneficiario: x.nombreUsuarioBeneficiario.trim(),
       departamento: x.departamento.trim(),
       descripcion: x.descripcion.trim(),
     }
+    const solicitanteDatos = x.nombreSolicitante.trim()
+      ? { nombreSolicitante: x.nombreSolicitante.trim(), cargoSolicitante: x.cargoSolicitante.trim() }
+      : {}
     const error = (e: Error) => notifications.show({ color: 'red', title: 'No se pudo guardar', message: e.message })
     const listo = (r: Solicitud) => {
       notifications.show({ color: 'green', title: s ? 'Solicitud modificada' : 'Solicitud registrada', message: `${r.codigoUnico} · cada cambio queda en el historial.` })
@@ -102,20 +141,24 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
       onGuardada?.(r)
     }
     if (s) {
-      editar.mutate(
-        {
-          id: s.id,
-          datos: {
-            ...comunes,
-            ...(x.destino === 'activo' ? { activoId: Number(x.activoId) } : { activoId: null, recurso: x.recurso.trim() }),
-            motivo: x.motivo.trim() || undefined,
-          },
-        },
-        { onSuccess: listo, onError: error },
-      )
+      const datos: DatosEditar = {
+        ...comunes,
+        ...solicitanteDatos,
+        ...(x.destino === 'activo' ? { activoId: Number(x.activoId) } : { activoId: null, recurso: x.recurso.trim() }),
+        ...(cerrada ? { fechaAtendido: fechaHoraLocalAIso(x.fechaAtendido!), resolucion: x.resolucion.trim() } : {}),
+        motivo: x.motivo.trim() || undefined,
+      }
+      // El tipo de acceso de una solicitud que ya no está abierta no se envía (no cambia).
+      if (tipoBloqueado) delete datos.tipoAcceso
+      editar.mutate({ id: s.id, datos }, { onSuccess: listo, onError: error })
     } else {
       crear.mutate(
-        { ...comunes, ...(x.destino === 'activo' ? { activoId: Number(x.activoId) } : { recurso: x.recurso.trim() }) },
+        {
+          ...comunes,
+          nombreSolicitante: x.nombreSolicitante.trim(),
+          cargoSolicitante: x.cargoSolicitante.trim(),
+          ...(x.destino === 'activo' ? { activoId: Number(x.activoId) } : { recurso: x.recurso.trim() }),
+        },
         { onSuccess: listo, onError: error },
       )
     }
@@ -124,7 +167,29 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+        {cerrada && (
+          <Alert color="orange" title="Corrección de una solicitud cerrada">
+            Solo un administrador puede corregirla. El motivo es obligatorio y cada campo corregido queda en el historial con el
+            valor anterior.
+          </Alert>
+        )}
+        {/* Una fila por selector: «BAJA · Desvinculación de acceso» no cabe en media fila. */}
+        <SimpleGrid cols={1}>
+          <div>
+            <Text size="sm" fw={500} mb={4}>
+              Tipo de solicitud
+            </Text>
+            <SegmentedControl
+              fullWidth
+              data={(['ACCESO', 'BAJA'] as const).map((t) => ({ value: t, label: `${TIPO_SOLICITUD[t].corto} · ${TIPO_SOLICITUD[t].etiqueta}` }))}
+              {...form.getInputProps('tipoSolicitud')}
+            />
+            <Text size="xs" c="dimmed">
+              {v.tipoSolicitud === 'BAJA'
+                ? 'Retira el acceso a la persona. No retira ni modifica el activo en el inventario ni en GLPI.'
+                : 'Concede el acceso a la persona.'}
+            </Text>
+          </div>
           <div>
             <Text size="sm" fw={500} mb={4}>
               Tipo de acceso
@@ -146,30 +211,33 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
               </Text>
             )}
           </div>
-          <div>
-            <Text size="sm" fw={500} mb={4}>
-              Tipo de solicitud
-            </Text>
-            <SegmentedControl
-              fullWidth
-              data={(['ACCESO', 'BAJA'] as const).map((t) => ({ value: t, label: TIPO_SOLICITUD[t] }))}
-              {...form.getInputProps('tipoSolicitud')}
-            />
-          </div>
         </SimpleGrid>
 
-        <div>
-          <Text size="sm" fw={500} mb={4}>
-            ¿Sobre qué?
+        <Divider label="Solicitante: quien pide o autoriza el trámite" labelPosition="left" />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput label="Nombre del solicitante" withAsterisk={solicitanteObligatorio} placeholder="Jorge Andrade" {...form.getInputProps('nombreSolicitante')} />
+          <TextInput label="Cargo del solicitante" withAsterisk={solicitanteObligatorio} placeholder="Jefe de Contabilidad" {...form.getInputProps('cargoSolicitante')} />
+        </SimpleGrid>
+        {!solicitanteObligatorio && (
+          <Text size="xs" c="dimmed">
+            Esta solicitud se registró antes de existir el solicitante. Complételo solo si consta en un documento.
           </Text>
-          <SegmentedControl
-            data={[
-              { value: 'activo', label: 'Activo inventariado' },
-              { value: 'recurso', label: 'Recurso no inventariado' },
-            ]}
-            {...form.getInputProps('destino')}
-          />
-        </div>
+        )}
+
+        <Divider label={v.tipoSolicitud === 'BAJA' ? 'Beneficiario: quien pierde el acceso' : 'Beneficiario: quien recibe el acceso'} labelPosition="left" />
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <TextInput label="Nombre del beneficiario" withAsterisk placeholder="María Pérez" {...form.getInputProps('nombreUsuarioBeneficiario')} />
+          <TextInput label="Departamento" withAsterisk placeholder="Contabilidad" {...form.getInputProps('departamento')} />
+        </SimpleGrid>
+
+        <Divider label="Recurso" labelPosition="left" />
+        <SegmentedControl
+          data={[
+            { value: 'activo', label: 'Activo inventariado' },
+            { value: 'recurso', label: 'Recurso no inventariado' },
+          ]}
+          {...form.getInputProps('destino')}
+        />
         {v.destino === 'activo' ? (
           <SelectorActivoElegible
             tipoAcceso={v.tipoAcceso}
@@ -190,26 +258,37 @@ function Formulario({ solicitud: s, onCerrar, onGuardada }: { solicitud?: Solici
 
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <DateTimePicker label="Fecha de solicitud" valueFormat="DD MMM YYYY HH:mm" withAsterisk maxDate={ahoraLocal()} {...form.getInputProps('fechaSolicitud')} />
-          <DateTimePicker
-            label="Fecha y hora deseadas"
-            description="Cuándo se espera otorgar (o retirar) el acceso"
-            valueFormat="DD MMM YYYY HH:mm"
-            withAsterisk
-            minDate={v.fechaSolicitud ?? undefined}
-            {...form.getInputProps('fechaAccesoDeseada')}
-          />
-          <TextInput label="Beneficiario" withAsterisk placeholder="Nombre de la persona" {...form.getInputProps('nombreUsuarioBeneficiario')} />
-          <TextInput label="Departamento" withAsterisk placeholder="Contabilidad" {...form.getInputProps('departamento')} />
+          {cerrada && (
+            <DateTimePicker
+              label="Fecha atendida"
+              description="Fecha y hora reales de la atención"
+              valueFormat="DD MMM YYYY HH:mm"
+              withAsterisk
+              minDate={v.fechaSolicitud ?? undefined}
+              maxDate={ahoraLocal()}
+              {...form.getInputProps('fechaAtendido')}
+            />
+          )}
         </SimpleGrid>
-        <Textarea label="Descripción o motivo" withAsterisk autosize minRows={2} {...form.getInputProps('descripcion')} />
-        {s && <Textarea label="Motivo del cambio" description="Opcional; queda en el historial junto a cada campo modificado." autosize minRows={1} {...form.getInputProps('motivo')} />}
+        <Textarea label="Descripción o motivo de la solicitud" withAsterisk autosize minRows={2} {...form.getInputProps('descripcion')} />
+        {cerrada && <Textarea label="Resolución" withAsterisk autosize minRows={2} {...form.getInputProps('resolucion')} />}
+        {s && (
+          <Textarea
+            label="Motivo del cambio"
+            withAsterisk={cerrada}
+            description={cerrada ? 'Obligatorio (mínimo 20 caracteres): queda en el historial.' : 'Opcional; queda en el historial junto a cada campo modificado.'}
+            autosize
+            minRows={1}
+            {...form.getInputProps('motivo')}
+          />
+        )}
 
         <Group justify="flex-end">
           <Button variant="default" onClick={onCerrar}>
             Cancelar
           </Button>
           <Button type="submit" loading={crear.isPending || editar.isPending || crear.isSuccess || editar.isSuccess}>
-            {s ? 'Guardar cambios' : 'Registrar solicitud'}
+            {!s ? 'Registrar solicitud' : cerrada ? 'Guardar corrección' : 'Guardar cambios'}
           </Button>
         </Group>
       </Stack>
