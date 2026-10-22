@@ -121,7 +121,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       const cuerpo = {
         tipo: 'PREVENTIVO',
         frecuencia: 'TRIMESTRAL',
-        proximaFecha: en(5),
+        fechaInicio: en(5),
         responsable: 'Soporte TIC',
         actividades: 'Limpieza interna, revisión de ventiladores y actualización de firmware.',
         activoIds: [ids.pc, ids.pcMala],
@@ -137,7 +137,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       const base = {
         tipo: 'PREVENTIVO',
         frecuencia: 'ANUAL',
-        proximaFecha: en(30),
+        fechaInicio: en(30),
         responsable: 'Soporte',
         actividades: 'Revisión general del equipo.',
       };
@@ -184,10 +184,13 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
     let id: number;
 
     beforeAll(async () => {
-      // El equipo en condición "Malo" recibe un mantenimiento correctivo.
+      // El equipo en condición "Malo" recibe un mantenimiento correctivo, planificado.
+      const plan = await prisma.planMantenimiento.create({
+        data: { activoId: ids.pcMala, tipo: 'CORRECTIVO', frecuencia: 'UNICA', fechaInicio: new Date(hace(2)), responsable: 'Soporte TIC', actividades: 'Fuente dañada' },
+      });
       id = (
         await api(tokens.analista)
-          .post('/api/mantenimientos', { activoId: ids.pcMala, tipo: 'CORRECTIVO', actividad: 'Fuente dañada', fecha: hace(2), fechaLimite: en(2) })
+          .post('/api/mantenimientos', { planId: plan.id, fecha: hace(2), fechaLimite: en(2) })
           .expect(201)
       ).body.id;
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: hace(1), tecnico: 'jperez' }).expect(200);
@@ -195,7 +198,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
 
     it('finalizar exige diagnóstico y duración', async () => {
       const res = await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/finalizar`, { resultado: 'Fuente reemplazada.', estadoEquipo: 'OPERATIVO' })
+        .patch(`/api/mantenimientos/${id}/finalizar`, { resultado: 'Fuente reemplazada.', estadoEquipo: 'OPERATIVO', fechaFin: new Date().toISOString() })
         .expect(400);
       expect(JSON.stringify(res.body.message)).toMatch(/diagnostico|duracionMin/);
     });
@@ -205,6 +208,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
         .patch(`/api/mantenimientos/${id}/finalizar`, {
           resultado: 'Fuente reemplazada y pruebas de encendido.',
           estadoEquipo: 'OPERATIVO',
+          fechaFin: new Date().toISOString(),
           diagnostico: 'Fuente de poder quemada.',
           duracionMin: 90,
           costo: 45.5,

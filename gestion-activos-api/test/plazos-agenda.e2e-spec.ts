@@ -28,6 +28,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
   let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
   let activoId: number;
   let categoriaId: number;
+  let planId: number;
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -42,6 +43,12 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
     activoId = (
       await prisma.activo.create({
         data: { codigo: 'PC-PLAZOS', nombre: 'PC de plazos', sistemas: '', custodio: 'TIC', ubicacion: 'Matriz', cifrado: false, ultimaRevision: new Date('2026-01-01'), categoriaId, criticidadId, estado: 'Malo' },
+      })
+    ).id;
+    // Las ejecuciones nacen de una planificación.
+    planId = (
+      await prisma.planMantenimiento.create({
+        data: { activoId, tipo: 'CORRECTIVO', frecuencia: 'UNICA', fechaInicio: new Date(ahora), responsable: 'Soporte', actividades: 'Cambio de fuente' },
       })
     ).id;
   }, LENTO);
@@ -66,7 +73,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
 
   describe('Mantenimientos', () => {
     const programar = (fecha: number, fechaLimite: number) =>
-      api(tokens.analista).post('/api/mantenimientos', { activoId, tipo: 'CORRECTIVO', actividad: 'Cambio de fuente', fecha: iso(fecha), fechaLimite: iso(fechaLimite) });
+      api(tokens.analista).post('/api/mantenimientos', { planId, fecha: iso(fecha), fechaLimite: iso(fechaLimite) });
 
     it('la fecha límite no puede ser anterior al inicio previsto → 400', async () => {
       const res = await programar(ahora + DIA, ahora).expect(400);
@@ -83,11 +90,13 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
 
     it('fuera del intervalo: 409 sin justificación, 403 para el analista, 200 para el admin (excepción registrada)', async () => {
       const { id } = (await programar(ahora + DIA, ahora + 3 * DIA).expect(201)).body;
-      const res = await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(409);
+      // Fecha real: ahora, antes del inicio previsto (mañana).
+      const fechaInicio = iso(ahora);
+      const res = await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio }).expect(409);
       expect(res.body.message).toMatch(/fuera del intervalo previsto/);
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { motivoExcepcion: JUSTIFICACION }).expect(403);
-      await api(tokens.admin).patch(`/api/mantenimientos/${id}/iniciar`, { motivoExcepcion: 'corto' }).expect(400);
-      const ok = await api(tokens.admin).patch(`/api/mantenimientos/${id}/iniciar`, { motivoExcepcion: JUSTIFICACION }).expect(200);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio, motivoExcepcion: JUSTIFICACION }).expect(403);
+      await api(tokens.admin).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio, motivoExcepcion: 'corto' }).expect(400);
+      const ok = await api(tokens.admin).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio, motivoExcepcion: JUSTIFICACION }).expect(200);
       expect(ok.body).toMatchObject({ fueraDePlazo: true, motivoExcepcion: JUSTIFICACION, excepcionPor: 'admin.test' });
       // El plan no se toca: el inicio previsto sigue siendo mañana.
       expect(ok.body.fecha).toBe(iso(ahora + DIA));
@@ -163,7 +172,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       const proxima = '2026-12-30T13:00:00.000Z';
       const [plan] = (
         await api(tokens.analista)
-          .post('/api/mantenimientos/planes', { tipo: 'PREVENTIVO', frecuencia: 'MENSUAL', proximaFecha: proxima, plazoDias: 5, responsable: 'Soporte', actividades: 'Revisión mensual del equipo.', activoIds: [activoId] })
+          .post('/api/mantenimientos/planes', { tipo: 'PREVENTIVO', frecuencia: 'MENSUAL', fechaInicio: proxima, plazoDias: 5, responsable: 'Soporte', actividades: 'Revisión mensual del equipo.', activoIds: [activoId] })
           .expect(201)
       ).body;
       const eventos = await agenda('mantenimientos', 1, Date.parse('2026-12-01T00:00:00Z'), Date.parse('2027-02-28T00:00:00Z'));

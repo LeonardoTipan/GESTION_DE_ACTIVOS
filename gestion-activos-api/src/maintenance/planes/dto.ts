@@ -13,6 +13,7 @@ import {
   IsBoolean,
   IsDate,
   IsEnum,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -39,28 +40,49 @@ import {
 
 // ── Capa 1 · Planificación ──────────────────────────────────────────────────
 
+/** Semestre (S1 ene–jun, S2 jul–dic) y año de una fecha, en la hora de la institución. */
+export class SemestreDto {
+  @ApiProperty({ example: 2026 }) anio: number;
+  @ApiProperty({ enum: [1, 2] }) semestre: 1 | 2;
+  @ApiProperty({ example: 'S1-2026' }) etiqueta: string;
+}
+
+
 export class ParametrosPlanMantenimientoDto {
-  @ApiProperty({ enum: TipoMantenimiento })
+  @ApiProperty({
+    enum: TipoMantenimiento,
+    description: 'Tipo previsto. Hardware: PREVENTIVO, CORRECTIVO, PREDICTIVO. Software: PREVENTIVO, CORRECTIVO, PERFECTIVO, ADAPTATIVO, EVOLUTIVO (según la clase de la categoría del activo).',
+  })
   @IsEnum(TipoMantenimiento)
   tipo: TipoMantenimiento;
 
-  @ApiProperty({ enum: FrecuenciaMantenimiento, description: 'UNICA = una sola intervención.' })
+  @ApiProperty({ enum: FrecuenciaMantenimiento, description: 'PERÍODO: cada cuánto se planifica (UNICA = una sola intervención).' })
   @IsEnum(FrecuenciaMantenimiento)
   frecuencia: FrecuenciaMantenimiento;
 
-  @ApiProperty({ type: String, format: 'date-time', description: 'Primera (o próxima) intervención prevista.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    description: 'Fecha de inicio PLANIFICADA (fija). De ella salen el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.',
+  })
   @Type(() => Date)
   @IsDate()
-  proximaFecha: Date;
+  fechaInicio: Date;
 
-  @ApiProperty({ example: 'Mesa de Servicios' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Próxima intervención prevista; al crear, la fecha de inicio.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  proximaFecha?: Date;
+
+  @ApiProperty({ example: 'Mesa de Servicios', description: 'Asignado: quién debe realizarlo.' })
   @Trim()
   @IsString()
   @MinLength(1)
   @MaxLength(191)
   responsable: string;
 
-  @ApiProperty({ example: 'Limpieza interna, revisión de ventiladores y actualización de firmware.' })
+  @ApiProperty({ example: 'Limpieza interna, revisión de ventiladores y actualización de firmware.', description: 'Descripción PLANIFICADA del trabajo.' })
   @Trim()
   @IsString()
   @MinLength(10)
@@ -110,6 +132,20 @@ export class QueryPlanesMantenimientoDto extends QueryRegistrosDto {
   @IsEnum(EstadoPlan)
   estado?: EstadoPlan;
 
+  @ApiPropertyOptional({ minimum: 2000, maximum: 2100, description: 'Año planificado (de la fecha de inicio).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  anio?: number;
+
+  @ApiPropertyOptional({ enum: [1, 2], description: 'Semestre planificado (exige el año).' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsIn([1, 2])
+  semestre?: 1 | 2;
+
   @ApiPropertyOptional({ description: 'true = solo los vigentes cuya próxima intervención ya pasó.' })
   @IsOptional()
   @aBooleano()
@@ -127,18 +163,32 @@ export class PlanMantenimientoDto extends IntersectionType(
   @ApiProperty({ enum: EstadoPlan }) estado: EstadoPlan;
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'null = sin más intervenciones previstas.' })
   declare proximaFecha: Date;
+  @ApiProperty({ type: () => SemestreDto, description: 'Semestre y año PLANIFICADOS (de la fecha de inicio).' })
+  semestrePlanificado: SemestreDto;
+  @ApiProperty({ description: 'Ejecuciones COMPLETADAS (finalizadas, no anuladas).' }) ejecucionesCompletadas: number;
   @ApiProperty({ description: 'Vigente y con la próxima intervención ya vencida.' }) vencido: boolean;
   @ApiProperty({ description: 'Intervenciones generadas desde el plan.' }) intervenciones: number;
 }
 
 export class PaginatedPlanMantenimientoDto extends PaginatedResponseDto(PlanMantenimientoDto) {}
 
+/**
+ * Crea una EJECUCIÓN (situación Pendiente) de la planificación. Normal: la de la
+ * próxima fecha, y el período adelanta la siguiente. Adicional (intervención
+ * parcial, trabajo extra o reprogramación): no mueve la próxima fecha y vale
+ * también para una planificación de período único ya programada.
+ */
 export class ProgramarDesdePlanDto {
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Por defecto, la próxima fecha del plan.' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha prevista de esta ejecución; por defecto, la próxima fecha del plan. Obligatoria si es adicional.' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   fecha?: Date;
+
+  @ApiPropertyOptional({ description: 'true = ejecución adicional: no adelanta la próxima fecha del período.' })
+  @IsOptional()
+  @IsBoolean()
+  adicional?: boolean;
 }
 
 // ── Capa 3 · Verificación y cierre ──────────────────────────────────────────

@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsOptional, IsString, MaxLength } from 'class-validator';
+import { ClaseMantenimiento } from '../../../generated/prisma/enums.js';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
 
 export class CreateCategoriaDto {
@@ -32,6 +33,15 @@ export class CreateCategoriaDto {
   @IsOptional()
   @IsBoolean()
   admiteAccesoFisico?: boolean;
+
+  @ApiPropertyOptional({
+    enum: ClaseMantenimiento,
+    nullable: true,
+    description: 'Mantenimiento: HARDWARE (preventivo, correctivo, predictivo) o SOFTWARE (preventivo, correctivo, perfectivo, adaptativo, evolutivo). null = sin clasificar: solo preventivo y correctivo.',
+  })
+  @IsOptional()
+  @IsEnum(ClaseMantenimiento)
+  claseMantenimiento?: ClaseMantenimiento | null;
 }
 
 /** En PATCH todos los campos son opcionales. */
@@ -54,4 +64,7 @@ export class CategoriaDto {
 
   @ApiProperty({ description: 'Elegible para solicitudes de acceso físico.' })
   admiteAccesoFisico: boolean;
+
+  @ApiProperty({ enum: ClaseMantenimiento, nullable: true, description: 'Clase para los tipos de mantenimiento; null = sin clasificar.' })
+  claseMantenimiento: ClaseMantenimiento | null;
 }

@@ -308,14 +308,25 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       mantenimiento: 0,
       vulnerabilidad: 0,
     };
+    // Toda ejecución de mantenimiento nace de una planificación: una por activo, creada antes.
+    const planDe = new Map<number, number>();
+    const planificar = async (id: number) => {
+      if (!planDe.has(id)) {
+        const plan = await prisma.planMantenimiento.create({
+          data: { activoId: id, tipo: 'PREVENTIVO', frecuencia: 'UNICA', fechaInicio: new Date(MANANA), responsable: 'Soporte', actividades: 'Limpieza' },
+        });
+        planDe.set(id, plan.id);
+      }
+    };
     const operaciones = (id: number): [string, object][] => [
       ['/api/respaldos/planes', { ...PLAN, activoIds: [id] }],
-      ['/api/mantenimientos', { activoId: id, tipo: 'PREVENTIVO', actividad: 'Limpieza', fecha: MANANA, fechaLimite: MANANA }],
+      ['/api/mantenimientos', { planId: planDe.get(id), fecha: MANANA, fechaLimite: MANANA }],
       ['/api/vulnerabilidades', { activoId: id, descripcion: 'Parche pendiente', nivelRiesgo: 'ALTO', fecha: AYER }],
     ];
 
     it('mientras está activo admite respaldos, mantenimientos y vulnerabilidades', async () => {
       activoId = (await activoDe('Computer #7')).id;
+      await planificar(activoId);
       const [r, m, v] = await Promise.all(
         operaciones(activoId).map(([url, cuerpo]) =>
           api(tokens.analista).post(url, cuerpo).expect(201),
@@ -391,12 +402,14 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       expect(await total('estado=Dado de baja')).toBe(1);
       expect(await total('operativos=true')).toBe(25);
       // Y el backend no admite operaciones nuevas sobre él.
+      await planificar(id);
       for (const [url, cuerpo] of operaciones(id)) {
         const res = await api(tokens.admin).post(url, cuerpo).expect(400);
         expect(res.body.message).toContain('no está operativo (su estado es "Dado de baja")');
       }
       // Un equipo en mal estado SÍ es operativo: es el que necesita mantenimiento.
       const malo = (await activoDe('Computer #5')).id;
+      await planificar(malo);
       const creado = await api(tokens.analista).post(...operaciones(malo)[1]).expect(201);
       await api(tokens.admin)
         .post(`/api/mantenimientos/${creado.body.id}/anular`, { motivo: 'Creado solo para comprobar la regla de estados.' })
@@ -451,6 +464,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       expect(await total('estado=Bueno')).toBe(25); // ya no cuenta como Bueno
       const ficha = await api(tokens.auditor).get(`/api/activos/${id}`).expect(200);
       expect(ficha.body.deletedAt).not.toBeNull();
+      await planificar(id);
       const res = await api(tokens.admin).post(...operaciones(id)[1]).expect(400);
       expect(res.body.message).toContain('fue dado de baja');
       // Y la sincronización no lo reactiva ni lo modifica.

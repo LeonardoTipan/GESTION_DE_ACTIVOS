@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -10,6 +11,7 @@ import {
   type Paginated,
 } from '../../common/dto/paginated-response.dto.js';
 import type { Prisma } from '../../generated/prisma/client.js';
+import type { TipoMantenimiento } from '../../generated/prisma/enums.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
@@ -20,6 +22,7 @@ import { exigirIntervalo, exigirReprogramacion, plazoOExcepcion, SIN_EXCEPCION }
 import type {
   AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
+  CorregirEjecucionDto,
   EditarMantenimientoDto,
   FinalizarMantenimientoDto,
   IniciarMantenimientoDto,
@@ -38,9 +41,16 @@ import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import { BitacoraService } from '../../inventory/bitacora/bitacora.service.js';
 import { calcularCambios } from '../../inventory/bitacora/cambios.js';
 import { cierreDe } from '../planes/frecuencia.js';
+import { exigirFechasReales, exigirRepositorioValido, exigirTipoPermitido, semestreDe } from '../planificacion.js';
 
 const INCLUDE = {
   activo: SELECT_ACTIVO,
+  plan: {
+    select: {
+      id: true, frecuencia: true, tipo: true, fechaInicio: true,
+      responsable: true, actividades: true, plazoDias: true, estado: true,
+    },
+  },
   verificaciones: { select: { resultado: true, anuladoEn: true }, orderBy: { id: 'asc' } },
 } as const;
 
@@ -141,14 +151,34 @@ export class MantenimientosService {
     return conVencido(mantenimiento);
   }
 
-  /** Crea el mantenimiento en fase PROGRAMADO. El activo debe estar vigente. */
+  /**
+   * Nueva EJECUCIÓN (Pendiente) de una planificación vigente. El activo, el tipo y
+   * la descripción prevista son los de la planificación: no se puede asociar a otra
+   * planificación ni a otro activo. No adelanta la próxima fecha del período (eso
+   * lo hace «programar» desde la planificación).
+   */
   async programar(dto: ProgramarMantenimientoDto): Promise<MantenimientoDto> {
-    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos,
-    // pero la regla no depende de ella.
-    await this.activos.exigirOperativo(dto.activoId);
-    exigirIntervalo(dto.fecha, dto.fechaLimite, 'Mantenimiento');
+    const plan = await this.prisma.planMantenimiento.findUnique({ where: { id: dto.planId } });
+    if (!plan) throw new BadRequestException(`La planificación ${dto.planId} no existe.`);
+    if (plan.anuladoEn || plan.estado !== 'VIGENTE') {
+      throw new ConflictException(`La planificación ${dto.planId} no está vigente.`);
+    }
+    if (dto.activoId !== undefined && dto.activoId !== plan.activoId) {
+      throw new BadRequestException(`El activo ${dto.activoId} no es el de la planificación ${dto.planId}.`);
+    }
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos.
+    await this.activos.exigirOperativo(plan.activoId);
+    const fechaLimite = dto.fechaLimite ?? new Date(dto.fecha.getTime() + plan.plazoDias * 86_400_000);
+    exigirIntervalo(dto.fecha, fechaLimite, 'Mantenimiento');
     const mantenimiento = await this.prisma.mantenimiento.create({
-      data: dto,
+      data: {
+        planId: plan.id,
+        activoId: plan.activoId,
+        tipo: plan.tipo,
+        actividad: plan.actividades.slice(0, 191),
+        fecha: dto.fecha,
+        fechaLimite,
+      },
       include: INCLUDE,
     });
     return conVencido(mantenimiento);
@@ -167,7 +197,9 @@ export class MantenimientosService {
   ): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     this.validarTransicion(actual, 'iniciar');
-    const fechaInicio = dto.fechaInicio ?? new Date();
+    // La fecha REAL la indica el usuario: no se sustituye por la hora del servidor.
+    const fechaInicio = dto.fechaInicio;
+    exigirFechasReales(fechaInicio, null);
     const excepcion = actual.fechaLimite
       ? plazoOExcepcion({
           real: fechaInicio,
@@ -178,11 +210,17 @@ export class MantenimientosService {
           usuario,
         })
       : SIN_EXCEPCION;
-    return this.aplicar(id, 'iniciar', {
-      fechaInicio,
-      ...(dto.tecnico ? { tecnico: dto.tecnico } : {}),
-      ...(excepcion.fueraDePlazo ? excepcion : {}),
-    });
+    return this.aplicar(
+      id,
+      'iniciar',
+      {
+        fechaInicio,
+        ...(dto.tecnico ? { tecnico: dto.tecnico } : {}),
+        ...(excepcion.fueraDePlazo ? excepcion : {}),
+      },
+      excepcion.fueraDePlazo ? `Inicio de la ejecución, fuera de plazo: ${excepcion.motivoExcepcion}` : 'Inicio de la ejecución.',
+      usuario,
+    );
   }
 
   async finalizar(
@@ -192,12 +230,10 @@ export class MantenimientosService {
   ): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     this.validarTransicion(actual, 'finalizar');
-    const fechaFin = dto.fechaFin ?? new Date();
-    if (actual.fechaInicio && fechaFin < actual.fechaInicio) {
-      throw new BadRequestException(
-        'La fecha de fin no puede ser anterior a la de inicio.',
-      );
-    }
+    // Fecha REAL de finalización, indicada por el usuario (nunca la hora del servidor).
+    const fechaFin = dto.fechaFin;
+    exigirFechasReales(actual.fechaInicio, fechaFin);
+    exigirRepositorioValido(dto.repositorioVerificable);
     const tecnico = dto.tecnico ?? actual.tecnico;
     if (!tecnico) {
       throw new BadRequestException('Indique el técnico que realizó el mantenimiento.');
@@ -218,21 +254,28 @@ export class MantenimientosService {
       throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
     }
     exigirIntervalo(dto.verificacionPrevista, dto.verificacionLimite, 'Verificación');
-    const resultado = await this.aplicar(id, 'finalizar', {
-      ...(excepcion.fueraDePlazo ? excepcion : {}),
-      verificacionPrevista: dto.verificacionPrevista,
-      verificacionLimite: dto.verificacionLimite,
-      resultado: dto.resultado,
-      estadoEquipo: dto.estadoEquipo,
-      fechaFin,
-      tecnico,
-      diagnostico: dto.diagnostico,
-      duracionMin: dto.duracionMin,
-      costo: dto.costo,
-      repuestos: dto.repuestos,
-      observaciones: dto.observaciones,
-      evidencia: dto.evidencia,
-    });
+    const resultado = await this.aplicar(
+      id,
+      'finalizar',
+      {
+        ...(excepcion.fueraDePlazo ? excepcion : {}),
+        verificacionPrevista: dto.verificacionPrevista,
+        verificacionLimite: dto.verificacionLimite,
+        resultado: dto.resultado,
+        estadoEquipo: dto.estadoEquipo,
+        fechaFin,
+        tecnico,
+        diagnostico: dto.diagnostico,
+        duracionMin: dto.duracionMin,
+        costo: dto.costo,
+        repuestos: dto.repuestos,
+        observaciones: dto.observaciones,
+        evidencia: dto.evidencia,
+        repositorioVerificable: dto.repositorioVerificable,
+      },
+      excepcion.fueraDePlazo ? `Ejecución completada, fuera de plazo: ${excepcion.motivoExcepcion}` : 'Ejecución completada.',
+      usuario,
+    );
     // Se refleja en el activo: su última revisión es la del mantenimiento.
     await this.prisma.$transaction(async (tx) => {
       const activo = await tx.activo.findUniqueOrThrow({ where: { id: actual.activoId } });
@@ -248,16 +291,62 @@ export class MantenimientosService {
     return resultado;
   }
 
+  /**
+   * Cancelar: el mantenimiento no se realizará. Exige el motivo. Se registra el
+   * momento de la cancelación aparte: la fecha real de fin queda vacía porque el
+   * trabajo no terminó.
+   */
   async cancelar(
     id: number,
     dto: CancelarMantenimientoDto,
+    usuario?: AuthUser,
   ): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     this.validarTransicion(actual, 'cancelar');
-    return this.aplicar(id, 'cancelar', {
-      resultado: dto.motivo,
-      fechaFin: new Date(),
+    return this.aplicar(
+      id,
+      'cancelar',
+      { resultado: dto.motivo, fechaCancelacion: new Date() },
+      `Ejecución cancelada: ${dto.motivo}`,
+      usuario,
+    );
+  }
+
+  /**
+   * Corrige lo EJECUTADO (fechas reales, persona encargada, descripción,
+   * observación, verificable, condición del equipo y, justificado, el tipo
+   * realmente ejecutado). En ejecución: admin y analista; completada: solo admin.
+   * Versionado y auditado en la misma transacción, con el usuario de la sesión.
+   */
+  async corregirEjecucion(id: number, dto: CorregirEjecucionDto, usuario: AuthUser): Promise<MantenimientoDto> {
+    const { motivoCambio, ...datos } = dto;
+    const actual = await this.findOne(id);
+    if (actual.anuladoEn) throw new ConflictException(`El mantenimiento ${id} está anulado.`);
+    if (actual.fase !== 'EN_EJECUCION' && actual.fase !== 'FINALIZADO') {
+      throw new ConflictException(
+        `El mantenimiento ${id} está ${actual.fase}: solo se corrige lo ejecutado de uno en ejecución o completado.`,
+      );
+    }
+    if (actual.fase === 'FINALIZADO' && !usuario.roles.includes('admin')) {
+      throw new ForbiddenException(`El mantenimiento ${id} está completado: solo un administrador corrige su ejecución.`);
+    }
+    if (actual.fase === 'EN_EJECUCION' && (datos.fechaFin || datos.resultado || datos.estadoEquipo)) {
+      throw new BadRequestException('La fecha de fin, la descripción de la ejecución y la condición del equipo se registran al completar.');
+    }
+    exigirFechasReales(datos.fechaInicio ?? actual.fechaInicio, datos.fechaFin ?? actual.fechaFin);
+    exigirRepositorioValido(datos.repositorioVerificable);
+    if (datos.tipo && datos.tipo !== actual.tipo) await this.exigirTipoDelActivo(actual.activoId, datos.tipo);
+    await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: actual.fase });
+    return this.findOne(id);
+  }
+
+  /** El tipo debe corresponder a la clase (hardware/software) de la categoría del activo. */
+  private async exigirTipoDelActivo(activoId: number, tipo: TipoMantenimiento): Promise<void> {
+    const activo = await this.prisma.activo.findUniqueOrThrow({
+      where: { id: activoId },
+      select: { codigo: true, categoria: { select: { nombre: true, claseMantenimiento: true } } },
     });
+    exigirTipoPermitido(tipo, activo);
   }
 
   private validarTransicion(
@@ -275,24 +364,23 @@ export class MantenimientosService {
   }
 
   /**
-   * Cambia de fase con una actualización condicional: solo se aplica si la
-   * fase sigue siendo una de las permitidas. Si otra petición se adelantó, 409.
+   * Cambia de situación con la auditoría común (registro_cambio): el cambio y su
+   * traza (situación, fechas reales, responsable…) van en la MISMA transacción,
+   * con el usuario de la sesión. Actualización condicional: solo si la situación
+   * sigue siendo una de las permitidas y la versión no cambió; si no, 409.
    */
   private async aplicar(
     id: number,
     accion: AccionMantenimiento,
-    data: Prisma.MantenimientoUpdateManyMutationInput,
+    data: Record<string, unknown>,
+    motivo: string,
+    usuario?: AuthUser,
   ): Promise<MantenimientoDto> {
     const { desde, hacia } = TRANSICIONES[accion];
-    const { count } = await this.prisma.mantenimiento.updateMany({
-      where: { id, fase: { in: desde }, anuladoEn: null },
-      data: { ...data, fase: hacia },
+    const datos = Object.fromEntries(Object.entries({ ...data, fase: hacia }).filter(([, v]) => v !== undefined));
+    await this.trazas.modificar('MANTENIMIENTO', id, datos, motivo.slice(0, 2000), usuario?.username ?? 'SISTEMA', {
+      fase: { in: desde },
     });
-    if (count === 0) {
-      throw new ConflictException(
-        `El mantenimiento ${id} cambió de fase mientras se procesaba; vuelve a consultarlo.`,
-      );
-    }
     return this.findOne(id);
   }
 
@@ -317,6 +405,7 @@ export class MantenimientosService {
       );
     }
     exigirIntervalo(datos.fecha ?? actual.fecha, datos.fechaLimite ?? actual.fechaLimite, 'Mantenimiento');
+    if (datos.tipo && datos.tipo !== actual.tipo) await this.exigirTipoDelActivo(actual.activoId, datos.tipo);
     await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: 'PROGRAMADO' });
     return this.findOne(id);
   }
@@ -428,5 +517,7 @@ function conVencido(
     costo: m.costo === null ? null : Number(m.costo),
     vencido: estaVencido(m, ahora),
     cierre: cierreDe(m.fase, verificaciones),
+    semestrePlanificado: m.plan ? semestreDe(m.plan.fechaInicio) : null,
+    semestreReal: m.fechaInicio ? semestreDe(m.fechaInicio) : null,
   };
 }

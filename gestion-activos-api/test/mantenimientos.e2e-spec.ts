@@ -19,6 +19,9 @@ describe('Mantenimientos (e2e)', () => {
   let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
   let activoId: number;
   let activoDeBajaId: number;
+  let planPreventivoId: number;
+  let planCorrectivoId: number;
+  let planDeBajaId: number;
 
   const MANANA = new Date(Date.now() + 24 * 3600 * 1000).toISOString();
   const AYER = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
@@ -26,6 +29,9 @@ describe('Mantenimientos (e2e)', () => {
   const HACE_DOS_HORAS = new Date(Date.now() - 2 * 3600 * 1000).toISOString();
   const HACE_UNA_HORA = new Date(Date.now() - 3600 * 1000).toISOString();
   const EN_UNA_SEMANA = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+  // Fecha REAL de mantenimiento (obligatoria, la indica el usuario) dentro del plazo.
+  const INICIO_REAL = { fechaInicio: HACE_UNA_HORA };
+  const ahora = () => new Date().toISOString();
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({
@@ -41,7 +47,7 @@ describe('Mantenimientos (e2e)', () => {
     tokens = await getTokensDePrueba();
 
     const categoria = await prisma.categoria.create({
-      data: { nombre: 'Hardware', descripcion: '' },
+      data: { nombre: 'Hardware', descripcion: '', claseMantenimiento: 'HARDWARE' },
     });
     const criticidad = await prisma.criticidad.create({
       data: { nivel: 'Alta' },
@@ -63,6 +69,22 @@ describe('Mantenimientos (e2e)', () => {
       await prisma.activo.create({
         data: { ...base, codigo: 'SRV-OLD', deletedAt: new Date() },
       })
+    ).id;
+    // Toda ejecución nace de una planificación (capa 1).
+    const plan = {
+      frecuencia: 'UNICA' as const,
+      fechaInicio: new Date(HACE_DOS_HORAS),
+      responsable: 'Infraestructura',
+      actividades: 'Limpieza y actualización de firmware',
+    };
+    planPreventivoId = (await prisma.planMantenimiento.create({ data: { ...plan, activoId, tipo: 'PREVENTIVO' } })).id;
+    planCorrectivoId = (
+      await prisma.planMantenimiento.create({
+        data: { ...plan, activoId, tipo: 'CORRECTIVO', actividades: 'Cambio de disco' },
+      })
+    ).id;
+    planDeBajaId = (
+      await prisma.planMantenimiento.create({ data: { ...plan, activoId: activoDeBajaId, tipo: 'PREVENTIVO' } })
     ).id;
   });
 
@@ -87,9 +109,7 @@ describe('Mantenimientos (e2e)', () => {
     (
       await api(tokens.analista)
         .post('/api/mantenimientos', {
-          activoId,
-          tipo: 'PREVENTIVO',
-          actividad: 'Limpieza y actualización de firmware',
+          planId: planPreventivoId,
           fecha: HACE_DOS_HORAS,
           fechaLimite: EN_UNA_SEMANA,
           ...extra,
@@ -108,18 +128,19 @@ describe('Mantenimientos (e2e)', () => {
   describe('ciclo completo: programar → iniciar → finalizar', () => {
     let id: number;
 
-    it('programar → 201 en fase PROGRAMADO, con el activo incluido', async () => {
+    it('programar desde la planificación → 201 Pendiente, con activo, tipo y descripción de la planificación', async () => {
       const res = await api(tokens.analista)
         .post('/api/mantenimientos', {
+          planId: planPreventivoId,
           activoId,
-          tipo: 'PREVENTIVO',
-          actividad: '  Limpieza y actualización de firmware  ',
           // Intervalo previsto que contiene "ahora": se inicia en plazo.
           fecha: HACE_DOS_HORAS,
           fechaLimite: EN_UNA_SEMANA,
         })
         .expect(201);
       expect(res.body).toMatchObject({
+        planId: planPreventivoId,
+        plan: { id: planPreventivoId, frecuencia: 'UNICA', responsable: 'Infraestructura' },
         activo: { id: activoId, codigo: 'SRV-ERP' },
         tipo: 'PREVENTIVO',
         fase: 'PROGRAMADO',
@@ -138,23 +159,24 @@ describe('Mantenimientos (e2e)', () => {
 
     it('no se puede finalizar sin haber iniciado → 409', () =>
       api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/finalizar`, FINALIZAR_OK)
+        .patch(`/api/mantenimientos/${id}/finalizar`, { ...FINALIZAR_OK, fechaFin: ahora() })
         .expect(409));
 
-    it('iniciar sin body usa la hora del servidor → EN_EJECUCION', async () => {
-      const antes = Date.now();
+    it('iniciar sin fecha real → 400 (no se usa la hora del servidor)', async () => {
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(400);
+    });
+
+    it('iniciar con la fecha real indicada → EN_EJECUCION, con esa fecha', async () => {
       const res = await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(200);
       expect(res.body.fase).toBe('EN_EJECUCION');
-      expect(new Date(res.body.fechaInicio).getTime()).toBeGreaterThanOrEqual(
-        antes - 1000,
-      );
+      expect(res.body.fechaInicio).toBe(HACE_UNA_HORA);
     });
 
     it('no se puede iniciar dos veces → 409', () =>
       api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(409));
 
     it('finalizar con fecha anterior al inicio → 400', async () => {
@@ -164,18 +186,29 @@ describe('Mantenimientos (e2e)', () => {
           fechaFin: '2020-01-01T00:00:00.000Z',
         })
         .expect(400);
-      expect(res.body.message).toMatch(/anterior a la de inicio/);
+      expect(res.body.message).toMatch(/anterior a la fecha real de mantenimiento/);
     });
 
-    it('finalizar → FINALIZADO con resultado y estado del equipo', async () => {
+    it('finalizar sin fecha real de fin → 400', () =>
+      api(tokens.analista).patch(`/api/mantenimientos/${id}/finalizar`, FINALIZAR_OK).expect(400));
+
+    it('finalizar → FINALIZADO con resultado, estado del equipo, verificable y repositorio', async () => {
+      const fechaFin = ahora();
       const res = await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/finalizar`, FINALIZAR_OK)
+        .patch(`/api/mantenimientos/${id}/finalizar`, {
+          ...FINALIZAR_OK,
+          fechaFin,
+          evidencia: 'Informe MT-2026-001',
+          repositorioVerificable: 'https://intranet.example/mantenimiento/MT-2026-001.pdf',
+        })
         .expect(200);
       expect(res.body).toMatchObject({
         fase: 'FINALIZADO',
         estadoEquipo: 'OPERATIVO',
         resultado: FINALIZAR_OK.resultado,
-        fechaFin: expect.any(String),
+        fechaFin,
+        evidencia: 'Informe MT-2026-001',
+        repositorioVerificable: 'https://intranet.example/mantenimiento/MT-2026-001.pdf',
       });
     });
 
@@ -187,10 +220,7 @@ describe('Mantenimientos (e2e)', () => {
 
   describe('cancelación', () => {
     it('desde PROGRAMADO → CANCELADO, guarda el motivo como resultado', async () => {
-      const { id } = await programar({
-        tipo: 'CORRECTIVO',
-        actividad: 'Cambio de disco',
-      });
+      const { id } = await programar({ planId: planCorrectivoId });
       const res = await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}/cancelar`, {
           motivo: 'El proveedor reprogramó la visita.',
@@ -200,17 +230,19 @@ describe('Mantenimientos (e2e)', () => {
         fase: 'CANCELADO',
         resultado: 'El proveedor reprogramó la visita.',
         estadoEquipo: null,
-        fechaFin: expect.any(String),
+        // La cancelación tiene su propia fecha: la fecha real de fin queda vacía.
+        fechaFin: null,
+        fechaCancelacion: expect.any(String),
       });
       await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(409);
     });
 
     it('desde EN_EJECUCION → CANCELADO', async () => {
-      const { id } = await programar({ actividad: 'Revisión de UPS' });
+      const { id } = await programar();
       await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(200);
       const res = await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}/cancelar`, {
@@ -221,7 +253,7 @@ describe('Mantenimientos (e2e)', () => {
     });
 
     it('cancelar sin motivo → 400', async () => {
-      const { id } = await programar({ actividad: 'Sin motivo' });
+      const { id } = await programar();
       await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}/cancelar`, {})
         .expect(400);
@@ -229,45 +261,46 @@ describe('Mantenimientos (e2e)', () => {
   });
 
   describe('validaciones', () => {
-    it('activo inexistente o dado de baja → 400', async () => {
-      const cuerpo = { tipo: 'PREVENTIVO', actividad: 'X', fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
-      await api(tokens.analista)
-        .post('/api/mantenimientos', { ...cuerpo, activoId: 999999 })
+    it('sin planificación, planificación inexistente, de otro activo o con activo dado de baja → 400', async () => {
+      const cuerpo = { fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
+      await api(tokens.analista).post('/api/mantenimientos', { ...cuerpo, activoId }).expect(400);
+      await api(tokens.analista).post('/api/mantenimientos', { ...cuerpo, planId: 999999 }).expect(400);
+      const otro = await api(tokens.analista)
+        .post('/api/mantenimientos', { ...cuerpo, planId: planPreventivoId, activoId: activoDeBajaId })
         .expect(400);
+      expect(otro.body.message).toMatch(/no es el de la planificación/);
       const res = await api(tokens.analista)
-        .post('/api/mantenimientos', { ...cuerpo, activoId: activoDeBajaId })
+        .post('/api/mantenimientos', { ...cuerpo, planId: planDeBajaId })
         .expect(400);
       expect(res.body.message).toMatch(/dado de baja/);
     });
 
-    it('tipo inválido o campos de otras fases al programar → 400', async () => {
-      const cuerpo = { activoId, actividad: 'X', fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
-      await api(tokens.analista)
-        .post('/api/mantenimientos', { ...cuerpo, tipo: 'PREDICTIVO' })
-        .expect(400);
-      await api(tokens.analista)
-        .post('/api/mantenimientos', {
-          ...cuerpo,
-          tipo: 'PREVENTIVO',
-          fase: 'FINALIZADO',
-        })
-        .expect(400);
+    it('tipo, actividad o campos de otras fases al programar → 400 (salen de la planificación)', async () => {
+      const cuerpo = { planId: planPreventivoId, fecha: MANANA, fechaLimite: EN_UNA_SEMANA };
+      await api(tokens.analista).post('/api/mantenimientos', { ...cuerpo, tipo: 'CORRECTIVO' }).expect(400);
+      await api(tokens.analista).post('/api/mantenimientos', { ...cuerpo, actividad: 'Otra' }).expect(400);
+      await api(tokens.analista).post('/api/mantenimientos', { ...cuerpo, fase: 'FINALIZADO' }).expect(400);
     });
 
     it('finalizar sin estado del equipo o con estado inválido → 400', async () => {
-      const { id } = await programar({ actividad: 'Validación de cierre' });
+      const { id } = await programar();
       await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(200);
       const url = `/api/mantenimientos/${id}/finalizar`;
-      await api(tokens.analista).patch(url, { resultado: 'OK' }).expect(400);
+      await api(tokens.analista).patch(url, { resultado: 'OK', fechaFin: ahora() }).expect(400);
       await api(tokens.analista)
-        .patch(url, { resultado: 'OK', estadoEquipo: 'ROTO' })
+        .patch(url, { resultado: 'OK', estadoEquipo: 'ROTO', fechaFin: ahora() })
         .expect(400);
+      // Repositorio con un esquema que no es http(s) → 400.
+      const repo = await api(tokens.analista)
+        .patch(url, { ...FINALIZAR_OK, fechaFin: ahora(), repositorioVerificable: 'javascript:alert(1)' })
+        .expect(400);
+      expect(repo.body.message).toMatch(/http o https/);
     });
 
     it('fechaInicio futura → 400', async () => {
-      const { id } = await programar({ actividad: 'Inicio futuro' });
+      const { id } = await programar();
       const res = await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: MANANA })
         .expect(400);
@@ -279,7 +312,7 @@ describe('Mantenimientos (e2e)', () => {
     it('inexistente → 404; id no numérico → 400', async () => {
       await api(tokens.auditor).get('/api/mantenimientos/999999').expect(404);
       await api(tokens.analista)
-        .patch('/api/mantenimientos/999999/iniciar')
+        .patch('/api/mantenimientos/999999/iniciar', INICIO_REAL)
         .expect(404);
       await api(tokens.auditor).get('/api/mantenimientos/abc').expect(400);
     });
@@ -287,19 +320,13 @@ describe('Mantenimientos (e2e)', () => {
 
   describe('permisos por rol', () => {
     it('el auditor puede consultar pero no programar ni cambiar de fase → 403', async () => {
-      const { id } = await programar({ actividad: 'Permisos' });
+      const { id } = await programar();
       await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
       await api(tokens.auditor)
-        .post('/api/mantenimientos', {
-          activoId,
-          tipo: 'PREVENTIVO',
-          actividad: 'X',
-          fecha: MANANA,
-          fechaLimite: EN_UNA_SEMANA,
-        })
+        .post('/api/mantenimientos', { planId: planPreventivoId, fecha: MANANA, fechaLimite: EN_UNA_SEMANA })
         .expect(403);
       await api(tokens.auditor)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(403);
       await api(tokens.auditor)
         .patch(`/api/mantenimientos/${id}/cancelar`, { motivo: 'X' })
@@ -311,7 +338,7 @@ describe('Mantenimientos (e2e)', () => {
     let vencidoId: number;
 
     beforeAll(async () => {
-      vencidoId = (await programar({ actividad: 'Atrasado', fecha: AYER, fechaLimite: HACE_UNA_HORA })).id;
+      vencidoId = (await programar({ fecha: AYER, fechaLimite: HACE_UNA_HORA })).id;
     });
 
     it('marca como vencido un PROGRAMADO con fecha pasada, y lo filtra', async () => {
@@ -367,11 +394,11 @@ describe('Mantenimientos (e2e)', () => {
     });
 
     it('?actualizadoDesde devuelve solo lo modificado después de esa fecha', async () => {
-      const { id } = await programar({ actividad: 'Sincronización' });
+      const { id } = await programar();
       const desde = new Date().toISOString();
       await new Promise((r) => setTimeout(r, 20));
       await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/iniciar`)
+        .patch(`/api/mantenimientos/${id}/iniciar`, INICIO_REAL)
         .expect(200);
       const res = await api(tokens.auditor)
         .get(
@@ -402,6 +429,9 @@ describe('Mantenimientos (e2e)', () => {
         '/api/mantenimientos/{id}/iniciar',
         '/api/mantenimientos/{id}/finalizar',
         '/api/mantenimientos/{id}/cancelar',
+        '/api/mantenimientos/{id}/ejecucion',
+        '/api/mantenimientos/bitacora/general',
+        '/api/mantenimientos/bitacora/especifica',
       ]),
     );
   });

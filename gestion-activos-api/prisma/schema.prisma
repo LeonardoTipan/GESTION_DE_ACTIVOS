@@ -16,14 +16,18 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Categoria {
-  id                 Int     @id @default(autoincrement())
-  nombre             String  @unique
+  id                 Int                 @id @default(autoincrement())
+  nombre             String              @unique
   descripcion        String
   // Control de acceso: si los activos de la categoría admiten solicitudes de
   // acceso lógico (contienen o dan acceso a información) o físico. Lo decide el
   // admin en Catálogos; la sincronización con GLPI no lo toca.
-  admiteAccesoLogico Boolean @default(false)
-  admiteAccesoFisico Boolean @default(false)
+  admiteAccesoLogico Boolean             @default(false)
+  admiteAccesoFisico Boolean             @default(false)
+  // Mantenimiento: si sus activos son HARDWARE (preventivo, correctivo, predictivo) o
+  // SOFTWARE (preventivo, correctivo, perfectivo, adaptativo, evolutivo). null = sin
+  // clasificar (solo preventivo y correctivo). La decide el admin en Catálogos.
+  claseMantenimiento ClaseMantenimiento?
 
   activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
 
@@ -168,42 +172,48 @@ enum EstadoPrueba {
 
 // Capa 2 · Ejecución: cada intervención (programada desde un plan o directa).
 model Mantenimiento {
-  id                   Int               @id @default(autoincrement())
-  activoId             Int
+  id                     Int               @id @default(autoincrement())
+  activoId               Int
   // Plan del que procede (capa 1); null si se programó directamente
-  planId               Int?
-  tipo                 TipoMantenimiento
+  planId                 Int?
+  tipo                   TipoMantenimiento
   // Ciclo: PROGRAMADO → EN_EJECUCION → FINALIZADO (o CANCELADO)
-  fase                 FaseMantenimiento @default(PROGRAMADO)
+  fase                   FaseMantenimiento @default(PROGRAMADO)
   // Cómo quedó el equipo: se registra al FINALIZAR
-  estadoEquipo         EstadoEquipo?
-  actividad            String
+  estadoEquipo           EstadoEquipo?
+  actividad              String
   // Resultado al finalizar, o motivo al cancelar
-  resultado            String?
+  resultado              String?
   // Fecha programada
-  fecha                DateTime
-  fechaInicio          DateTime?
-  fechaFin             DateTime?
+  fecha                  DateTime
+  fechaInicio            DateTime?
+  fechaFin               DateTime?
   // Datos de la ejecución (se exigen al finalizar)
-  tecnico              String?
-  diagnostico          String?           @db.Text
-  duracionMin          Int?
-  costo                Decimal?          @db.Decimal(12, 2)
-  repuestos            String?           @db.Text
-  observaciones        String?           @db.Text
+  tecnico                String?
+  diagnostico            String?           @db.Text
+  duracionMin            Int?
+  costo                  Decimal?          @db.Decimal(12, 2)
+  repuestos              String?           @db.Text
+  observaciones          String?           @db.Text
   // Referencia a la evidencia (acta, informe, ruta de red)
-  evidencia            String?
+  // «Verificable»: nombre del informe o documento que prueba la ejecución.
+  evidencia              String?
+  // «Repositorio verificable»: dónde está guardado (carpeta compartida o URL http/https).
+  repositorioVerificable String?
+  // Cuándo se canceló (momento del registro). La fecha real de fin (fechaFin) no se usa
+  // para las cancelaciones: el trabajo no terminó.
+  fechaCancelacion       DateTime?
   // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
   // Plazo previsto de la ejecución: [fecha, fechaLimite]. fechaLimiteOriginal: antes de una ampliación.
-  fechaLimite          DateTime?
-  fechaLimiteOriginal  DateTime?
+  fechaLimite            DateTime?
+  fechaLimiteOriginal    DateTime?
   // Registrado fuera del intervalo previsto: solo un admin, con justificación.
-  fueraDePlazo         Boolean           @default(false)
-  motivoExcepcion      String?           @db.Text
-  excepcionPor         String?
+  fueraDePlazo           Boolean           @default(false)
+  motivoExcepcion        String?           @db.Text
+  excepcionPor           String?
   // Capa 3: ventana prevista para verificar el trabajo (la fecha real está en la verificación).
-  verificacionPrevista DateTime?
-  verificacionLimite   DateTime?
+  verificacionPrevista   DateTime?
+  verificacionLimite     DateTime?
 
   version         Int       @default(1)
   // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
@@ -228,6 +238,9 @@ model PlanMantenimiento {
   activoId     Int
   tipo         TipoMantenimiento
   frecuencia   FrecuenciaMantenimiento
+  // PLANIFICACIÓN: fecha de inicio planificada. Fija (no avanza al programar): de ella
+  // se derivan el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.
+  fechaInicio  DateTime
   // Próxima intervención prevista; null cuando ya no hay más (frecuencia única ya programada)
   proximaFecha DateTime?
   responsable  String
@@ -294,9 +307,21 @@ enum ResultadoVerificacionMantenimiento {
   NO_SATISFACTORIO
 }
 
+/// Tipos de mantenimiento. Comunes: PREVENTIVO y CORRECTIVO. Solo hardware: PREDICTIVO.
+/// Solo software: PERFECTIVO, ADAPTATIVO y EVOLUTIVO (ver ClaseMantenimiento).
 enum TipoMantenimiento {
   PREVENTIVO
   CORRECTIVO
+  PREDICTIVO
+  PERFECTIVO
+  ADAPTATIVO
+  EVOLUTIVO
+}
+
+/// Clase de un activo a efectos de mantenimiento (por su categoría).
+enum ClaseMantenimiento {
+  HARDWARE
+  SOFTWARE
 }
 
 enum FaseMantenimiento {

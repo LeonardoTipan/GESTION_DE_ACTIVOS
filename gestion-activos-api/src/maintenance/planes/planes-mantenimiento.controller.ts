@@ -109,7 +109,7 @@ export class PlanesMantenimientoController {
   @Roles('admin', 'analista')
   @Post('planes/:id/programar')
   programar(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarDesdePlanDto): Promise<ProgramacionDesdePlanDto> {
-    return this.planes.programar(id, dto.fecha);
+    return this.planes.programar(id, dto);
   }
 
   @ApiOperation({ summary: 'Anular un plan (eliminación lógica, admin)' })

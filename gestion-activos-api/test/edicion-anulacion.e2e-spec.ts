@@ -90,14 +90,19 @@ describe('Editar con motivo y anular (e2e)', () => {
     (await api(tokens.analista).post(url, body).expect(201)).body as { id: number };
 
   describe('mantenimientos', () => {
-    const nuevo = () =>
-      crear('/api/mantenimientos', {
-        activoId,
-        tipo: 'PREVENTIVO',
-        actividad: 'Limpieza',
-        fecha: HACE_UNA_HORA,
-        fechaLimite: MANANA,
-      });
+    let planId: number;
+    // Fecha REAL de mantenimiento (obligatoria al iniciar), dentro del plazo previsto.
+    const INICIO = () => ({ fechaInicio: new Date().toISOString() });
+
+    beforeAll(async () => {
+      planId = (
+        await prisma.planMantenimiento.create({
+          data: { activoId, tipo: 'PREVENTIVO', frecuencia: 'UNICA', fechaInicio: new Date(HACE_UNA_HORA), responsable: 'Soporte', actividades: 'Limpieza' },
+        })
+      ).id;
+    });
+
+    const nuevo = () => crear('/api/mantenimientos', { planId, fecha: HACE_UNA_HORA, fechaLimite: MANANA });
 
     it('editar tipo, actividad y fecha mientras está PROGRAMADO → 200', async () => {
       const { id } = await nuevo();
@@ -122,7 +127,7 @@ describe('Editar con motivo y anular (e2e)', () => {
 
     it('una vez iniciado ya no se edita → 409', async () => {
       const { id } = await nuevo();
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(200);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, INICIO()).expect(200);
       const res = await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}`, { motivoCambio: MOTIVO,  actividad: 'Otra' })
         .expect(409);
@@ -161,7 +166,7 @@ describe('Editar con motivo y anular (e2e)', () => {
       // Sigue existiendo y se consulta.
       await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
       // Ni cambia de fase ni se edita.
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(409);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, INICIO()).expect(409);
       await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}`, { actividad: 'X', motivoCambio: MOTIVO })
         .expect(409);
@@ -170,7 +175,7 @@ describe('Editar con motivo y anular (e2e)', () => {
       expect(vigentes.body.data.some((m: { id: number }) => m.id === id)).toBe(false);
       // Revertir.
       await api(tokens.admin).post(`/api/mantenimientos/${id}/reversar`, { motivo: MOTIVO }).expect(200);
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`).expect(200);
+      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, INICIO()).expect(200);
     });
 
     it('no hay borrado físico: DELETE ya no existe', async () => {
@@ -277,10 +282,11 @@ describe('Editar con motivo y anular (e2e)', () => {
         data: { ...datosActivo, codigo: 'SRV-CON-HISTORIAL' } as never,
       });
       const [plan] = (await api(tokens.analista).post('/api/respaldos/planes', { ...PLAN, activoIds: [otro.id] }).expect(201)).body as { id: number }[];
+      const planMantenimiento = await prisma.planMantenimiento.create({
+        data: { activoId: otro.id, tipo: 'PREVENTIVO', frecuencia: 'UNICA', fechaInicio: new Date(HACE_UNA_HORA), responsable: 'Soporte', actividades: 'Limpieza' },
+      });
       const mantenimiento = await crear('/api/mantenimientos', {
-        activoId: otro.id,
-        tipo: 'PREVENTIVO',
-        actividad: 'Limpieza',
+        planId: planMantenimiento.id,
         fecha: HACE_UNA_HORA,
         fechaLimite: MANANA,
       });

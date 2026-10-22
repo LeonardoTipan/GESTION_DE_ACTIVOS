@@ -1,8 +1,9 @@
 import {
   ApiProperty,
   ApiPropertyOptional,
-  OmitType,
-  PartialType, IntersectionType } from '@nestjs/swagger';
+  IntersectionType,
+  PartialType,
+} from '@nestjs/swagger';
 import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
 import { Type } from 'class-transformer';
 import {
@@ -30,13 +31,8 @@ import {
 /** Margen para diferencias de reloj entre el equipo del usuario y el servidor. */
 const AHORA_CON_MARGEN = () => new Date(Date.now() + 5 * 60 * 1000);
 
-/** Programar: crea el mantenimiento en fase PROGRAMADO. */
-export class ProgramarMantenimientoDto {
-  @ApiProperty({ example: 5, description: 'ID de un activo vigente.' })
-  @IsInt()
-  @Min(1)
-  activoId: number;
-
+/** Datos PREVISTOS de una ejecución (los copia de su planificación al crearla). */
+export class DatosPrevistosEjecucionDto {
   @ApiProperty({ enum: TipoMantenimiento, example: 'PREVENTIVO' })
   @IsEnum(TipoMantenimiento)
   tipo: TipoMantenimiento;
@@ -55,7 +51,7 @@ export class ProgramarMantenimientoDto {
     type: String,
     format: 'date-time',
     example: '2026-10-15T08:00:00.000Z',
-    description: 'Inicio previsto (puede ser futuro).',
+    description: 'Inicio previsto de esta ejecución (puede ser futuro).',
   })
   @Type(() => Date)
   @IsDate()
@@ -65,34 +61,127 @@ export class ProgramarMantenimientoDto {
     type: String,
     format: 'date-time',
     example: '2026-10-17T18:00:00.000Z',
-    description: 'Límite previsto para completarlo: no anterior al inicio previsto.',
+    description: 'Límite previsto para completarla: no anterior al inicio previsto.',
   })
   @Type(() => Date)
   @IsDate()
   fechaLimite: Date;
 }
 
-/** Edición: tipo, actividad y fecha programada; solo mientras está PROGRAMADO. */
-/** Toda edición exige motivo: se conserva la versión anterior. */
-export class EditarMantenimientoDto extends IntersectionType(
-  PartialType(OmitType(ProgramarMantenimientoDto, ['activoId'] as const)),
-  MotivoCambioDto,
-) {}
+/**
+ * Nueva EJECUCIÓN (situación Pendiente) de una planificación existente. El activo,
+ * el tipo y la descripción prevista salen de la planificación: la ejecución no se
+ * puede asociar a otra planificación ni a otro activo.
+ */
+export class ProgramarMantenimientoDto {
+  @ApiProperty({ example: 3, description: 'Planificación (vigente) que origina la ejecución.' })
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  planId: number;
+
+  @ApiPropertyOptional({ example: 5, description: 'Si se envía, debe ser el activo de la planificación.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  activoId?: number;
+
+  @ApiProperty({ type: String, format: 'date-time', description: 'Inicio previsto de esta ejecución.' })
+  @Type(() => Date)
+  @IsDate()
+  fecha: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Límite previsto; por defecto, inicio + plazo de la planificación.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaLimite?: Date;
+}
+
+/** Edición de lo previsto (tipo, actividad, fechas previstas); solo mientras está Pendiente. Exige motivo. */
+export class EditarMantenimientoDto extends IntersectionType(PartialType(DatosPrevistosEjecucionDto), MotivoCambioDto) {}
+
+/**
+ * Corrección de lo EJECUTADO por un usuario autorizado (p. ej. se registra días
+ * después): fechas reales, persona encargada, descripción, observación,
+ * verificable y, con justificación, el tipo realmente ejecutado. En ejecución:
+ * admin y analista; completada: solo admin. Exige motivo y queda auditada.
+ */
+export class CorregirEjecucionDto extends MotivoCambioDto {
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha REAL de mantenimiento.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaInicio?: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha REAL de finalización (solo en una completada).' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaFin?: Date;
+
+  @ApiPropertyOptional({ description: 'Persona encargada.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  tecnico?: string;
+
+  @ApiPropertyOptional({ enum: TipoMantenimiento, description: 'Tipo realmente ejecutado, si difiere del previsto (validado por la clase del activo).' })
+  @IsOptional()
+  @IsEnum(TipoMantenimiento)
+  tipo?: TipoMantenimiento;
+
+  @ApiPropertyOptional({ maxLength: 191, description: 'Descripción de la ejecución (solo en una completada).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  resultado?: string;
+
+  @ApiPropertyOptional({ enum: EstadoEquipo, description: 'Condición del equipo (solo en una completada).' })
+  @IsOptional()
+  @IsEnum(EstadoEquipo)
+  estadoEquipo?: EstadoEquipo;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  observaciones?: string;
+
+  @ApiPropertyOptional({ description: 'Verificable.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  evidencia?: string;
+
+  @ApiPropertyOptional({ description: 'Repositorio del verificable.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  repositorioVerificable?: string;
+}
 
 /** Iniciar: PROGRAMADO → EN_EJECUCION. */
 export class IniciarMantenimientoDto {
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: String,
     format: 'date-time',
-    description: 'Si no se envía, se usa la hora actual del servidor.',
+    description: 'Fecha REAL de mantenimiento: cuándo empezó efectivamente el trabajo (obligatoria; puede ser anterior al registro; no futura).',
   })
-  @IsOptional()
   @Type(() => Date)
   @IsDate()
   @MaxDate(AHORA_CON_MARGEN, {
     message: 'fechaInicio no puede estar en el futuro',
   })
-  fechaInicio?: Date;
+  fechaInicio: Date;
 
   @ApiPropertyOptional({
     description: 'Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres).',
@@ -102,7 +191,7 @@ export class IniciarMantenimientoDto {
   @MaxLength(2000)
   motivoExcepcion?: string;
 
-  @ApiPropertyOptional({ example: 'jperez', description: 'Técnico que realiza el trabajo.' })
+  @ApiPropertyOptional({ example: 'jperez', description: 'Persona encargada que realiza el trabajo.' })
   @IsOptional()
   @Trim()
   @IsString()
@@ -115,6 +204,7 @@ export class FinalizarMantenimientoDto {
   @ApiProperty({
     example: 'Firmware actualizado a v2.4; sin incidencias.',
     maxLength: 191,
+    description: 'Descripción de la EJECUCIÓN: el trabajo realmente realizado (no sustituye a la planificada).',
   })
   @Trim()
   @IsString()
@@ -125,23 +215,22 @@ export class FinalizarMantenimientoDto {
   @ApiProperty({
     enum: EstadoEquipo,
     example: 'OPERATIVO',
-    description: 'Cómo quedó el equipo tras el mantenimiento.',
+    description: 'Condición del equipo tras el mantenimiento (Operativo / Requiere cambio…). No es la situación de la ejecución.',
   })
   @IsEnum(EstadoEquipo)
   estadoEquipo: EstadoEquipo;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     type: String,
     format: 'date-time',
-    description: 'Si no se envía, se usa la hora actual del servidor.',
+    description: 'Fecha REAL de finalización (obligatoria; no anterior a la fecha real de mantenimiento; no futura).',
   })
-  @IsOptional()
   @Type(() => Date)
   @IsDate()
   @MaxDate(AHORA_CON_MARGEN, {
     message: 'fechaFin no puede estar en el futuro',
   })
-  fechaFin?: Date;
+  fechaFin: Date;
 
   @ApiPropertyOptional({
     example: 'jperez',
@@ -189,12 +278,19 @@ export class FinalizarMantenimientoDto {
   @MaxLength(2000)
   observaciones?: string;
 
-  @ApiPropertyOptional({ example: 'Informe técnico MT-031', description: 'Referencia a la evidencia.' })
+  @ApiPropertyOptional({ example: 'Informe de Mantenimiento a Servidores y Servicios 01', description: 'VERIFICABLE: nombre del informe o documento que prueba la ejecución.' })
   @IsOptional()
   @Trim()
   @IsString()
   @MaxLength(191)
   evidencia?: string;
+
+  @ApiPropertyOptional({ example: 'Carpeta Compartida TICs/Interno', description: 'REPOSITORIO del verificable: carpeta compartida o URL http(s).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  repositorioVerificable?: string;
 
   @ApiPropertyOptional({
     description: 'Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres).',

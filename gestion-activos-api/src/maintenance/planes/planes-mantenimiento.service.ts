@@ -30,20 +30,28 @@ import type {
   VerificacionMantenimientoDto,
 } from './dto.js';
 import { siguienteFecha } from './frecuencia.js';
+import { exigirTipoPermitido, rangoDe, semestreDe } from '../planificacion.js';
+import type { TipoMantenimiento } from '../../generated/prisma/enums.js';
 import { plazoOExcepcion } from '../../common/plazos/plazos.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import { agendaMantenimientos } from './agenda.js';
 
-const INCLUDE = { activo: SELECT_ACTIVO, _count: { select: { mantenimientos: true } } } as const;
+const INCLUDE = {
+  activo: SELECT_ACTIVO,
+  // Para contar las ejecuciones (todas) y las completadas sin una consulta por plan.
+  mantenimientos: { select: { fase: true, anuladoEn: true } },
+} as const;
 type PlanConActivo = Prisma.PlanMantenimientoGetPayload<{ include: typeof INCLUDE }>;
 
 const aDto = (p: PlanConActivo, ahora = new Date()): PlanMantenimientoDto => {
-  const { _count, ...plan } = p;
+  const { mantenimientos, ...plan } = p;
   return {
     ...plan,
     proximaFecha: plan.proximaFecha as Date,
     activo: activoBreve(plan.activo),
-    intervenciones: _count.mantenimientos,
+    intervenciones: mantenimientos.length,
+    ejecucionesCompletadas: mantenimientos.filter((m) => m.fase === 'FINALIZADO' && !m.anuladoEn).length,
+    semestrePlanificado: semestreDe(plan.fechaInicio),
     vencido:
       plan.estado === 'VIGENTE' &&
       !plan.anuladoEn &&
@@ -76,12 +84,17 @@ export class PlanesMantenimientoService {
       ...(q.responsable ? { responsable: { contains: q.responsable } } : {}),
       ...(q.vencidos ? { ...VIGENTE, proximaFecha: { lt: ahora } } : {}),
     };
+    if (q.semestre && !q.anio) throw new BadRequestException('El semestre exige el año.');
+    if (q.anio) {
+      const { desde, hasta } = rangoDe(q.anio, q.semestre);
+      where.fechaInicio = { gte: desde, lt: hasta };
+    }
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.planMantenimiento.count({ where }),
       this.prisma.planMantenimiento.findMany({
         where,
         include: INCLUDE,
-        orderBy: [{ proximaFecha: 'asc' }, { id: 'asc' }],
+        orderBy: [{ fechaInicio: 'desc' }, { id: 'desc' }],
         skip: skipFor(q),
         take: q.limit,
       }),
@@ -98,11 +111,16 @@ export class PlanesMantenimientoService {
   async crear(dto: CrearPlanesMantenimientoDto): Promise<PlanMantenimientoDto[]> {
     const { activoIds, ...parametros } = dto;
     for (const id of activoIds) await this.activos.exigirOperativo(id);
+    await this.exigirTipoParaActivos(activoIds, dto.tipo);
     await this.exigirSinPlanVigente(activoIds, dto.tipo);
     const creados = await this.prisma.$transaction((tx) =>
       Promise.all(
         activoIds.map((activoId) =>
-          tx.planMantenimiento.create({ data: { ...parametros, activoId }, include: INCLUDE }),
+          // La primera intervención prevista es la de la fecha de inicio planificada.
+          tx.planMantenimiento.create({
+            data: { ...parametros, proximaFecha: parametros.proximaFecha ?? parametros.fechaInicio, activoId },
+            include: INCLUDE,
+          }),
         ),
       ),
     );
@@ -113,6 +131,7 @@ export class PlanesMantenimientoService {
     const { motivoCambio, ...datos } = dto;
     const actual = await this.findOne(id);
     const tipo = datos.tipo ?? actual.tipo;
+    if (datos.tipo) await this.exigirTipoParaActivos([actual.activoId], datos.tipo);
     const pasaAVigente = (datos.estado ?? actual.estado) === 'VIGENTE';
     if (pasaAVigente && (datos.estado === 'VIGENTE' || datos.tipo)) {
       await this.activos.exigirOperativo(actual.activoId);
@@ -140,24 +159,35 @@ export class PlanesMantenimientoService {
    * Programa la intervención prevista (capa 2) y adelanta la próxima fecha
    * según la frecuencia (o la deja vacía si el plan era de una sola vez).
    */
-  async programar(id: number, fecha?: Date): Promise<{ mantenimientoId: number; plan: PlanMantenimientoDto }> {
+  async programar(
+    id: number,
+    opciones: { fecha?: Date; adicional?: boolean } = {},
+  ): Promise<{ mantenimientoId: number; plan: PlanMantenimientoDto }> {
+    const { fecha, adicional = false } = opciones;
     const plan = await this.findOne(id);
     if (plan.anuladoEn || plan.estado !== 'VIGENTE') {
-      throw new ConflictException(`El plan ${id} no está vigente.`);
+      throw new ConflictException(`La planificación ${id} no está vigente.`);
     }
-    if (!plan.proximaFecha) {
-      throw new ConflictException(`El plan ${id} no tiene más intervenciones previstas.`);
+    if (adicional && !fecha) {
+      throw new BadRequestException('Una ejecución adicional exige su fecha prevista.');
+    }
+    if (!adicional && !plan.proximaFecha) {
+      throw new ConflictException(
+        `La planificación ${id} no tiene más intervenciones previstas: registre una ejecución adicional si hace falta.`,
+      );
     }
     await this.activos.exigirOperativo(plan.activoId);
-    const prevista = new Date(plan.proximaFecha);
+    const prevista = adicional ? fecha! : new Date(plan.proximaFecha);
     const mantenimientoId = await this.prisma.$transaction(async (tx) => {
-      // Condicional: si otra petición ya programó esta fecha, no se duplica.
-      const { count } = await tx.planMantenimiento.updateMany({
-        where: { id, proximaFecha: prevista, ...VIGENTE },
-        data: { proximaFecha: siguienteFecha(prevista, plan.frecuencia) },
-      });
-      if (count === 0) {
-        throw new ConflictException(`El plan ${id} cambió mientras se programaba; vuelve a consultarlo.`);
+      if (!adicional) {
+        // Condicional: si otra petición ya programó esta fecha, no se duplica.
+        const { count } = await tx.planMantenimiento.updateMany({
+          where: { id, proximaFecha: prevista, ...VIGENTE },
+          data: { proximaFecha: siguienteFecha(prevista, plan.frecuencia) },
+        });
+        if (count === 0) {
+          throw new ConflictException(`La planificación ${id} cambió mientras se programaba; vuelve a consultarla.`);
+        }
       }
       // Intervalo previsto: desde el inicio, con el plazo del plan.
       const inicio = fecha ?? prevista;
@@ -274,11 +304,20 @@ export class PlanesMantenimientoService {
     };
   }
 
+  /** Tipo permitido para la clase (hardware/software) de la categoría de cada activo. */
+  private async exigirTipoParaActivos(activoIds: number[], tipo: TipoMantenimiento): Promise<void> {
+    const activos = await this.prisma.activo.findMany({
+      where: { id: { in: activoIds } },
+      select: { codigo: true, categoria: { select: { nombre: true, claseMantenimiento: true } } },
+    });
+    for (const a of activos) exigirTipoPermitido(tipo, a);
+  }
+
   private async exigirSinPlanVigente(activoIds: number[], tipo: string, excepto?: number) {
     const con = await this.prisma.planMantenimiento.findMany({
       where: {
         activoId: { in: activoIds },
-        tipo: tipo as 'PREVENTIVO' | 'CORRECTIVO',
+        tipo: tipo as TipoMantenimiento,
         ...VIGENTE,
         id: excepto ? { not: excepto } : undefined,
       },

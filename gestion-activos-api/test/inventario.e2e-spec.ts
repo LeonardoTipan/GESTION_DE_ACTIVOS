@@ -66,6 +66,8 @@ describe('Inventario (e2e)', () => {
         // Control de acceso: una categoría nueva no es elegible hasta que el admin lo marque.
         admiteAccesoLogico: false,
         admiteAccesoFisico: false,
+        // Mantenimiento: sin clasificar hasta que el admin elija hardware o software.
+        claseMantenimiento: null,
       });
       categoriaId = res.body.id;
     });
@@ -100,6 +102,14 @@ describe('Inventario (e2e)', () => {
         })
         .expect(200);
       expect(res.body.descripcion).toBe('Servidores y estaciones');
+    });
+
+    it('admin clasifica la categoría para el mantenimiento (hardware/software); valor inválido → 400', async () => {
+      const url = `/api/categorias/${categoriaId}`;
+      await api(tokens.admin).patch(url, { claseMantenimiento: 'FIRMWARE' }).expect(400);
+      const res = await api(tokens.admin).patch(url, { claseMantenimiento: 'HARDWARE' }).expect(200);
+      expect(res.body.claseMantenimiento).toBe('HARDWARE');
+      await api(tokens.analista).patch(url, { claseMantenimiento: 'SOFTWARE' }).expect(403);
     });
 
     it('criticidades: alta, duplicado → 409, listado', async () => {

@@ -4,9 +4,12 @@ import { ActivoBreveDto } from '../../../common/dto/registro.dto.js';
 import type { CierreMantenimiento } from '../../planes/frecuencia.js';
 import {
   EstadoEquipo,
+  EstadoPlan,
   FaseMantenimiento,
+  FrecuenciaMantenimiento,
   TipoMantenimiento,
 } from '../../../generated/prisma/enums.js';
+import { SemestreDto } from '../../planes/dto.js';
 
 /** Datos mínimos del activo, para mostrarlo sin otra petición. */
 export class ActivoMantenidoDto {
@@ -18,6 +21,18 @@ export class ActivoMantenidoDto {
 
   @ApiProperty({ example: 'Servidor de base de datos' })
   nombre: string;
+}
+
+/** Lo PLANIFICADO de la ejecución, para mostrarlo junto a lo ejecutado. */
+export class PlanificacionBreveDto {
+  @ApiProperty() id: number;
+  @ApiProperty({ enum: FrecuenciaMantenimiento, description: 'Período.' }) frecuencia: FrecuenciaMantenimiento;
+  @ApiProperty({ enum: TipoMantenimiento, description: 'Tipo planificado.' }) tipo: TipoMantenimiento;
+  @ApiProperty({ type: String, format: 'date-time', description: 'Fecha de inicio planificada.' }) fechaInicio: Date;
+  @ApiProperty({ description: 'Asignado.' }) responsable: string;
+  @ApiProperty({ description: 'Descripción planificada.' }) actividades: string;
+  @ApiProperty({ type: Number, description: 'Días de plazo.' }) plazoDias: number;
+  @ApiProperty({ enum: EstadoPlan }) estado: EstadoPlan;
 }
 
 export class MantenimientoDto {
@@ -75,7 +90,7 @@ export class MantenimientoDto {
   })
   resultado: string | null;
 
-  @ApiProperty({ type: String, format: 'date-time' })
+  @ApiProperty({ type: String, format: 'date-time', description: 'Fecha de registro (automática, la pone el servidor).' })
   createdAt: Date;
 
   @ApiProperty({ type: String, format: 'date-time' })
@@ -90,7 +105,17 @@ export class MantenimientoDto {
   @ApiProperty({ type: Number, nullable: true }) costo: number | null;
   @ApiProperty({ type: String, nullable: true }) repuestos: string | null;
   @ApiProperty({ type: String, nullable: true }) observaciones: string | null;
-  @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Verificable (nombre del informe o acta).' }) evidencia: string | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Repositorio del verificable: carpeta o URL http(s).' })
+  repositorioVerificable: string | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Momento de la cancelación (no es una fecha real de fin).' })
+  fechaCancelacion: Date | null;
+  @ApiProperty({ type: () => PlanificacionBreveDto, nullable: true, description: 'Planificación de origen; null = registro anterior sin planificación.' })
+  plan: PlanificacionBreveDto | null;
+  @ApiProperty({ type: () => SemestreDto, nullable: true, description: 'Semestre PLANIFICADO (fecha de inicio de la planificación).' })
+  semestrePlanificado: SemestreDto | null;
+  @ApiProperty({ type: () => SemestreDto, nullable: true, description: 'Semestre REAL (fecha real de mantenimiento); null si no se ha iniciado.' })
+  semestreReal: SemestreDto | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite previsto de la ejecución.' })
   fechaLimite: Date | null;
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Límite antes de ampliarlo.' })

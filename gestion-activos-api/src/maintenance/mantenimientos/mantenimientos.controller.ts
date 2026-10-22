@@ -33,6 +33,7 @@ import { ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
 import {
   AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
+  CorregirEjecucionDto,
   EditarMantenimientoDto,
   FinalizarMantenimientoDto,
   IniciarMantenimientoDto,
@@ -90,8 +91,8 @@ export class MantenimientosController {
   }
 
   @ApiOperation({
-    summary: 'Programar mantenimiento (admin, analista)',
-    description: 'Crea el mantenimiento en fase PROGRAMADO.',
+    summary: 'Nueva ejecución de una planificación (admin, analista)',
+    description: 'Crea la ejecución en situación Pendiente (PROGRAMADO). Activo, tipo y descripción prevista salen de la planificación vigente.',
   })
   @ApiCreatedResponse({ type: MantenimientoDto })
   @ApiBadRequestResponse({
@@ -185,8 +186,28 @@ export class MantenimientosController {
   cancelar(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: CancelarMantenimientoDto,
+    @CurrentUser() usuario: AuthUser,
   ): Promise<MantenimientoDto> {
-    return this.mantenimientos.cancelar(id, dto);
+    return this.mantenimientos.cancelar(id, dto, usuario);
+  }
+
+  @ApiOperation({
+    summary: 'Corregir lo ejecutado (en ejecución: admin y analista; completada: solo admin)',
+    description:
+      'Fechas reales, persona encargada, descripción, observación, verificable, repositorio, condición del equipo y tipo ' +
+      'realmente ejecutado. Exige motivoCambio; sube la versión y queda en la auditoría con el usuario de la sesión.',
+  })
+  @ApiOkResponse({ type: MantenimientoDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Pendiente, cancelado, anulado o modificado entretanto.' })
+  @Roles('admin', 'analista')
+  @Patch(':id/ejecucion')
+  corregirEjecucion(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: CorregirEjecucionDto,
+    @CurrentUser() usuario: AuthUser,
+  ): Promise<MantenimientoDto> {
+    return this.mantenimientos.corregirEjecucion(id, dto, usuario);
   }
 
   @ApiOperation({
