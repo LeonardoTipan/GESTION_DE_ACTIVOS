@@ -75,6 +75,14 @@ Fuentes:
 | Diagnóstico, duración, costo, repuestos | Ejecución | Existente | Iguales | Conservados | Ya exigidos al completar |
 | Fecha Planificada, Fecha Ejecutada Renovación | — | Excel (Matriz de Renovación) | — | **Fuera de alcance** | Decisión del usuario: la renovación no forma parte de este módulo |
 
+### Clase del activo en la interfaz
+
+- Al planificar se elige **primero el activo**. Cada fila del selector y la planificación muestran su clase según la categoría: **Hardware · físico**, **Software · lógico** o **Sin clasificar**. Es la misma lógica de marcas por categoría que en Control de acceso: la decide el admin en Catálogos.
+- El selector **Tipo de mantenimiento** está deshabilitado hasta elegir un activo y luego ofrece **solo** los tipos de su clase.
+- Una planificación agrupa activos de **una sola clase**: los de otra clase no se pueden marcar.
+- La API valida lo mismo por su cuenta (400 «no corresponde a hardware/software»), así que la regla no depende de la interfaz.
+- La clase también se muestra en la tabla de planificaciones, en «Nueva ejecución» y en el detalle de la ejecución.
+
 ## 3. Año y semestre
 
 - El **semestre planificado** se deriva de `plan_mantenimiento.fechaInicio`; el **semestre real**, de `mantenimiento.fechaInicio`. Ninguno se almacena.

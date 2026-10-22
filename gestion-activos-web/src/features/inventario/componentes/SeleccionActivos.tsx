@@ -38,6 +38,10 @@ interface Props {
   multiple?: boolean
   /** Regla propia del módulo: el motivo por el que un activo no se puede elegir, o null. */
   noElegible?: (activo: Activo) => string | null
+  /** Insignia propia del módulo junto a cada activo (p. ej. su clase hardware/software). */
+  insignia?: (activo: Activo) => ReactNode
+  /** Recibe los activos elegidos (con sus datos) cada vez que cambia la selección. */
+  onElegidos?: (activos: Activo[]) => void
   error?: ReactNode
   /** Texto de ayuda bajo la lista. */
   ayuda?: ReactNode
@@ -57,6 +61,8 @@ export function SeleccionActivos({
   onChange,
   multiple = true,
   noElegible = () => null,
+  insignia,
+  onElegidos,
   error,
   ayuda,
 }: Props) {
@@ -84,6 +90,13 @@ export function SeleccionActivos({
   const [conocidos, setConocidos] = useState<ReadonlyMap<number, Activo>>(new Map())
   const recordar = (nuevos: Activo[]) =>
     setConocidos((m) => new Map([...m, ...nuevos.map((a) => [a.id, a] as const)]))
+  // Cambia la selección y avisa con los datos de cada activo (los recién elegidos aún no están en «conocidos»).
+  const cambiar = (ids: number[], nuevos: Activo[] = []) => {
+    onChange(ids)
+    if (!onElegidos) return
+    const mapa = new Map([...conocidos, ...nuevos.map((a) => [a.id, a] as const)])
+    onElegidos(ids.flatMap((id) => mapa.get(id) ?? []))
+  }
   const visibles = new Set((lista.data?.data ?? []).map((a) => a.id))
   const fuera = value.filter((id) => !visibles.has(id))
 
@@ -99,7 +112,7 @@ export function SeleccionActivos({
       recordar(criticos)
       const elegibles = criticos.filter((a) => !noElegible(a)).map((a) => a.id)
       const descartados = criticos.length - elegibles.length
-      onChange(agregar(value, elegibles))
+      cambiar(agregar(value, elegibles), criticos)
       setAviso(
         criticos.length === 0
           ? `No hay activos críticos operativos${categoriaId ? ' en esta categoría' : ''}.`
@@ -139,7 +152,7 @@ export function SeleccionActivos({
           size="compact-xs"
           variant="default"
           onClick={() => {
-            onChange([])
+            cambiar([])
             setAviso(null)
           }}
         >
@@ -205,7 +218,7 @@ export function SeleccionActivos({
                   onChange={(e) => {
                     const valor = e.currentTarget.checked
                     if (valor) recordar([a])
-                    onChange(alternar(value, a.id, valor, multiple))
+                    cambiar(alternar(value, a.id, valor, multiple), [a])
                   }}
                   label={
                     <Group gap={6} wrap="nowrap">
@@ -213,6 +226,7 @@ export function SeleccionActivos({
                         {a.codigo} · {a.nombre}
                       </Text>
                       <BadgeCriticidad nivel={a.criticidad.nivel} />
+                      {insignia?.(a)}
                     </Group>
                   }
                   description={motivo ?? `${a.categoria.nombre}${a.estado ? ` · ${a.estado}` : ''}`}
@@ -237,7 +251,7 @@ export function SeleccionActivos({
           </Text>
           <Group gap={4}>
             {fuera.map((id) => (
-              <Pill key={id} size="xs" withRemoveButton onRemove={() => onChange(value.filter((x) => x !== id))}>
+              <Pill key={id} size="xs" withRemoveButton onRemove={() => cambiar(value.filter((x) => x !== id))}>
                 {etiquetaActivo(id)}
               </Pill>
             ))}

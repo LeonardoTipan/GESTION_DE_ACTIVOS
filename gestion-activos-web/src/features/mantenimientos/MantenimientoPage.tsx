@@ -22,6 +22,7 @@ import { Link, useParams } from 'react-router'
 import { formatearDia, formatearFechaHora } from '../../shared/formato.ts'
 import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
+import { useCategorias } from '../inventario/api/catalogos.ts'
 import {
   useAnulacionMantenimiento,
   useMantenimiento,
@@ -29,6 +30,7 @@ import {
 } from './api/mantenimientos.ts'
 import { EditarMantenimientoModal } from './componentes/EditarMantenimientoModal.tsx'
 import {
+  BadgeClase,
   BadgeEstadoEquipo,
   BadgeFase,
   BadgeTipo,
@@ -139,6 +141,7 @@ export function MantenimientoPage() {
   const id = Number(useParams().id)
   const { data: m, isPending, error } = useMantenimiento(id)
   const puedeOperar = usePuedeOperar()
+  const categorias = useCategorias()
   const esAdmin = usePuedeAdministrar()
   const anulacion = useAnulacionMantenimiento()
   const [editando, edicion] = useDisclosure()
@@ -184,6 +187,7 @@ export function MantenimientoPage() {
           <Group gap="sm">
             <Title order={2}>Ejecución #{m.id}</Title>
             <BadgeTipo tipo={m.tipo} />
+            <BadgeClase clase={categorias.data?.find((c) => c.id === m.activo.categoriaId)?.claseMantenimiento ?? null} />
             <BadgeFase fase={m.fase} />
             {m.vencido && <BadgeVencido />}
           </Group>

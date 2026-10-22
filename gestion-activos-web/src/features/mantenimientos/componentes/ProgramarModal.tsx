@@ -11,7 +11,9 @@ import {
   useProgramarMantenimiento,
   type Mantenimiento,
 } from '../api/mantenimientos.ts'
+import { useCategorias } from '../../inventario/api/catalogos.ts'
 import { INFO_FRECUENCIA, INFO_TIPO } from '../fases.ts'
+import { BadgeClase } from './Badges.tsx'
 
 import { instante } from '../../../shared/zona.ts'
 interface Props {
@@ -42,6 +44,7 @@ export function ProgramarModal({ opened, onClose, ...resto }: Props) {
 
 function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omit<Props, 'opened'>) {
   const programar = useProgramarMantenimiento()
+  const categorias = useCategorias()
   const [busqueda, setBusqueda] = useState('')
   const [q] = useDebouncedValue(busqueda.trim(), 300)
   const planes = usePlanesMantenimiento({
@@ -117,9 +120,12 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
         />
         {plan && (
           <Card withBorder padding="sm" bg="var(--mantine-color-default-hover)">
-            <Text size="sm">
-              <b>Activo:</b> {plan.activo.codigo} · {plan.activo.nombre} ({plan.activo.categoria})
-            </Text>
+            <Group gap="xs">
+              <Text size="sm">
+                <b>Activo:</b> {plan.activo.codigo} · {plan.activo.nombre} ({plan.activo.categoria})
+              </Text>
+              <BadgeClase clase={categorias.data?.find((c) => c.id === plan.activo.categoriaId)?.claseMantenimiento ?? null} size="xs" />
+            </Group>
             <Text size="sm">
               <b>Asignado:</b> {plan.responsable} · <b>Plazo:</b> {plan.plazoDias} día(s)
             </Text>

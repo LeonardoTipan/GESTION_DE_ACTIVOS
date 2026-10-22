@@ -39,6 +39,7 @@ import {
 } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
+import type { Activo } from '../../inventario/api/activos.ts'
 import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import { useCategorias } from '../../inventario/api/catalogos.ts'
 import {
@@ -54,7 +55,7 @@ import {
   type TipoMantenimiento,
 } from '../api/mantenimientos.ts'
 import { etiquetaSemestre, FRECUENCIAS, INFO_CLASE, INFO_FRECUENCIA, INFO_TIPO, TIPOS, tiposPermitidos } from '../fases.ts'
-import { BadgeTipo } from './Badges.tsx'
+import { BadgeClase, BadgeTipo } from './Badges.tsx'
 
 const ETIQUETAS_PLAN: Record<string, string> = {
   tipo: 'Tipo',
@@ -207,6 +208,8 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
   const crear = useCrearPlanesMantenimiento()
   const modificar = useModificarPlanMantenimiento()
   const [seleccion, setSeleccion] = useState<number[]>([])
+  // Activos elegidos con sus datos: su categoría dice si son hardware (físico) o software (lógico).
+  const [elegidos, setElegidos] = useState<Activo[]>([])
   const vigentes = usePlanesMantenimiento({ estado: 'VIGENTE', page: 1, limit: 100 })
   const categorias = useCategorias()
   const claseDe = (categoriaId: number): ClaseMantenimiento | null =>
@@ -227,6 +230,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
         }
       : { tipo: 'PREVENTIVO', frecuencia: 'SEMESTRAL', fechaInicio: null, proximaFecha: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
     validate: {
+      tipo: (v) => (clase !== undefined && !tiposPermitidos(clase).includes(v) ? 'Este tipo no corresponde a la clase del activo' : null),
       fechaInicio: (v) => (v ? null : 'Indica la fecha de inicio planificada'),
       plazoDias: (v) => (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 365 ? 'Entre 1 y 365 días' : null),
       responsable: (v) => (!v.trim() ? 'Obligatorio' : v.length > 191 ? 'Máximo 191' : null),
@@ -264,6 +268,10 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
       notifications.show({ color: 'red', title: 'Seleccione al menos un activo', message: 'Marque los activos a incluir.' })
       return
     }
+    if (mezcla) {
+      notifications.show({ color: 'red', title: 'Activos de distinta clase', message: 'Una planificación agrupa solo activos de hardware o solo de software.' })
+      return
+    }
     crear.mutate(
       { ...parametros, activoIds: seleccion },
       {
@@ -279,43 +287,106 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
   const conPlanDelTipo = new Set(
     (vigentes.data?.data ?? []).filter((p) => !p.anuladoEn && p.tipo === form.values.tipo).map((p) => p.activoId),
   )
-  // Al modificar, solo los tipos de la clase del activo. Al crear, todos: la lista de
-  // activos deja elegir solo aquellos cuya clase admite el tipo elegido.
-  const tipos = plan ? tiposPermitidos(claseDe(plan.activo.categoriaId)) : TIPOS
+  // Clase de la planificación: la del activo (al modificar) o la del primer activo elegido
+  // (undefined = aún no se eligió ninguno). Decide los tipos que se ofrecen.
+  const clase: ClaseMantenimiento | null | undefined = plan
+    ? claseDe(plan.activo.categoriaId)
+    : elegidos.length > 0
+      ? claseDe(elegidos[0].categoriaId)
+      : undefined
+  const tipos = clase === undefined ? [] : tiposPermitidos(clase)
+  const mezcla = new Set(elegidos.map((a) => claseDe(a.categoriaId))).size > 1
+  const etiquetaClase = (c: ClaseMantenimiento | null) => (c ? INFO_CLASE[c].toLowerCase() : 'sin clasificar')
+  const alElegir = (activos: Activo[]) => {
+    setElegidos(activos)
+    const nueva = activos.length > 0 ? claseDe(activos[0].categoriaId) : undefined
+    // Si el tipo elegido no vale para la nueva clase, vuelve a uno común a todas.
+    if (nueva !== undefined && !tiposPermitidos(nueva).includes(form.values.tipo)) form.setFieldValue('tipo', 'PREVENTIVO')
+  }
+  const duplicados = elegidos.filter((a) => conPlanDelTipo.has(a.id))
   const semestre = form.values.fechaInicio ? etiquetaSemestre(form.values.fechaInicio.slice(0, 10)) : null
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
         {plan ? (
-          <TextInput label="Activo" value={`${plan.activo.codigo} · ${plan.activo.nombre}`} disabled description="El activo no se sustituye: anule el plan y cree otro." />
+          <Group gap="sm" align="flex-end" wrap="nowrap">
+            <TextInput
+              label="Activo"
+              value={`${plan.activo.codigo} · ${plan.activo.nombre}`}
+              disabled
+              description="El activo no se sustituye: anule la planificación y cree otra."
+              style={{ flex: 1 }}
+            />
+            <BadgeClase clase={clase ?? null} size="lg" />
+          </Group>
         ) : (
           <SeleccionActivos
             titulo="Seleccionar activos para mantenimiento"
             etiqueta="Activos"
             value={seleccion}
             onChange={setSeleccion}
-            // Reglas del módulo: un plan vigente por activo y tipo, y el tipo debe ser de la
-            // clase (hardware/software) de su categoría. La condición "Malo" no excluye.
+            onElegidos={alElegir}
+            insignia={(a) => <BadgeClase clase={claseDe(a.categoriaId)} size="xs" />}
+            // Reglas del módulo: todos los activos de una planificación son de la misma clase
+            // (hardware o software) y no tienen ya una planificación vigente de ese tipo.
             noElegible={(a) => {
-              const tipo = INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()
-              if (conPlanDelTipo.has(a.id)) return `Ya tiene un plan ${tipo} vigente.`
-              const clase = claseDe(a.categoriaId)
-              if (!tiposPermitidos(clase).includes(form.values.tipo)) {
-                return clase ? `El tipo ${tipo} no es de ${INFO_CLASE[clase].toLowerCase()}.` : `Categoría sin clasificar: solo preventivo o correctivo.`
+              const suya = claseDe(a.categoriaId)
+              if (clase !== undefined && suya !== clase) {
+                return `Es ${etiquetaClase(suya)}; esta planificación es de ${etiquetaClase(clase)}.`
               }
+              if (conPlanDelTipo.has(a.id)) return `Ya tiene una planificación ${INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()} vigente.`
               return null
             }}
-            ayuda="Solo se ofrecen activos operativos (también en condición «Malo»). Se crea un plan por activo con los parámetros siguientes."
+            error={mezcla ? 'Hay activos de distinta clase: deje solo los de hardware o solo los de software.' : undefined}
+            ayuda="Elija primero los activos: su clase (hardware o software) decide los tipos de mantenimiento. Solo se ofrecen activos operativos (también en condición «Malo»)."
           />
+        )}
+        {!plan && (
+          <Card withBorder padding="xs">
+            <Group gap="sm">
+              <Text size="sm" fw={500}>
+                Clase del activo:
+              </Text>
+              {clase === undefined ? (
+                <Text size="sm" c="dimmed">
+                  elija un activo
+                </Text>
+              ) : (
+                <>
+                  <BadgeClase clase={clase} />
+                  <Text size="xs" c="dimmed">
+                    Tipos permitidos: {tipos.map((t) => INFO_TIPO[t].etiqueta).join(', ')}
+                  </Text>
+                </>
+              )}
+            </Group>
+          </Card>
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <Select
-            label="Tipo"
+            label="Tipo de mantenimiento"
             withAsterisk
-            description="Hardware: preventivo, correctivo, predictivo · Software: preventivo, correctivo, perfectivo, adaptativo, evolutivo"
-            data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta, disabled: !tipos.includes(t) }))}
+            placeholder={clase === undefined ? 'Elija primero el activo' : undefined}
+            disabled={clase === undefined}
+            description={
+              clase === 'HARDWARE'
+                ? 'Hardware (físico): preventivo, correctivo, predictivo'
+                : clase === 'SOFTWARE'
+                  ? 'Software (lógico): preventivo, correctivo, perfectivo, adaptativo, evolutivo'
+                  : clase === null
+                    ? 'Categoría sin clasificar: solo preventivo y correctivo (el admin la clasifica en Catálogos)'
+                    : 'Depende de la clase del activo'
+            }
+            data={tipos.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
+            value={clase === undefined ? null : form.values.tipo}
+            onChange={(v) => v && form.setFieldValue('tipo', v as TipoMantenimiento)}
+            error={
+              form.errors.tipo ??
+              (duplicados.length > 0
+                ? `Ya tienen una planificación ${INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()} vigente: ${duplicados.map((a) => a.codigo).join(', ')}`
+                : undefined)
+            }
             allowDeselect={false}
-            {...form.getInputProps('tipo')}
           />
           <Select
             label="Período"
@@ -608,6 +679,7 @@ export function Planificacion() {
                         <Text size="xs" c="dimmed">
                           {p.activo.nombre} · {p.activo.categoria}
                         </Text>
+                        <BadgeClase clase={categorias.data?.find((c) => c.id === p.activo.categoriaId)?.claseMantenimiento ?? null} size="xs" />
                       </Table.Td>
                       <Table.Td>
                         <BadgeTipo tipo={p.tipo} />
