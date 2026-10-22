@@ -8,8 +8,8 @@ import { FASES, TIPOS } from './fases.ts'
 
 export const TAMANO_PAGINA = 20
 
-/** Las tres capas del módulo, cada una en su pestaña. */
-export const CAPAS = ['planificacion', 'ejecucion', 'verificacion'] as const
+/** Las tres capas del módulo y las bitácoras, cada una en su pestaña. */
+export const CAPAS = ['planificacion', 'ejecucion', 'verificacion', 'bitacoras'] as const
 export type Capa = (typeof CAPAS)[number]
 export const CIERRES = ['PENDIENTE_VERIFICACION', 'CERRADO'] as const
 export type FiltroCierre = (typeof CIERRES)[number]

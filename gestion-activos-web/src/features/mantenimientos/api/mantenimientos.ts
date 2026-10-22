@@ -12,6 +12,8 @@ export type Mantenimiento = components['schemas']['MantenimientoDto']
 export type Fase = Mantenimiento['fase']
 export type TipoMantenimiento = Mantenimiento['tipo']
 export type EstadoEquipo = NonNullable<Mantenimiento['estadoEquipo']>
+export type ClaseMantenimiento = NonNullable<components['schemas']['CategoriaDto']['claseMantenimiento']>
+export type Semestre = components['schemas']['SemestreDto']
 type DatosProgramar = components['schemas']['ProgramarMantenimientoDto']
 type DatosIniciar = components['schemas']['IniciarMantenimientoDto']
 type DatosFinalizar = components['schemas']['FinalizarMantenimientoDto']
@@ -49,7 +51,7 @@ function useInvalidarMantenimientos() {
   return () => queryClient.invalidateQueries({ queryKey: claves.todo })
 }
 
-/** Crea el mantenimiento en fase PROGRAMADO. */
+/** Nueva EJECUCIÓN (Pendiente) de una planificación vigente. */
 export function useProgramarMantenimiento() {
   const invalidar = useInvalidarMantenimientos()
   return useMutation({
@@ -101,7 +103,23 @@ export function useCancelarMantenimiento() {
   })
 }
 
-/** Corrige o reprograma (solo en fase PROGRAMADO). */
+/**
+ * Corrige lo EJECUTADO (fechas reales, encargado, verificable…), con motivo.
+ * En ejecución: admin y analista; completada: solo admin.
+ */
+export function useCorregirEjecucion() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['CorregirEjecucionDto'] }) =>
+      ejecutar(api.PATCH('/api/mantenimientos/{id}/ejecucion', { params: { path: { id } }, body: datos })),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: claves.todo })
+      void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    },
+  })
+}
+
+/** Corrige o reprograma lo previsto (solo mientras está Pendiente). */
 export function useEditarMantenimiento() {
   const queryClient = useQueryClient()
   return useMutation({
@@ -185,12 +203,15 @@ export function useModificarPlanMantenimiento() {
   })
 }
 
-/** Crea el mantenimiento de la próxima fecha y adelanta el plan según su frecuencia. */
+/**
+ * Crea la ejecución de la próxima fecha y adelanta la planificación según su período.
+ * Adicional (con fecha): una ejecución más que no mueve la próxima fecha.
+ */
 export function useProgramarDesdePlan() {
   const invalidar = useInvalidarMantenimientos()
   return useMutation({
-    mutationFn: (id: number) =>
-      ejecutar(api.POST('/api/mantenimientos/planes/{id}/programar', { params: { path: { id } }, body: {} })),
+    mutationFn: ({ id, datos = {} }: { id: number; datos?: components['schemas']['ProgramarDesdePlanDto'] }) =>
+      ejecutar(api.POST('/api/mantenimientos/planes/{id}/programar', { params: { path: { id } }, body: datos })),
     onSuccess: invalidar,
   })
 }
@@ -260,5 +281,33 @@ export function useProgramarVerificacionMantenimiento() {
     mutationFn: ({ id, prevista, limite }: { id: number; prevista: string; limite: string }) =>
       ejecutar(api.PATCH('/api/mantenimientos/{id}/verificacion-prevista', { params: { path: { id } }, body: { prevista, limite } })),
     onSuccess: invalidar,
+  })
+}
+
+// ── Bitácoras (solo lectura) ────────────────────────────────────────────────
+
+export type BitacoraGeneral = components['schemas']['BitacoraGeneralDto']
+export type ResumenBitacora = components['schemas']['ResumenBitacoraDto']
+export type FilaBitacora = components['schemas']['FilaBitacoraDto']
+export type SituacionBitacora = FilaBitacora['situacion']
+export type FiltrosBitacoraEspecifica = NonNullable<
+  paths['/api/mantenimientos/bitacora/especifica']['get']['parameters']['query']
+>
+
+export function useBitacoraGeneral(anio: number, semestre?: 1 | 2) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'general', anio, semestre],
+    queryFn: () =>
+      ejecutar(api.GET('/api/mantenimientos/bitacora/general', { params: { query: { anio, semestre } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useBitacoraEspecifica(filtros: FiltrosBitacoraEspecifica) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'especifica', filtros],
+    queryFn: () =>
+      ejecutar(api.GET('/api/mantenimientos/bitacora/especifica', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
   })
 }

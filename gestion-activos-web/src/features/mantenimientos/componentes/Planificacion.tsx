@@ -48,22 +48,27 @@ import {
   usePlanesMantenimiento,
   useProgramarDesdePlan,
   useTableroMantenimientos,
+  type ClaseMantenimiento,
   type FrecuenciaMantenimiento,
   type PlanMantenimiento,
   type TipoMantenimiento,
 } from '../api/mantenimientos.ts'
-import { FRECUENCIAS, INFO_FRECUENCIA, INFO_TIPO, TIPOS } from '../fases.ts'
+import { etiquetaSemestre, FRECUENCIAS, INFO_CLASE, INFO_FRECUENCIA, INFO_TIPO, TIPOS, tiposPermitidos } from '../fases.ts'
 import { BadgeTipo } from './Badges.tsx'
 
 const ETIQUETAS_PLAN: Record<string, string> = {
   tipo: 'Tipo',
-  frecuencia: 'Frecuencia',
+  frecuencia: 'Período',
+  fechaInicio: 'Fecha de inicio planificada',
   proximaFecha: 'Próxima fecha',
   plazoDias: 'Plazo (días)',
-  responsable: 'Responsable',
-  actividades: 'Actividades',
+  responsable: 'Asignado',
+  actividades: 'Descripción planificada',
   estado: 'Estado',
 }
+
+const AÑO_ACTUAL = new Date().getFullYear()
+const AÑOS = Array.from({ length: 6 }, (_, i) => String(AÑO_ACTUAL + 1 - i))
 
 const folio = (id: number) => `PLM-${String(id).padStart(4, '0')}`
 
@@ -181,6 +186,7 @@ function Tablero() {
 interface ValoresPlan {
   tipo: TipoMantenimiento
   frecuencia: FrecuenciaMantenimiento
+  fechaInicio: string | null
   proximaFecha: string | null
   plazoDias: number | string
   responsable: string
@@ -192,7 +198,7 @@ interface ValoresPlan {
 /** Crear (para varios activos a la vez) o modificar (con motivo) un plan. */
 function PlanModal({ abierto, plan, onCerrar }: { abierto: boolean; plan: PlanMantenimiento | null; onCerrar: () => void }) {
   return (
-    <Modal opened={abierto} onClose={onCerrar} size="xl" title={plan ? `Modificar ${folio(plan.id)} · v${plan.version}` : 'Nuevo plan de mantenimiento'}>
+    <Modal opened={abierto} onClose={onCerrar} size="xl" title={plan ? `Modificar ${folio(plan.id)} · v${plan.version}` : 'Nueva planificación de mantenimiento'}>
       {abierto && <FormPlan plan={plan} onCerrar={onCerrar} />}
     </Modal>
   )
@@ -203,12 +209,16 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
   const modificar = useModificarPlanMantenimiento()
   const [seleccion, setSeleccion] = useState<number[]>([])
   const vigentes = usePlanesMantenimiento({ estado: 'VIGENTE', page: 1, limit: 100 })
+  const categorias = useCategorias()
+  const claseDe = (categoriaId: number): ClaseMantenimiento | null =>
+    categorias.data?.find((c) => c.id === categoriaId)?.claseMantenimiento ?? null
 
   const form = useForm<ValoresPlan>({
     initialValues: plan
       ? {
           tipo: plan.tipo,
           frecuencia: plan.frecuencia,
+          fechaInicio: isoAFechaHoraLocal(plan.fechaInicio),
           proximaFecha: plan.proximaFecha ? isoAFechaHoraLocal(plan.proximaFecha) : null,
           plazoDias: plan.plazoDias ?? 7,
           responsable: plan.responsable,
@@ -216,9 +226,9 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
           estado: plan.estado,
           motivoCambio: '',
         }
-      : { tipo: 'PREVENTIVO', frecuencia: 'TRIMESTRAL', proximaFecha: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
+      : { tipo: 'PREVENTIVO', frecuencia: 'SEMESTRAL', fechaInicio: null, proximaFecha: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
     validate: {
-      proximaFecha: (v) => (v ? null : 'Indica la primera intervención'),
+      fechaInicio: (v) => (v ? null : 'Indica la fecha de inicio planificada'),
       plazoDias: (v) => (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 365 ? 'Entre 1 y 365 días' : null),
       responsable: (v) => (!v.trim() ? 'Obligatorio' : v.length > 191 ? 'Máximo 191' : null),
       actividades: (v) => (v.trim().length < 10 ? 'Mínimo 10 caracteres' : v.length > 2000 ? 'Máximo 2000' : null),
@@ -231,7 +241,9 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
     const parametros = {
       tipo: v.tipo,
       frecuencia: v.frecuencia,
-      proximaFecha: fechaHoraLocalAIso(v.proximaFecha!),
+      fechaInicio: fechaHoraLocalAIso(v.fechaInicio!),
+      // Al crear, la primera intervención es la fecha de inicio; al modificar se puede mover.
+      ...(plan && v.proximaFecha ? { proximaFecha: fechaHoraLocalAIso(v.proximaFecha) } : {}),
       plazoDias: Number(v.plazoDias),
       responsable: v.responsable.trim(),
       actividades: v.actividades.trim(),
@@ -241,7 +253,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
         { id: plan.id, datos: { ...parametros, estado: v.estado, motivoCambio: v.motivoCambio.trim() } },
         {
           onSuccess: (p) => {
-            notifications.show({ color: 'green', title: 'Plan modificado', message: `${folio(p.id)} · versión ${p.version}` })
+            notifications.show({ color: 'green', title: 'Planificación modificada', message: `${folio(p.id)} · versión ${p.version}` })
             onCerrar()
           },
           onError: error,
@@ -257,7 +269,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
       { ...parametros, activoIds: seleccion },
       {
         onSuccess: (creados) => {
-          notifications.show({ color: 'green', title: 'Planes creados', message: `${creados.length} plan(es) de mantenimiento.` })
+          notifications.show({ color: 'green', title: 'Planificaciones creadas', message: `${creados.length} planificación(es) de mantenimiento.` })
           onCerrar()
         },
         onError: error,
@@ -268,6 +280,10 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
   const conPlanDelTipo = new Set(
     (vigentes.data?.data ?? []).filter((p) => !p.anuladoEn && p.tipo === form.values.tipo).map((p) => p.activoId),
   )
+  // Al modificar, solo los tipos de la clase del activo. Al crear, todos: la lista de
+  // activos deja elegir solo aquellos cuya clase admite el tipo elegido.
+  const tipos = plan ? tiposPermitidos(claseDe(plan.activo.categoriaId)) : TIPOS
+  const semestre = form.values.fechaInicio ? etiquetaSemestre(form.values.fechaInicio.slice(0, 10)) : null
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
@@ -279,23 +295,53 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
             etiqueta="Activos"
             value={seleccion}
             onChange={setSeleccion}
-            // Regla del módulo: un plan vigente por activo y tipo. La condición "Malo" no excluye.
-            noElegible={(a) =>
-              conPlanDelTipo.has(a.id) ? `Ya tiene un plan ${INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()} vigente.` : null
-            }
+            // Reglas del módulo: un plan vigente por activo y tipo, y el tipo debe ser de la
+            // clase (hardware/software) de su categoría. La condición "Malo" no excluye.
+            noElegible={(a) => {
+              const tipo = INFO_TIPO[form.values.tipo].etiqueta.toLowerCase()
+              if (conPlanDelTipo.has(a.id)) return `Ya tiene un plan ${tipo} vigente.`
+              const clase = claseDe(a.categoriaId)
+              if (!tiposPermitidos(clase).includes(form.values.tipo)) {
+                return clase ? `El tipo ${tipo} no es de ${INFO_CLASE[clase].toLowerCase()}.` : `Categoría sin clasificar: solo preventivo o correctivo.`
+              }
+              return null
+            }}
             ayuda="Solo se ofrecen activos operativos (también en condición «Malo»). Se crea un plan por activo con los parámetros siguientes."
           />
         )}
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <Select label="Tipo" withAsterisk data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))} allowDeselect={false} {...form.getInputProps('tipo')} />
           <Select
-            label="Frecuencia"
+            label="Tipo"
             withAsterisk
+            description="Hardware: preventivo, correctivo, predictivo · Software: preventivo, correctivo, perfectivo, adaptativo, evolutivo"
+            data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta, disabled: !tipos.includes(t) }))}
+            allowDeselect={false}
+            {...form.getInputProps('tipo')}
+          />
+          <Select
+            label="Período"
+            withAsterisk
+            description="Cada cuánto se repite (Única vez = una sola intervención)"
             data={FRECUENCIAS.map((f) => ({ value: f, label: INFO_FRECUENCIA[f] }))}
             allowDeselect={false}
             {...form.getInputProps('frecuencia')}
           />
-          <DateTimePicker label="Próxima intervención (inicio previsto)" valueFormat="DD MMM YYYY HH:mm" withAsterisk {...form.getInputProps('proximaFecha')} />
+          <DateTimePicker
+            label="Fecha de inicio planificada"
+            description={semestre ? `Semestre planificado: ${semestre} (S1 ene–jun · S2 jul–dic)` : 'De ella salen el año y el semestre planificados'}
+            valueFormat="DD MMM YYYY HH:mm"
+            withAsterisk
+            {...form.getInputProps('fechaInicio')}
+          />
+          {plan && (
+            <DateTimePicker
+              label="Próxima intervención"
+              description="La que se generará al pulsar «Nueva ejecución»"
+              valueFormat="DD MMM YYYY HH:mm"
+              clearable
+              {...form.getInputProps('proximaFecha')}
+            />
+          )}
           <NumberInput
             label="Plazo de cada intervención (días)"
             description="Fecha límite = inicio previsto + plazo"
@@ -305,7 +351,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
             allowDecimal={false}
             {...form.getInputProps('plazoDias')}
           />
-          <TextInput label="Responsable" withAsterisk placeholder="Soporte TIC" {...form.getInputProps('responsable')} />
+          <TextInput label="Asignado" description="Quién debe realizarlo" withAsterisk placeholder="Soporte TIC" {...form.getInputProps('responsable')} />
           {plan && (
             <Select
               label="Estado del plan"
@@ -319,7 +365,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
           )}
         </SimpleGrid>
         <Textarea
-          label="Actividades previstas"
+          label="Descripción planificada"
           withAsterisk
           autosize
           minRows={2}
@@ -332,11 +378,67 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
             Cancelar
           </Button>
           <Button type="submit" loading={crear.isPending || modificar.isPending}>
-            {plan ? 'Guardar cambios' : `Crear ${seleccion.length || ''} plan(es)`}
+            {plan ? 'Guardar cambios' : `Crear ${seleccion.length || ''} planificación(es)`}
           </Button>
         </Group>
       </Stack>
     </form>
+  )
+}
+
+/**
+ * Ejecución ADICIONAL de una planificación (intervención parcial, trabajo extra o
+ * reprogramación): en la fecha que se indique y sin mover la próxima del período.
+ */
+function EjecucionAdicionalModal({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar: () => void }) {
+  const programar = useProgramarDesdePlan()
+  const [fecha, setFecha] = useState<string | null>(null)
+  const cerrar = () => {
+    setFecha(null)
+    onCerrar()
+  }
+  return (
+    <Modal opened={plan !== null} onClose={cerrar} title={plan ? `Ejecución adicional · ${folio(plan.id)}` : ''}>
+      {plan && (
+        <Stack gap="sm">
+          <Text size="sm">
+            {plan.activo.codigo} · {plan.activo.nombre} — {INFO_TIPO[plan.tipo].etiqueta}, {INFO_FRECUENCIA[plan.frecuencia].toLowerCase()}
+          </Text>
+          <DateTimePicker
+            label="Inicio previsto de la ejecución"
+            description={`Plazo: ${plan.plazoDias} día(s). No cambia la próxima fecha del período.`}
+            valueFormat="DD MMM YYYY HH:mm"
+            withAsterisk
+            value={fecha}
+            onChange={setFecha}
+          />
+          <Group justify="flex-end">
+            <Button variant="default" onClick={cerrar}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={!fecha}
+              loading={programar.isPending}
+              onClick={() =>
+                fecha &&
+                programar.mutate(
+                  { id: plan.id, datos: { adicional: true, fecha: fechaHoraLocalAIso(fecha) } },
+                  {
+                    onSuccess: (r) => {
+                      notifications.show({ color: 'green', title: `Ejecución #${r.mantenimientoId} creada (pendiente)`, message: 'Ejecución adicional de la planificación.' })
+                      cerrar()
+                    },
+                    onError: (e) => notifications.show({ color: 'red', title: 'No se pudo crear la ejecución', message: e.message }),
+                  },
+                )
+              }
+            >
+              Crear ejecución
+            </Button>
+          </Group>
+        </Stack>
+      )}
+    </Modal>
   )
 }
 
@@ -350,6 +452,8 @@ export function Planificacion() {
     estado?: 'VIGENTE' | 'SUSPENDIDO'
     categoriaId?: number
     vencidos?: boolean
+    anio?: number
+    semestre?: 1 | 2
     q: string
   }>({ page: 1, q: '' })
   const [q] = useDebouncedValue(filtros.q, 300)
@@ -360,9 +464,12 @@ export function Planificacion() {
     estado: filtros.estado,
     categoriaId: filtros.categoriaId,
     vencidos: filtros.vencidos,
+    anio: filtros.anio,
+    semestre: filtros.anio ? filtros.semestre : undefined,
     q: q || undefined,
   })
   const programar = useProgramarDesdePlan()
+  const [adicional, setAdicional] = useState<PlanMantenimiento | null>(null)
   const anulacion = useAnulacionPlanMantenimiento()
   const [modal, setModal] = useState<{ plan: PlanMantenimiento | null } | null>(null)
   const [motivo, setMotivo] = useState<{ plan: PlanMantenimiento; modo: ModoMotivo } | null>(null)
@@ -370,14 +477,14 @@ export function Planificacion() {
   const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
 
   const programarPlan = (p: PlanMantenimiento) =>
-    programar.mutate(p.id, {
+    programar.mutate({ id: p.id }, {
       onSuccess: (r) =>
         notifications.show({
           color: 'green',
-          title: `Mantenimiento #${r.mantenimientoId} programado`,
+          title: `Ejecución #${r.mantenimientoId} creada (pendiente)`,
           message: r.plan.proximaFecha
-            ? `Siguiente intervención del plan: ${formatearDia(r.plan.proximaFecha)}.`
-            : 'Era un plan de una sola vez: no quedan intervenciones.',
+            ? `Siguiente intervención del período: ${formatearDia(r.plan.proximaFecha)}.`
+            : 'Era una planificación de una sola vez: no quedan intervenciones del período.',
         }),
       onError: (e) => notifications.show({ color: 'red', title: 'No se pudo programar', message: e.message }),
     })
@@ -386,17 +493,17 @@ export function Planificacion() {
     <Stack gap="md">
       <Tablero />
       <Group justify="space-between" align="flex-end">
-        <Title order={4}>Planes de mantenimiento</Title>
+        <Title order={4}>Planificaciones de mantenimiento</Title>
         {puedeOperar && (
           <Button leftSection={<IconPlus size={16} />} onClick={() => setModal({ plan: null })}>
-            Nuevo plan
+            Nueva planificación
           </Button>
         )}
       </Group>
       <Group gap="sm" align="flex-end" wrap="wrap">
         <TextInput
           label="Buscar"
-          placeholder="Activo, categoría, responsable…"
+          placeholder="Activo, categoría, asignado…"
           leftSection={<IconSearch size={14} />}
           value={filtros.q}
           onChange={(e) => cambiar({ q: e.currentTarget.value })}
@@ -433,6 +540,28 @@ export function Planificacion() {
           onChange={(v) => cambiar({ estado: (v as 'VIGENTE' | 'SUSPENDIDO' | null) ?? undefined })}
           w={{ base: '100%', sm: 150 }}
         />
+        <Select
+          label="Año planificado"
+          placeholder="Todos"
+          clearable
+          data={AÑOS}
+          value={filtros.anio ? String(filtros.anio) : null}
+          onChange={(v) => cambiar({ anio: v ? Number(v) : undefined, semestre: v ? filtros.semestre : undefined })}
+          w={{ base: '100%', sm: 130 }}
+        />
+        <Select
+          label="Semestre"
+          placeholder={filtros.anio ? 'Ambos' : 'Elija el año'}
+          clearable
+          disabled={!filtros.anio}
+          data={[
+            { value: '1', label: 'S1 (ene–jun)' },
+            { value: '2', label: 'S2 (jul–dic)' },
+          ]}
+          value={filtros.semestre ? String(filtros.semestre) : null}
+          onChange={(v) => cambiar({ semestre: v ? (Number(v) as 1 | 2) : undefined })}
+          w={{ base: '100%', sm: 150 }}
+        />
         <Switch label="Solo vencidos" color="red" checked={filtros.vencidos ?? false} onChange={(e) => cambiar({ vencidos: e.currentTarget.checked || undefined })} mb={8} />
       </Group>
 
@@ -444,22 +573,23 @@ export function Planificacion() {
           </Center>
         ) : planes.data && planes.data.data.length === 0 ? (
           <Text c="dimmed" ta="center" py="xl">
-            {filtros.q || filtros.tipo || filtros.estado || filtros.categoriaId || filtros.vencidos
-              ? 'Ningún plan coincide con los filtros.'
-              : 'Todavía no hay planes de mantenimiento.'}
+            {filtros.q || filtros.tipo || filtros.estado || filtros.categoriaId || filtros.vencidos || filtros.anio
+              ? 'Ninguna planificación coincide con los filtros.'
+              : 'Todavía no hay planificaciones de mantenimiento.'}
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={1350}>
+          <Table.ScrollContainer minWidth={1450}>
             <Table striped verticalSpacing="xs" fz="sm">
               <Table.Thead>
                 <Table.Tr>
-                  <Table.Th>Plan</Table.Th>
+                  <Table.Th>Planificación</Table.Th>
                   <Table.Th>Activo</Table.Th>
                   <Table.Th>Tipo</Table.Th>
-                  <Table.Th>Frecuencia</Table.Th>
+                  <Table.Th>Período</Table.Th>
+                  <Table.Th>Inicio planificado</Table.Th>
                   <Table.Th>Próxima</Table.Th>
-                  <Table.Th>Responsable</Table.Th>
-                  <Table.Th>Interv.</Table.Th>
+                  <Table.Th>Asignado</Table.Th>
+                  <Table.Th>Ejecuciones</Table.Th>
                   <Table.Th>Estado</Table.Th>
                   <Table.Th>Reg.</Table.Th>
                   <Table.Th>Acciones</Table.Th>
@@ -467,7 +597,8 @@ export function Planificacion() {
               </Table.Thead>
               <Table.Tbody>
                 {planes.data?.data.map((p) => {
-                  const programable = puedeOperar && !p.anuladoEn && p.estado === 'VIGENTE' && p.proximaFecha !== null
+                  const vigente = puedeOperar && !p.anuladoEn && p.estado === 'VIGENTE'
+                  const programable = vigente && p.proximaFecha !== null
                   return (
                     <Table.Tr key={p.id} style={{ opacity: p.anuladoEn ? 0.55 : 1 }}>
                       <Table.Td ff="monospace">{folio(p.id)}</Table.Td>
@@ -483,13 +614,19 @@ export function Planificacion() {
                         <BadgeTipo tipo={p.tipo} />
                       </Table.Td>
                       <Table.Td>{INFO_FRECUENCIA[p.frecuencia]}</Table.Td>
+                      <Table.Td>
+                        {formatearDia(p.fechaInicio)}
+                        <Badge size="xs" variant="outline" ml={6}>
+                          {p.semestrePlanificado.etiqueta}
+                        </Badge>
+                      </Table.Td>
                       <Table.Td c={p.vencido ? 'red' : undefined} fw={p.vencido ? 600 : undefined}>
                         {p.proximaFecha ? formatearFechaHora(p.proximaFecha) : '— (concluido)'}
                       </Table.Td>
                       <Table.Td>{p.responsable}</Table.Td>
                       <Table.Td>
-                        <Anchor component={Link} to={`/mantenimientos?planId=${p.id}`} size="sm">
-                          {p.intervenciones}
+                        <Anchor component={Link} to={`/mantenimientos?planId=${p.id}`} size="sm" title="Completadas / todas">
+                          {p.ejecucionesCompletadas} / {p.intervenciones}
                         </Anchor>
                       </Table.Td>
                       <Table.Td>
@@ -507,10 +644,16 @@ export function Planificacion() {
                               size="compact-xs"
                               color="teal"
                               leftSection={<IconCalendarPlus size={12} />}
-                              loading={programar.isPending && programar.variables === p.id}
+                              loading={programar.isPending && programar.variables?.id === p.id}
                               onClick={() => programarPlan(p)}
+                              title="Crea la ejecución de la próxima fecha y adelanta el período"
                             >
-                              Programar
+                              Nueva ejecución
+                            </Button>
+                          )}
+                          {vigente && (
+                            <Button size="compact-xs" variant="light" color="teal" onClick={() => setAdicional(p)} title="Otra ejecución en la fecha que elija; no mueve la próxima fecha">
+                              Adicional
                             </Button>
                           )}
                           <AccionesRegistro
@@ -537,6 +680,7 @@ export function Planificacion() {
       </Card>
 
       <PlanModal abierto={modal !== null} plan={modal?.plan ?? null} onCerrar={() => setModal(null)} />
+      <EjecucionAdicionalModal plan={adicional} onCerrar={() => setAdicional(null)} />
       <MotivoModal
         abierto={motivo !== null}
         modo={motivo?.modo ?? 'anular'}

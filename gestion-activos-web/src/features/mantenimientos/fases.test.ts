@@ -51,3 +51,26 @@ describe('cierre como operativo', () => {
     expect(faltantesParaCerrar({ ...completo, duracionMin: 0 })).toEqual([])
   })
 })
+
+describe('tipos por clase, semestre y repositorio', () => {
+  it('tipos permitidos según la clase de la categoría', async () => {
+    const { tiposPermitidos } = await import('./fases.ts')
+    expect(tiposPermitidos('HARDWARE')).toEqual(['PREVENTIVO', 'CORRECTIVO', 'PREDICTIVO'])
+    expect(tiposPermitidos('SOFTWARE')).toEqual(['PREVENTIVO', 'CORRECTIVO', 'PERFECTIVO', 'ADAPTATIVO', 'EVOLUTIVO'])
+    expect(tiposPermitidos(null)).toEqual(['PREVENTIVO', 'CORRECTIVO'])
+  })
+
+  it('semestre de un día local: S1 ene–jun, S2 jul–dic', async () => {
+    const { etiquetaSemestre } = await import('./fases.ts')
+    expect(etiquetaSemestre('2026-06-30')).toBe('S1-2026')
+    expect(etiquetaSemestre('2026-07-01')).toBe('S2-2026')
+  })
+
+  it('repositorio: carpeta, ruta o URL http(s)', async () => {
+    const { errorRepositorio } = await import('./fases.ts')
+    expect(errorRepositorio('Carpeta Compartida TICs/Interno')).toBeNull()
+    expect(errorRepositorio('C:\\Informes')).toBeNull()
+    expect(errorRepositorio('https://intranet/informe.pdf')).toBeNull()
+    expect(errorRepositorio('javascript:alert(1)')).toMatch(/http o https/)
+  })
+})

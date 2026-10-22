@@ -10,7 +10,8 @@ import {
   type Mantenimiento,
   type TipoMantenimiento,
 } from '../api/mantenimientos.ts'
-import { INFO_TIPO, TIPOS } from '../fases.ts'
+import { useCategorias } from '../../inventario/api/catalogos.ts'
+import { INFO_TIPO, tiposPermitidos } from '../fases.ts'
 
 import { instante } from '../../../shared/zona.ts'
 interface Props {
@@ -19,13 +20,13 @@ interface Props {
   mantenimiento: Mantenimiento
 }
 
-/** Reprograma o corrige un mantenimiento. Solo mientras está PROGRAMADO. */
+/** Reprograma o corrige lo PREVISTO de una ejecución. Solo mientras está Pendiente. */
 export function EditarMantenimientoModal({ opened, onClose, mantenimiento }: Props) {
   return (
     <Modal
       opened={opened}
       onClose={onClose}
-      title={`Editar el mantenimiento #${mantenimiento.id}`}
+      title={`Editar lo previsto de la ejecución #${mantenimiento.id}`}
       size="lg"
     >
       {/* El formulario vive dentro del Modal: se monta (y se reinicia) en cada apertura. */}
@@ -36,6 +37,9 @@ export function EditarMantenimientoModal({ opened, onClose, mantenimiento }: Pro
 
 function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
   const editar = useEditarMantenimiento()
+  // Solo los tipos de la clase (hardware/software) de la categoría del activo.
+  const categorias = useCategorias()
+  const clase = categorias.data?.find((c) => c.id === mantenimiento.activo.categoriaId)?.claseMantenimiento ?? null
   const form = useForm<{ tipo: TipoMantenimiento; actividad: string; fecha: string | null; fechaLimite: string | null; motivoCambio: string }>({
     initialValues: {
       tipo: mantenimiento.tipo,
@@ -93,20 +97,20 @@ function Formulario({ onClose, mantenimiento }: Omit<Props, 'opened'>) {
     <form onSubmit={enviar}>
       <Stack gap="sm">
         <Text size="sm" c="dimmed">
-          Solo se puede editar mientras está programado. El activo no se puede cambiar: si te
-          equivocaste de activo, anula este mantenimiento y programa otro.
+          Solo se puede editar mientras está pendiente. El activo y la planificación no se cambian: si
+          hubo un error, anule esta ejecución y cree otra desde la planificación correcta.
         </Text>
         <div>
           <Text size="sm" fw={500} mb={4}>
             Tipo
           </Text>
           <SegmentedControl
-            data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
+            data={tiposPermitidos(clase).map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
             {...form.getInputProps('tipo')}
           />
         </div>
         <Textarea
-          label="Actividad"
+          label="Descripción prevista"
           withAsterisk
           autosize
           minRows={2}

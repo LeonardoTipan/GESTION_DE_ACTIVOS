@@ -1,5 +1,6 @@
 import type {
   Cierre,
+  ClaseMantenimiento,
   EstadoEquipo,
   Fase,
   FrecuenciaMantenimiento,
@@ -10,16 +11,45 @@ import type {
 
 type Info = { etiqueta: string; color: string }
 
+/** SITUACIÓN de la ejecución (distinta de la condición del equipo). */
 export const INFO_FASE: Record<Fase, Info> = {
-  PROGRAMADO: { etiqueta: 'Programado', color: 'blue' },
+  PROGRAMADO: { etiqueta: 'Pendiente', color: 'blue' },
   EN_EJECUCION: { etiqueta: 'En ejecución', color: 'yellow' },
-  FINALIZADO: { etiqueta: 'Finalizado', color: 'green' },
+  FINALIZADO: { etiqueta: 'Completado', color: 'green' },
   CANCELADO: { etiqueta: 'Cancelado', color: 'gray' },
 }
 
 export const INFO_TIPO: Record<TipoMantenimiento, Info> = {
   PREVENTIVO: { etiqueta: 'Preventivo', color: 'teal' },
   CORRECTIVO: { etiqueta: 'Correctivo', color: 'orange' },
+  PREDICTIVO: { etiqueta: 'Predictivo', color: 'indigo' },
+  PERFECTIVO: { etiqueta: 'Perfectivo', color: 'cyan' },
+  ADAPTATIVO: { etiqueta: 'Adaptativo', color: 'grape' },
+  EVOLUTIVO: { etiqueta: 'Evolutivo', color: 'violet' },
+}
+
+export const INFO_CLASE: Record<ClaseMantenimiento, string> = {
+  HARDWARE: 'Hardware',
+  SOFTWARE: 'Software',
+}
+
+/** Tipos válidos según la clase de la categoría del activo (la API aplica la misma regla). */
+export function tiposPermitidos(clase: ClaseMantenimiento | null | undefined): TipoMantenimiento[] {
+  if (clase === 'HARDWARE') return ['PREVENTIVO', 'CORRECTIVO', 'PREDICTIVO']
+  if (clase === 'SOFTWARE') return ['PREVENTIVO', 'CORRECTIVO', 'PERFECTIVO', 'ADAPTATIVO', 'EVOLUTIVO']
+  return ['PREVENTIVO', 'CORRECTIVO']
+}
+
+/** Tipos que valen para TODAS las clases dadas (varios activos a la vez). */
+export function tiposComunes(clases: readonly (ClaseMantenimiento | null | undefined)[]): TipoMantenimiento[] {
+  if (clases.length === 0) return TIPOS
+  return clases.map(tiposPermitidos).reduce((a, b) => a.filter((t) => b.includes(t)))
+}
+
+/** Semestre (S1 ene–jun, S2 jul–dic) de un día AAAA-MM-DD ya en hora de Guayaquil. */
+export function etiquetaSemestre(diaLocal: string): string {
+  const [anio, mes] = diaLocal.split('-').map(Number)
+  return `S${mes <= 6 ? 1 : 2}-${anio}`
 }
 
 export const INFO_ESTADO_EQUIPO: Record<EstadoEquipo, Info> = {
@@ -109,4 +139,20 @@ export function faltantesParaCerrar(m: Pick<Mantenimiento, 'tecnico' | 'diagnost
     m.duracionMin === null && 'duración',
     !m.resultado && 'actividades realizadas',
   ].filter((x): x is string => Boolean(x))
+}
+
+/**
+ * Repositorio del verificable: una carpeta o ruta (sin esquema, también C:\…) o una
+ * URL http(s). Misma regla que la API; null = válido.
+ */
+export function errorRepositorio(valor: string): string | null {
+  const v = valor.trim()
+  if (v.length > 191) return 'Máximo 191 caracteres'
+  if (!v || !/^[a-z][a-z0-9+.-]+:/i.test(v)) return null
+  try {
+    const url = new URL(v)
+    return url.protocol === 'http:' || url.protocol === 'https:' ? null : 'Solo URL http o https, o una carpeta compartida'
+  } catch {
+    return 'No es una URL válida'
+  }
 }

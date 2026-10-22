@@ -8,6 +8,7 @@ import {
   useGuardarCategoria,
   useGuardarCriticidad,
 } from '../api/catalogos.ts'
+import type { ClaseMantenimiento } from '../../mantenimientos/api/mantenimientos.ts'
 import type { ConfigCatalogo } from './config-catalogo.ts'
 import { TablaCatalogo } from './TablaCatalogo.tsx'
 
@@ -30,13 +31,26 @@ const CATEGORIAS = {
       tipo: 'interruptor',
       descripcion: 'Sus activos son tangibles y se ofrecen en las solicitudes de acceso físico.',
     },
+    {
+      clave: 'claseMantenimiento',
+      etiqueta: 'Clase de mantenimiento',
+      requerido: false,
+      tipo: 'seleccion',
+      opciones: [
+        { value: 'HARDWARE', label: 'Hardware' },
+        { value: 'SOFTWARE', label: 'Software' },
+      ],
+      sinValor: 'Sin clasificar',
+      descripcion:
+        'Decide los tipos de mantenimiento de sus activos. Hardware: preventivo, correctivo, predictivo. Software: preventivo, correctivo, perfectivo, adaptativo, evolutivo. Sin clasificar: solo preventivo y correctivo.',
+    },
   ],
   useLista: useCategorias,
   useGuardar: useGuardarCategoria,
   useEliminar: useEliminarCategoria,
 } satisfies ConfigCatalogo<
-  { id: number; nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean },
-  { nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean }
+  { id: number; nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean; claseMantenimiento: ClaseMantenimiento | null },
+  { nombre: string; descripcion: string; admiteAccesoLogico: boolean; admiteAccesoFisico: boolean; claseMantenimiento: ClaseMantenimiento | null }
 >
 
 const CRITICIDADES = {
@@ -55,7 +69,8 @@ export function CatalogosPage() {
         <Title order={2}>Catálogos</Title>
         <Text c="dimmed" size="sm">
           Valores que se usan al clasificar los activos. En cada categoría se indica si sus activos admiten
-          solicitudes de acceso lógico o físico (Control de acceso); la sincronización con GLPI no lo cambia.
+          solicitudes de acceso lógico o físico (Control de acceso) y su clase de mantenimiento (hardware o software);
+          la sincronización con GLPI no los cambia.
         </Text>
       </div>
       <Tabs defaultValue="categorias" keepMounted={false}>

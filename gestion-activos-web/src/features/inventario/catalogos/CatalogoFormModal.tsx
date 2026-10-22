@@ -1,4 +1,4 @@
-import { Button, Group, Modal, Stack, Switch, Textarea, TextInput } from '@mantine/core'
+import { Button, Group, Modal, Select, Stack, Switch, Textarea, TextInput } from '@mantine/core'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { useEffect } from 'react'
@@ -26,7 +26,9 @@ export function CatalogoFormModal<
       config.campos.map((c) =>
         c.tipo === 'interruptor'
           ? [c.clave, fila ? Boolean(fila[c.clave]) : false]
-          : [c.clave, fila ? String(fila[c.clave] ?? '') : ''],
+          : c.tipo === 'seleccion'
+            ? [c.clave, fila ? ((fila[c.clave] as string | null) ?? null) : null]
+            : [c.clave, fila ? String(fila[c.clave] ?? '') : ''],
       ),
     ) as Record<string, ValorCatalogo>
 
@@ -59,6 +61,7 @@ export function CatalogoFormModal<
     const datos = Object.fromEntries(
       config.campos.map((c) => {
         const valor = v[c.clave]
+        if (c.tipo === 'seleccion') return [c.clave, valor || null]
         return [c.clave, typeof valor === 'string' ? valor.trim() : Boolean(valor)]
       }),
     ) as TDatos
@@ -94,6 +97,16 @@ export function CatalogoFormModal<
                 label={campo.etiqueta}
                 description={campo.descripcion}
                 {...form.getInputProps(campo.clave, { type: 'checkbox' })}
+              />
+            ) : campo.tipo === 'seleccion' ? (
+              <Select
+                key={campo.clave}
+                label={campo.etiqueta}
+                description={campo.descripcion}
+                placeholder={campo.sinValor}
+                data={campo.opciones ?? []}
+                clearable
+                {...form.getInputProps(campo.clave)}
               />
             ) : campo.multilinea ? (
               <Textarea

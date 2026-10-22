@@ -1,7 +1,7 @@
 import type { UseMutationResult, UseQueryResult } from '@tanstack/react-query'
 
-/** Valor de un campo de catálogo: texto, o un interruptor (sí / no). */
-export type ValorCatalogo = string | boolean
+/** Valor de un campo de catálogo: texto, un interruptor (sí / no) o una opción (null = sin elegir). */
+export type ValorCatalogo = string | boolean | null
 
 /**
  * Describe un catálogo editable (categorías, criticidades...) para que una
@@ -18,8 +18,11 @@ export interface ConfigCatalogo<
     etiqueta: string
     requerido: boolean
     multilinea?: boolean
-    /** 'interruptor' = sí / no (por defecto, texto). */
-    tipo?: 'texto' | 'interruptor'
+    /** 'interruptor' = sí / no; 'seleccion' = una de `opciones` o ninguna (por defecto, texto). */
+    tipo?: 'texto' | 'interruptor' | 'seleccion'
+    opciones?: { value: string; label: string }[]
+    /** Texto de la opción vacía (p. ej. "Sin clasificar"). */
+    sinValor?: string
     /** Ayuda bajo el campo en el formulario. */
     descripcion?: string
   }[]

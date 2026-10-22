@@ -99,6 +99,12 @@ export function TablaCatalogo<
                       <Badge size="sm" variant="light" color={fila[c.clave] ? 'green' : 'gray'}>
                         {fila[c.clave] ? 'Sí' : 'No'}
                       </Badge>
+                    ) : c.tipo === 'seleccion' ? (
+                      c.opciones?.find((o) => o.value === fila[c.clave])?.label ?? (
+                        <Text span size="sm" c="dimmed">
+                          {c.sinValor ?? '—'}
+                        </Text>
+                      )
                     ) : (
                       String(fila[c.clave] ?? '') || '—'
                     )}

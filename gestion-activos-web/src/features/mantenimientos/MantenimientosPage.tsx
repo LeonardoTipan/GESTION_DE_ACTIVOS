@@ -1,6 +1,6 @@
 import { Anchor, Badge, Button, Group, Select, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCalendarStats, IconChecklist, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
+import { IconCalendarStats, IconChecklist, IconNotebook, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
@@ -21,6 +21,7 @@ import {
   useIndicadoresMantenimiento,
 } from './api/mantenimientos.ts'
 import { BadgeCierre, BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
+import { Bitacoras } from './componentes/Bitacoras.tsx'
 import { Planificacion } from './componentes/Planificacion.tsx'
 import { ProgramarModal } from './componentes/ProgramarModal.tsx'
 import { FASES, INFO_CIERRE, INFO_FASE, INFO_TIPO, TIPOS } from './fases.ts'
@@ -37,11 +38,11 @@ function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Manteni
             <Table.Th>N.º</Table.Th>
             <Table.Th>Activo</Table.Th>
             <Table.Th>Tipo</Table.Th>
-            <Table.Th>Actividad</Table.Th>
-            <Table.Th>{verificacion ? 'Finalizado' : 'Fecha programada'}</Table.Th>
-            <Table.Th>Técnico</Table.Th>
-            <Table.Th>Fase</Table.Th>
-            <Table.Th>{verificacion ? 'Verificación' : 'Estado del equipo'}</Table.Th>
+            <Table.Th>Descripción prevista</Table.Th>
+            <Table.Th>{verificacion ? 'Completado' : 'Inicio previsto'}</Table.Th>
+            <Table.Th>Encargado</Table.Th>
+            <Table.Th>Situación</Table.Th>
+            <Table.Th>{verificacion ? 'Verificación' : 'Condición del equipo'}</Table.Th>
             <Table.Th>Reg.</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -59,7 +60,7 @@ function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Manteni
                 </Anchor>
                 {m.planId && (
                   <Text size="xs" c="dimmed">
-                    plan PLM-{String(m.planId).padStart(4, '0')}
+                    planificación PLM-{String(m.planId).padStart(4, '0')}
                   </Text>
                 )}
               </Table.Td>
@@ -143,13 +144,13 @@ function CampoTexto({ valor, onCambio, ...props }: { valor?: string; onCambio: (
 }
 
 const CALENDARIO_CAPA = {
-  1: { titulo: 'Calendario de planificación', descripcion: 'Inicio previsto y fecha límite de cada intervención programada; los planes, en su próxima fecha.' },
+  1: { titulo: 'Calendario de planificación', descripcion: 'Inicio previsto y fecha límite de cada ejecución pendiente; las planificaciones, en su próxima fecha.' },
   2: { titulo: 'Calendario de ejecución', descripcion: 'Lo previsto (trazo discontinuo) frente a lo ejecutado realmente; en rojo, lo vencido.' },
   3: { titulo: 'Calendario de verificación', descripcion: 'Ventanas de verificación previstas, con su propio plazo, y verificaciones registradas.' },
 } as const
 
 function CalendarioDeCapa({ capa, onCrear }: { capa: 1 | 2 | 3; onCrear?: (dia: Dayjs) => void }) {
-  return <Calendario {...CALENDARIO_CAPA[capa]} modulos={['mantenimientos']} capa={capa} onCrear={onCrear} textoCrear="Programar mantenimiento" />
+  return <Calendario {...CALENDARIO_CAPA[capa]} modulos={['mantenimientos']} capa={capa} onCrear={onCrear} textoCrear="Nueva ejecución" />
 }
 
 export function MantenimientosPage() {
@@ -203,7 +204,7 @@ export function MantenimientosPage() {
             ISO/IEC 27001:2022 · A.7.13 Mantenimiento de los equipos
           </Text>
         </div>
-        {puedeOperar && capa !== 'planificacion' && (
+        {puedeOperar && (capa === 'ejecucion' || capa === 'verificacion') && (
           <Button
             leftSection={<IconPlus size={18} />}
             onClick={() => {
@@ -211,7 +212,7 @@ export function MantenimientosPage() {
               modal.open()
             }}
           >
-            Programar mantenimiento
+            Nueva ejecución
           </Button>
         )}
       </Group>
@@ -227,10 +228,15 @@ export function MantenimientosPage() {
           <Tabs.Tab value="verificacion" leftSection={<IconChecklist size={16} />}>
             3 · Verificación y cierre
           </Tabs.Tab>
+          <Tabs.Tab value="bitacoras" leftSection={<IconNotebook size={16} />}>
+            Bitácoras
+          </Tabs.Tab>
         </Tabs.List>
       </Tabs>
 
-      {capa === 'planificacion' ? (
+      {capa === 'bitacoras' ? (
+        <Bitacoras />
+      ) : capa === 'planificacion' ? (
         <>
           <Planificacion />
           <CalendarioDeCapa capa={1} onCrear={puedeOperar ? programarEl : undefined} />
@@ -240,7 +246,7 @@ export function MantenimientosPage() {
           <Group gap="sm" align="flex-end" wrap="wrap">
             <CampoTexto
               label="Buscar"
-              placeholder="Activo, actividad, técnico…"
+              placeholder="Activo, descripción, encargado…"
               valor={filtros.q}
               onCambio={(q) => actualizar({ q, page: 1 })}
               w={{ base: '100%', sm: 220 }}
@@ -257,7 +263,7 @@ export function MantenimientosPage() {
             />
             {capa === 'ejecucion' ? (
               <Select
-                label="Fase"
+                label="Situación"
                 placeholder="Todas"
                 clearable
                 data={FASES.map((f) => ({ value: f, label: INFO_FASE[f].etiqueta }))}
@@ -285,7 +291,7 @@ export function MantenimientosPage() {
               w={{ base: '100%', sm: 140 }}
             />
             <CampoTexto
-              label="Técnico"
+              label="Encargado"
               placeholder="Usuario o nombre"
               valor={filtros.tecnico}
               onCambio={(tecnico) => actualizar({ tecnico, page: 1 })}
@@ -311,7 +317,7 @@ export function MantenimientosPage() {
           {filtros.planId && (
             <Group gap="xs">
               <Badge variant="light" size="lg">
-                Intervenciones del plan PLM-{String(filtros.planId).padStart(4, '0')}
+                Ejecuciones de la planificación PLM-{String(filtros.planId).padStart(4, '0')}
               </Badge>
               <Button size="compact-xs" variant="subtle" onClick={() => actualizar({ planId: undefined, page: 1 })}>
                 Quitar
@@ -329,13 +335,13 @@ export function MantenimientosPage() {
                 <Text c="dimmed">
                   {capa === 'verificacion'
                     ? (filtros.cierre ?? 'PENDIENTE_VERIFICACION') === 'PENDIENTE_VERIFICACION'
-                      ? 'No hay mantenimientos finalizados pendientes de verificar.'
-                      : 'Ningún mantenimiento cerrado coincide.'
+                      ? 'No hay ejecuciones completadas pendientes de verificar.'
+                      : 'Ninguna ejecución cerrada coincide.'
                     : filtros.vencidos
-                      ? 'No hay mantenimientos vencidos. ¡Todo al día!'
+                      ? 'No hay ejecuciones vencidas. ¡Todo al día!'
                       : hayFiltros
-                        ? 'Ningún mantenimiento coincide con los filtros.'
-                        : 'Todavía no hay mantenimientos programados.'}
+                        ? 'Ninguna ejecución coincide con los filtros.'
+                        : 'Todavía no hay ejecuciones de mantenimiento.'}
                 </Text>
                 {hayFiltros && (
                   <Button variant="subtle" onClick={quitarFiltros}>

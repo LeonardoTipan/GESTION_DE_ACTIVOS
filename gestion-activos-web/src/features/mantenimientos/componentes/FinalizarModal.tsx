@@ -17,7 +17,7 @@ import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../sha
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useFinalizarMantenimiento, type EstadoEquipo, type Mantenimiento } from '../api/mantenimientos.ts'
-import { ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
+import { errorRepositorio, ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
 
 import { instante } from '../../../shared/zona.ts'
 interface Props {
@@ -37,6 +37,7 @@ interface Valores {
   repuestos: string
   observaciones: string
   evidencia: string
+  repositorioVerificable: string
   motivoExcepcion: string
   verificacionPrevista: string | null
   verificacionLimite: string | null
@@ -45,12 +46,13 @@ interface Valores {
 const maximo = (n: number) => (v: string) => (v.trim().length > n ? `Máximo ${n} caracteres` : null)
 
 /**
- * Capa 2 · EN_EJECUCION → FINALIZADO: lo que se hizo, quién, cuánto tardó y
- * costó. El técnico, el diagnóstico y la duración son obligatorios.
+ * Capa 2 · En ejecución → Completado: fecha REAL de finalización (la indica el
+ * usuario), descripción de la ejecución, condición del equipo, persona encargada,
+ * verificable y su repositorio. Encargado, diagnóstico y duración son obligatorios.
  */
 export function FinalizarModal({ opened, onClose, ...resto }: Props) {
   return (
-    <Modal opened={opened} onClose={onClose} title="Registrar la ejecución y finalizar" size="xl">
+    <Modal opened={opened} onClose={onClose} title="Registrar la ejecución y completarla" size="xl">
       <FormFinalizar onClose={onClose} {...resto} />
     </Modal>
   )
@@ -68,7 +70,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
     initialValues: {
       estadoEquipo: 'OPERATIVO',
       resultado: '',
-      fechaFin: ahoraLocal(),
+      fechaFin: null,
       tecnico: tecnico ?? '',
       diagnostico: '',
       duracionMin: '',
@@ -76,19 +78,20 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       repuestos: '',
       observaciones: '',
       evidencia: '',
+      repositorioVerificable: '',
       motivoExcepcion: '',
       verificacionPrevista: null,
       verificacionLimite: null,
     },
     validate: {
-      resultado: (v) => (!v.trim() ? 'Describe las actividades realizadas' : maximo(191)(v)),
+      resultado: (v) => (!v.trim() ? 'Describa lo ejecutado' : maximo(191)(v)),
       fechaFin: (v) =>
         !v
-          ? 'Indica cuándo terminó'
+          ? 'Indique la fecha real en que terminó'
           : fechaInicio && instante(v).isBefore(instante(fechaInicio))
             ? 'No puede ser anterior al inicio'
             : null,
-      tecnico: (v) => (!v.trim() ? 'Indica el técnico responsable' : maximo(191)(v)),
+      tecnico: (v) => (!v.trim() ? 'Indique la persona encargada' : maximo(191)(v)),
       diagnostico: (v) => (v.trim().length < 5 ? 'Mínimo 5 caracteres' : maximo(2000)(v)),
       duracionMin: (v) =>
         typeof v !== 'number' || !Number.isInteger(v) || v < 1 ? 'Minutos enteros, al menos 1' : null,
@@ -96,6 +99,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       repuestos: maximo(2000),
       observaciones: maximo(2000),
       evidencia: maximo(191),
+      repositorioVerificable: errorRepositorio,
       motivoExcepcion: (v, valores) => errorExcepcion(finFueraDePlazo(m, valores.fechaFin), v),
       verificacionPrevista: (v, valores) =>
         !v && valores.verificacionLimite
@@ -129,6 +133,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           repuestos: opcional(v.repuestos),
           observaciones: opcional(v.observaciones),
           evidencia: opcional(v.evidencia),
+          repositorioVerificable: opcional(v.repositorioVerificable),
           motivoExcepcion: fuera ? v.motivoExcepcion.trim() : undefined,
           verificacionPrevista: v.verificacionPrevista ? fechaHoraLocalAIso(v.verificacionPrevista) : undefined,
           verificacionLimite: v.verificacionLimite ? fechaHoraLocalAIso(v.verificacionLimite) : undefined,
@@ -138,7 +143,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
         onSuccess: (m) => {
           notifications.show({
             color: m.estadoEquipo === 'OPERATIVO' ? 'green' : 'orange',
-            title: 'Mantenimiento finalizado',
+            title: 'Ejecución completada',
             message: `El equipo quedó ${INFO_ESTADO_EQUIPO[v.estadoEquipo].etiqueta.toLowerCase()}. Falta la verificación para cerrarlo.`,
           })
           onClose()
@@ -154,7 +159,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       <Stack gap="sm">
         <div>
           <Text size="sm" fw={500} mb={4}>
-            Estado en que queda el equipo
+            Condición en que queda el equipo
           </Text>
           <SegmentedControl
             data={ESTADOS_EQUIPO.map((e) => ({ value: e, label: INFO_ESTADO_EQUIPO[e].etiqueta }))}
@@ -162,9 +167,11 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           />
         </div>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <TextInput label="Técnico" withAsterisk placeholder="jperez" {...form.getInputProps('tecnico')} />
+          <TextInput label="Persona encargada" withAsterisk placeholder="jperez" {...form.getInputProps('tecnico')} />
           <DateTimePicker
-            label="Fecha y hora de fin"
+            label="Fecha real de finalización"
+            description="Cuándo terminó efectivamente (no puede ser futura)"
+            placeholder="Elija fecha y hora"
             valueFormat="DD MMM YYYY HH:mm"
             minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
             maxDate={ahoraLocal()}
@@ -202,7 +209,8 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           {...form.getInputProps('diagnostico')}
         />
         <Textarea
-          label="Actividades realizadas"
+          label="Descripción de la ejecución"
+          description="Lo que realmente se hizo (lo planificado está en la planificación)"
           withAsterisk
           autosize
           minRows={2}
@@ -218,12 +226,18 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             {...form.getInputProps('repuestos')}
           />
           <TextInput
-            label="Evidencia"
-            placeholder="Acta, orden de trabajo o informe (referencia)"
-            description="Referencia documental: la aplicación no almacena archivos."
+            label="Verificable"
+            placeholder="Informe MT-2026-031"
+            description="Nombre del informe o acta que prueba la ejecución (no se almacenan archivos)."
             {...form.getInputProps('evidencia')}
           />
         </SimpleGrid>
+        <TextInput
+          label="Repositorio del verificable"
+          placeholder="Carpeta Compartida TICs/Interno o https://…"
+          description="Carpeta compartida o URL http(s) donde está guardado."
+          {...form.getInputProps('repositorioVerificable')}
+        />
         <Textarea label="Observaciones" autosize minRows={1} {...form.getInputProps('observaciones')} />
         <div>
           <Text size="sm" fw={500}>
@@ -254,7 +268,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             Volver
           </Button>
           <Button type="submit" color="green" loading={finalizar.isPending || finalizar.isSuccess}>
-            Finalizar
+            Completar
           </Button>
         </Group>
       </Stack>

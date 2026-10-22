@@ -15,7 +15,8 @@ export function BadgeFase({ fase }: { fase: Fase }) {
 export function BadgeTipo({ tipo }: { tipo: TipoMantenimiento }) {
   const { etiqueta, color } = INFO_TIPO[tipo]
   return (
-    <Badge color={color} variant="outline">
+    // Sin recortar: «PRE…» no distinguiría Preventivo de Predictivo.
+    <Badge color={color} variant="outline" style={{ minWidth: 'max-content' }}>
       {etiqueta}
     </Badge>
   )

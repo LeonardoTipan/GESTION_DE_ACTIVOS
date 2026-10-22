@@ -1,16 +1,17 @@
-import { Button, Group, Modal, SegmentedControl, Stack, Text, Textarea } from '@mantine/core'
+import { Alert, Button, Card, Group, Modal, Select, Stack, Text } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
+import { useDebouncedValue } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import type { Dayjs } from 'dayjs'
+import { useState } from 'react'
 import { fechaHoraLocalAIso } from '../../../shared/formato.ts'
-import { SeleccionActivos } from '../../inventario/componentes/SeleccionActivos.tsx'
 import {
+  usePlanesMantenimiento,
   useProgramarMantenimiento,
   type Mantenimiento,
-  type TipoMantenimiento,
 } from '../api/mantenimientos.ts'
-import { INFO_TIPO, TIPOS } from '../fases.ts'
+import { INFO_FRECUENCIA, INFO_TIPO } from '../fases.ts'
 
 import { instante } from '../../../shared/zona.ts'
 interface Props {
@@ -23,10 +24,16 @@ interface Props {
   onProgramado: (mantenimiento: Mantenimiento) => void
 }
 
-/** Capa 1 · Crea un mantenimiento PROGRAMADO con su intervalo previsto [inicio, límite]. */
+const folio = (id: number) => `PLM-${String(id).padStart(4, '0')}`
+
+/**
+ * Capa 2 · Nueva EJECUCIÓN (situación Pendiente) de una planificación vigente, con su
+ * intervalo previsto [inicio, límite]. El activo, el tipo y la descripción prevista
+ * salen de la planificación: no se eligen aquí.
+ */
 export function ProgramarModal({ opened, onClose, ...resto }: Props) {
   return (
-    <Modal opened={opened} onClose={onClose} title="Programar mantenimiento" size="lg">
+    <Modal opened={opened} onClose={onClose} title="Nueva ejecución de mantenimiento" size="lg">
       {/* El formulario vive dentro del Modal: se monta (y se reinicia) en cada apertura. */}
       <FormProgramar onClose={onClose} {...resto} />
     </Modal>
@@ -35,59 +42,56 @@ export function ProgramarModal({ opened, onClose, ...resto }: Props) {
 
 function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omit<Props, 'opened'>) {
   const programar = useProgramarMantenimiento()
+  const [busqueda, setBusqueda] = useState('')
+  const [q] = useDebouncedValue(busqueda.trim(), 300)
+  const planes = usePlanesMantenimiento({
+    estado: 'VIGENTE',
+    incluirAnulados: false,
+    activoId: activoInicial,
+    q: q || undefined,
+    page: 1,
+    limit: 50,
+  })
   const form = useForm<{
-    activoId: number | null
-    tipo: TipoMantenimiento
-    actividad: string
+    planId: string | null
     fecha: string | null
     fechaLimite: string | null
   }>({
     initialValues: {
-      activoId: activoInicial ?? null,
-      tipo: 'PREVENTIVO',
-      actividad: '',
+      planId: null,
       fecha: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 08:00:00` : null,
       fechaLimite: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 18:00:00` : null,
     },
     validate: {
-      activoId: (v) => (v ? null : 'Elige el activo'),
-      actividad: (v) =>
-        !v.trim()
-          ? 'Describe la actividad'
-          : v.trim().length > 191
-            ? 'Máximo 191 caracteres'
-            : null,
+      planId: (v) => (v ? null : 'Elige la planificación'),
       fecha: (v) => (v ? null : 'Indica el inicio previsto'),
       fechaLimite: (v, valores) =>
-        !v
-          ? 'Indica la fecha límite'
-          : valores.fecha && instante(v).isBefore(instante(valores.fecha))
-            ? 'La fecha límite no puede ser anterior al inicio previsto'
-            : null,
+        v && valores.fecha && instante(v).isBefore(instante(valores.fecha))
+          ? 'La fecha límite no puede ser anterior al inicio previsto'
+          : null,
     },
   })
+  const plan = planes.data?.data.find((p) => String(p.id) === form.values.planId)
 
   const enviar = form.onSubmit((v) =>
     programar.mutate(
       {
-        activoId: v.activoId!,
-        tipo: v.tipo,
-        actividad: v.actividad.trim(),
+        planId: Number(v.planId),
         fecha: fechaHoraLocalAIso(v.fecha!),
-        fechaLimite: fechaHoraLocalAIso(v.fechaLimite!),
+        ...(v.fechaLimite ? { fechaLimite: fechaHoraLocalAIso(v.fechaLimite) } : {}),
       },
       {
         onSuccess: (m) => {
           notifications.show({
             color: 'green',
-            title: 'Mantenimiento programado',
+            title: 'Ejecución creada (pendiente)',
             message: `${INFO_TIPO[m.tipo].etiqueta} para ${m.activo.codigo}.`,
           })
           onClose()
           onProgramado(m)
         },
         onError: (e) =>
-          notifications.show({ color: 'red', title: 'No se pudo programar', message: e.message }),
+          notifications.show({ color: 'red', title: 'No se pudo crear la ejecución', message: e.message }),
       },
     ),
   )
@@ -95,32 +99,40 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
-        <SeleccionActivos
-          titulo="Seleccionar activo para mantenimiento"
-          etiqueta="Activo"
-          multiple={false}
-          value={form.values.activoId ? [form.values.activoId] : []}
-          onChange={(ids) => form.setFieldValue('activoId', ids[0] ?? null)}
-          error={form.errors.activoId}
-          ayuda="Solo se ofrecen activos operativos (también en condición «Malo»)."
-        />
-        <div>
-          <Text size="sm" fw={500} mb={4}>
-            Tipo
-          </Text>
-          <SegmentedControl
-            data={TIPOS.map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
-            {...form.getInputProps('tipo')}
-          />
-        </div>
-        <Textarea
-          label="Actividad"
-          placeholder="Limpieza interna y actualización de firmware"
+        <Select
+          label="Planificación"
+          description="Toda ejecución nace de una planificación vigente: de ella salen el activo, el tipo y la descripción."
+          placeholder="Busque por activo, categoría o asignado"
           withAsterisk
-          autosize
-          minRows={2}
-          {...form.getInputProps('actividad')}
+          searchable
+          searchValue={busqueda}
+          onSearchChange={setBusqueda}
+          filter={({ options }) => options}
+          nothingFoundMessage={planes.isPending ? 'Cargando…' : 'No hay planificaciones vigentes que coincidan'}
+          data={(planes.data?.data ?? []).map((p) => ({
+            value: String(p.id),
+            label: `${folio(p.id)} · ${p.activo.codigo} ${p.activo.nombre} · ${INFO_TIPO[p.tipo].etiqueta} · ${INFO_FRECUENCIA[p.frecuencia]} · ${p.semestrePlanificado.etiqueta}`,
+          }))}
+          {...form.getInputProps('planId')}
         />
+        {plan && (
+          <Card withBorder padding="sm" bg="var(--mantine-color-default-hover)">
+            <Text size="sm">
+              <b>Activo:</b> {plan.activo.codigo} · {plan.activo.nombre} ({plan.activo.categoria})
+            </Text>
+            <Text size="sm">
+              <b>Asignado:</b> {plan.responsable} · <b>Plazo:</b> {plan.plazoDias} día(s)
+            </Text>
+            <Text size="sm" c="dimmed" lineClamp={3}>
+              {plan.actividades}
+            </Text>
+          </Card>
+        )}
+        {planes.data && planes.data.meta.total === 0 && !q && (
+          <Alert color="yellow">
+            No hay planificaciones vigentes{activoInicial ? ' para este activo' : ''}. Créelas en la pestaña Planificación.
+          </Alert>
+        )}
         <Group grow align="flex-start">
           <DateTimePicker
             label="Inicio previsto"
@@ -131,9 +143,9 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
           />
           <DateTimePicker
             label="Fecha límite"
-            description="Después, queda vencido"
+            description={plan ? `Si se omite: inicio + ${plan.plazoDias} día(s)` : 'Si se omite: inicio + plazo de la planificación'}
             valueFormat="DD MMM YYYY HH:mm"
-            withAsterisk
+            clearable
             minDate={form.values.fecha ?? undefined}
             {...form.getInputProps('fechaLimite')}
           />
@@ -143,7 +155,7 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
             Volver
           </Button>
           <Button type="submit" loading={programar.isPending || programar.isSuccess}>
-            Programar
+            Crear ejecución
           </Button>
         </Group>
       </Stack>

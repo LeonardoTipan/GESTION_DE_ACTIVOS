@@ -764,6 +764,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/mantenimientos/bitacora/general": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bitácora General
+         * @description Por semestre del año (S1 ene–jun, S2 jul–dic): planificaciones, cumplidas (al menos una ejecución completada, sin doble conteo), pendientes, ejecuciones completadas por semestre REAL y % de cumplimiento. Las planificaciones se cuentan en su semestre PLANIFICADO. Los anulados no cuentan.
+         */
+        get: operations["BitacoraMantenimientoController_general"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/mantenimientos/bitacora/especifica": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bitácora Específica
+         * @description Una fila por ejecución, con su planificación, y una por planificación aún sin ejecuciones. Filtros: año y semestre planificados, activo, tipo, responsable y situación. Paginada.
+         */
+        get: operations["BitacoraMantenimientoController_especifica"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/mantenimientos": {
         parameters: {
             query?: never;
@@ -778,8 +818,8 @@ export interface paths {
         get: operations["MantenimientosController_findAll"];
         put?: never;
         /**
-         * Programar mantenimiento (admin, analista)
-         * @description Crea el mantenimiento en fase PROGRAMADO.
+         * Nueva ejecución de una planificación (admin, analista)
+         * @description Crea la ejecución en situación Pendiente (PROGRAMADO). Activo, tipo y descripción prevista salen de la planificación vigente.
          */
         post: operations["MantenimientosController_programar"];
         delete?: never;
@@ -927,6 +967,26 @@ export interface paths {
          * @description PROGRAMADO o EN_EJECUCION → CANCELADO, con motivo.
          */
         patch: operations["MantenimientosController_cancelar"];
+        trace?: never;
+    };
+    "/api/mantenimientos/{id}/ejecucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Corregir lo ejecutado (en ejecución: admin y analista; completada: solo admin)
+         * @description Fechas reales, persona encargada, descripción, observación, verificable, repositorio, condición del equipo y tipo realmente ejecutado. Exige motivoCambio; sube la versión y queda en la auditoría con el usuario de la sesión.
+         */
+        patch: operations["MantenimientosController_corregirEjecucion"];
         trace?: never;
     };
     "/api/mantenimientos/{id}/anular": {
@@ -1587,6 +1647,11 @@ export interface components {
             admiteAccesoLogico: boolean;
             /** @description Elegible para solicitudes de acceso físico. */
             admiteAccesoFisico: boolean;
+            /**
+             * @description Clase para los tipos de mantenimiento; null = sin clasificar.
+             * @enum {string|null}
+             */
+            claseMantenimiento: "HARDWARE" | "SOFTWARE" | null;
         };
         CriticidadDto: {
             /** @example 3 */
@@ -1983,6 +2048,11 @@ export interface components {
             admiteAccesoLogico?: boolean;
             /** @description Control de acceso: sus activos admiten solicitudes de acceso FÍSICO. Falso si se omite. */
             admiteAccesoFisico?: boolean;
+            /**
+             * @description Mantenimiento: HARDWARE (preventivo, correctivo, predictivo) o SOFTWARE (preventivo, correctivo, perfectivo, adaptativo, evolutivo). null = sin clasificar: solo preventivo y correctivo.
+             * @enum {string|null}
+             */
+            claseMantenimiento?: "HARDWARE" | "SOFTWARE" | null;
         };
         UpdateCategoriaDto: {
             /** @example Hardware */
@@ -1993,6 +2063,11 @@ export interface components {
             admiteAccesoLogico?: boolean;
             /** @description Control de acceso: sus activos admiten solicitudes de acceso FÍSICO. Falso si se omite. */
             admiteAccesoFisico?: boolean;
+            /**
+             * @description Mantenimiento: HARDWARE (preventivo, correctivo, predictivo) o SOFTWARE (preventivo, correctivo, perfectivo, adaptativo, evolutivo). null = sin clasificar: solo preventivo y correctivo.
+             * @enum {string|null}
+             */
+            claseMantenimiento?: "HARDWARE" | "SOFTWARE" | null;
         };
         CreateCriticidadDto: {
             /** @example Alta */
@@ -2655,7 +2730,7 @@ export interface components {
             /** Format: date-time */
             fecha: string;
             /** @enum {string} */
-            tipo: "PREVENTIVO" | "CORRECTIVO";
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
             activo: components["schemas"]["ActivoBreveDto"];
             vencido: boolean;
         };
@@ -2670,22 +2745,44 @@ export interface components {
             /** @description Finalizados que esperan su verificación. */
             pendientesVerificacion: number;
         };
+        SemestreDto: {
+            /** @example 2026 */
+            anio: number;
+            /** @enum {number} */
+            semestre: 1 | 2;
+            /** @example S1-2026 */
+            etiqueta: string;
+        };
         PlanMantenimientoDto: {
-            /** @enum {string} */
-            tipo: "PREVENTIVO" | "CORRECTIVO";
             /**
-             * @description UNICA = una sola intervención.
+             * @description Tipo previsto. Hardware: PREVENTIVO, CORRECTIVO, PREDICTIVO. Software: PREVENTIVO, CORRECTIVO, PERFECTIVO, ADAPTATIVO, EVOLUTIVO (según la clase de la categoría del activo).
+             * @enum {string}
+             */
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+            /**
+             * @description PERÍODO: cada cuánto se planifica (UNICA = una sola intervención).
              * @enum {string}
              */
             frecuencia: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
             /**
              * Format: date-time
+             * @description Fecha de inicio PLANIFICADA (fija). De ella salen el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.
+             */
+            fechaInicio: string;
+            /**
+             * Format: date-time
              * @description null = sin más intervenciones previstas.
              */
-            proximaFecha: string | null;
-            /** @example Mesa de Servicios */
+            proximaFecha?: string | null;
+            /**
+             * @description Asignado: quién debe realizarlo.
+             * @example Mesa de Servicios
+             */
             responsable: string;
-            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            /**
+             * @description Descripción PLANIFICADA del trabajo.
+             * @example Limpieza interna, revisión de ventiladores y actualización de firmware.
+             */
             actividades: string;
             /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
             plazoDias?: number;
@@ -2710,6 +2807,10 @@ export interface components {
             activo: components["schemas"]["ActivoBreveDto"];
             /** @enum {string} */
             estado: "VIGENTE" | "SUSPENDIDO";
+            /** @description Semestre y año PLANIFICADOS (de la fecha de inicio). */
+            semestrePlanificado: components["schemas"]["SemestreDto"];
+            /** @description Ejecuciones COMPLETADAS (finalizadas, no anuladas). */
+            ejecucionesCompletadas: number;
             /** @description Vigente y con la próxima intervención ya vencida. */
             vencido: boolean;
             /** @description Intervenciones generadas desde el plan. */
@@ -2720,21 +2821,35 @@ export interface components {
             meta: components["schemas"]["PaginationMetaDto"];
         };
         CrearPlanesMantenimientoDto: {
-            /** @enum {string} */
-            tipo: "PREVENTIVO" | "CORRECTIVO";
             /**
-             * @description UNICA = una sola intervención.
+             * @description Tipo previsto. Hardware: PREVENTIVO, CORRECTIVO, PREDICTIVO. Software: PREVENTIVO, CORRECTIVO, PERFECTIVO, ADAPTATIVO, EVOLUTIVO (según la clase de la categoría del activo).
+             * @enum {string}
+             */
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+            /**
+             * @description PERÍODO: cada cuánto se planifica (UNICA = una sola intervención).
              * @enum {string}
              */
             frecuencia: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
             /**
              * Format: date-time
-             * @description Primera (o próxima) intervención prevista.
+             * @description Fecha de inicio PLANIFICADA (fija). De ella salen el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.
              */
-            proximaFecha: string;
-            /** @example Mesa de Servicios */
+            fechaInicio: string;
+            /**
+             * Format: date-time
+             * @description Próxima intervención prevista; al crear, la fecha de inicio.
+             */
+            proximaFecha?: string;
+            /**
+             * @description Asignado: quién debe realizarlo.
+             * @example Mesa de Servicios
+             */
             responsable: string;
-            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            /**
+             * @description Descripción PLANIFICADA del trabajo.
+             * @example Limpieza interna, revisión de ventiladores y actualización de firmware.
+             */
             actividades: string;
             /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
             plazoDias?: number;
@@ -2748,21 +2863,35 @@ export interface components {
             activoIds: number[];
         };
         ModificarPlanMantenimientoDto: {
-            /** @enum {string} */
-            tipo?: "PREVENTIVO" | "CORRECTIVO";
             /**
-             * @description UNICA = una sola intervención.
+             * @description Tipo previsto. Hardware: PREVENTIVO, CORRECTIVO, PREDICTIVO. Software: PREVENTIVO, CORRECTIVO, PERFECTIVO, ADAPTATIVO, EVOLUTIVO (según la clase de la categoría del activo).
+             * @enum {string}
+             */
+            tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+            /**
+             * @description PERÍODO: cada cuánto se planifica (UNICA = una sola intervención).
              * @enum {string}
              */
             frecuencia?: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
             /**
              * Format: date-time
-             * @description Primera (o próxima) intervención prevista.
+             * @description Fecha de inicio PLANIFICADA (fija). De ella salen el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.
+             */
+            fechaInicio?: string;
+            /**
+             * Format: date-time
+             * @description Próxima intervención prevista; al crear, la fecha de inicio.
              */
             proximaFecha?: string;
-            /** @example Mesa de Servicios */
+            /**
+             * @description Asignado: quién debe realizarlo.
+             * @example Mesa de Servicios
+             */
             responsable?: string;
-            /** @example Limpieza interna, revisión de ventiladores y actualización de firmware. */
+            /**
+             * @description Descripción PLANIFICADA del trabajo.
+             * @example Limpieza interna, revisión de ventiladores y actualización de firmware.
+             */
             actividades?: string;
             /** @description Días de plazo de cada intervención desde su inicio previsto (7 si se omite). */
             plazoDias?: number;
@@ -2774,9 +2903,11 @@ export interface components {
         ProgramarDesdePlanDto: {
             /**
              * Format: date-time
-             * @description Por defecto, la próxima fecha del plan.
+             * @description Fecha prevista de esta ejecución; por defecto, la próxima fecha del plan. Obligatoria si es adicional.
              */
             fecha?: string;
+            /** @description true = ejecución adicional: no adelanta la próxima fecha del período. */
+            adicional?: boolean;
         };
         ProgramacionDesdePlanDto: {
             /** @description Mantenimiento creado (fase PROGRAMADO). */
@@ -2835,6 +2966,139 @@ export interface components {
             /** @example Mesa de Servicios */
             responsable: string;
         };
+        PeriodoBitacoraDto: {
+            anio: number;
+            /**
+             * @description null = el año entero.
+             * @enum {number|null}
+             */
+            semestre: 1 | 2 | null;
+            /** @example S1-2026 */
+            etiqueta: string;
+        };
+        ResumenBitacoraDto: {
+            periodo: components["schemas"]["PeriodoBitacoraDto"];
+            /** @description Planificaciones del semestre PLANIFICADO (fecha de inicio planificada), no anuladas. */
+            planificadas: number;
+            /** @description Suspendidas sin ejecución completada: no exigibles, fuera del cálculo. */
+            suspendidas: number;
+            /** @description planificadas − suspendidas (denominador del cumplimiento). */
+            esperadas: number;
+            /** @description Planificaciones con al menos una ejecución completada (sin doble conteo). */
+            cumplidas: number;
+            /** @description esperadas − cumplidas. */
+            pendientes: number;
+            /** @description Ejecuciones completadas en este semestre REAL (fecha real de mantenimiento). */
+            ejecucionesCompletadas: number;
+            /** @description De ellas, sin planificación (registros anteriores). */
+            ejecucionesSinPlanificacion: number;
+            /** @description cumplidas / esperadas × 100, con 1 decimal; null si no hay esperadas. */
+            cumplimiento: number | null;
+        };
+        BitacoraGeneralDto: {
+            semestres: components["schemas"]["ResumenBitacoraDto"][];
+            /** @description Suma de los semestres pedidos. */
+            total: components["schemas"]["ResumenBitacoraDto"];
+        };
+        FilaBitacoraDto: {
+            /**
+             * @description E-<ejecución> o P-<planificación sin ejecución>.
+             * @example E-12
+             */
+            clave: string;
+            mantenimientoId: number | null;
+            /** @description null = registro anterior sin planificación. */
+            planId: number | null;
+            activo: components["schemas"]["ActivoBreveDto"];
+            /** @enum {string} */
+            situacion: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO" | "SIN_EJECUCION";
+            /**
+             * @description Período.
+             * @enum {string|null}
+             */
+            periodo: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL" | null;
+            semestrePlanificado: components["schemas"]["SemestreDto"] | null;
+            /** Format: date-time */
+            fechaInicioPlanificada: string | null;
+            /** @enum {string|null} */
+            tipoPlanificado: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO" | null;
+            /** @description Asignado. */
+            asignado: string | null;
+            descripcionPlanificada: string | null;
+            /**
+             * @description Tipo de la ejecución.
+             * @enum {string|null}
+             */
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO" | null;
+            /**
+             * Format: date-time
+             * @description Inicio previsto de la ejecución.
+             */
+            fechaPrevista: string | null;
+            /** Format: date-time */
+            fechaLimite: string | null;
+            /**
+             * Format: date-time
+             * @description Fecha REAL de mantenimiento.
+             */
+            fechaInicio: string | null;
+            /**
+             * Format: date-time
+             * @description Fecha REAL de finalización.
+             */
+            fechaFin: string | null;
+            semestreReal: components["schemas"]["SemestreDto"] | null;
+            /** @description Persona encargada. */
+            tecnico: string | null;
+            /** @description Descripción de la ejecución o motivo de cancelación. */
+            resultado: string | null;
+            /**
+             * @description Condición del equipo.
+             * @enum {string|null}
+             */
+            estadoEquipo: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO" | null;
+            observaciones: string | null;
+            /** @description Verificable. */
+            evidencia: string | null;
+            repositorioVerificable: string | null;
+            /** Format: date-time */
+            fechaCancelacion: string | null;
+            /**
+             * Format: date-time
+             * @description Fecha de registro (de la ejecución, o de la planificación si no tiene).
+             */
+            registradoEn: string;
+        };
+        PaginatedFilaBitacoraDto: {
+            data: components["schemas"]["FilaBitacoraDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        PlanificacionBreveDto: {
+            id: number;
+            /**
+             * @description Período.
+             * @enum {string}
+             */
+            frecuencia: "UNICA" | "MENSUAL" | "TRIMESTRAL" | "SEMESTRAL" | "ANUAL";
+            /**
+             * @description Tipo planificado.
+             * @enum {string}
+             */
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+            /**
+             * Format: date-time
+             * @description Fecha de inicio planificada.
+             */
+            fechaInicio: string;
+            /** @description Asignado. */
+            responsable: string;
+            /** @description Descripción planificada. */
+            actividades: string;
+            /** @description Días de plazo. */
+            plazoDias: number;
+            /** @enum {string} */
+            estado: "VIGENTE" | "SUSPENDIDO";
+        };
         MantenimientoDto: {
             /** @example 1 */
             id: number;
@@ -2844,7 +3108,7 @@ export interface components {
             /** @description Plan del que procede (capa 1). */
             planId: number | null;
             /** @enum {string} */
-            tipo: "PREVENTIVO" | "CORRECTIVO";
+            tipo: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
             /** @enum {string} */
             fase: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO";
             /**
@@ -2870,7 +3134,10 @@ export interface components {
             estadoEquipo: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO" | null;
             /** @description Resultado al finalizar o motivo al cancelar. */
             resultado: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Fecha de registro (automática, la pone el servidor).
+             */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
@@ -2886,7 +3153,21 @@ export interface components {
             costo: number | null;
             repuestos: string | null;
             observaciones: string | null;
+            /** @description Verificable (nombre del informe o acta). */
             evidencia: string | null;
+            /** @description Repositorio del verificable: carpeta o URL http(s). */
+            repositorioVerificable: string | null;
+            /**
+             * Format: date-time
+             * @description Momento de la cancelación (no es una fecha real de fin).
+             */
+            fechaCancelacion: string | null;
+            /** @description Planificación de origen; null = registro anterior sin planificación. */
+            plan: components["schemas"]["PlanificacionBreveDto"] | null;
+            /** @description Semestre PLANIFICADO (fecha de inicio de la planificación). */
+            semestrePlanificado: components["schemas"]["SemestreDto"] | null;
+            /** @description Semestre REAL (fecha real de mantenimiento); null si no se ha iniciado. */
+            semestreReal: components["schemas"]["SemestreDto"] | null;
             /**
              * Format: date-time
              * @description Límite previsto de la ejecución.
@@ -2927,40 +3208,36 @@ export interface components {
         };
         ProgramarMantenimientoDto: {
             /**
-             * @description ID de un activo vigente.
+             * @description Planificación (vigente) que origina la ejecución.
+             * @example 3
+             */
+            planId: number;
+            /**
+             * @description Si se envía, debe ser el activo de la planificación.
              * @example 5
              */
-            activoId: number;
-            /**
-             * @example PREVENTIVO
-             * @enum {string}
-             */
-            tipo: "PREVENTIVO" | "CORRECTIVO";
-            /** @example Limpieza interna y actualización de firmware */
-            actividad: string;
+            activoId?: number;
             /**
              * Format: date-time
-             * @description Inicio previsto (puede ser futuro).
-             * @example 2026-10-15T08:00:00.000Z
+             * @description Inicio previsto de esta ejecución.
              */
             fecha: string;
             /**
              * Format: date-time
-             * @description Límite previsto para completarlo: no anterior al inicio previsto.
-             * @example 2026-10-17T18:00:00.000Z
+             * @description Límite previsto; por defecto, inicio + plazo de la planificación.
              */
-            fechaLimite: string;
+            fechaLimite?: string;
         };
         IniciarMantenimientoDto: {
             /**
              * Format: date-time
-             * @description Si no se envía, se usa la hora actual del servidor.
+             * @description Fecha REAL de mantenimiento: cuándo empezó efectivamente el trabajo (obligatoria; puede ser anterior al registro; no futura).
              */
-            fechaInicio?: string;
+            fechaInicio: string;
             /** @description Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres). */
             motivoExcepcion?: string;
             /**
-             * @description Técnico que realiza el trabajo.
+             * @description Persona encargada que realiza el trabajo.
              * @example jperez
              */
             tecnico?: string;
@@ -2973,19 +3250,22 @@ export interface components {
             campo: "EJECUCION" | "VERIFICACION";
         };
         FinalizarMantenimientoDto: {
-            /** @example Firmware actualizado a v2.4; sin incidencias. */
+            /**
+             * @description Descripción de la EJECUCIÓN: el trabajo realmente realizado (no sustituye a la planificada).
+             * @example Firmware actualizado a v2.4; sin incidencias.
+             */
             resultado: string;
             /**
-             * @description Cómo quedó el equipo tras el mantenimiento.
+             * @description Condición del equipo tras el mantenimiento (Operativo / Requiere cambio…). No es la situación de la ejecución.
              * @example OPERATIVO
              * @enum {string}
              */
             estadoEquipo: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO";
             /**
              * Format: date-time
-             * @description Si no se envía, se usa la hora actual del servidor.
+             * @description Fecha REAL de finalización (obligatoria; no anterior a la fecha real de mantenimiento; no futura).
              */
-            fechaFin?: string;
+            fechaFin: string;
             /**
              * @description Técnico. Obligatorio si no se indicó al iniciar.
              * @example jperez
@@ -3007,10 +3287,15 @@ export interface components {
             repuestos?: string;
             observaciones?: string;
             /**
-             * @description Referencia a la evidencia.
-             * @example Informe técnico MT-031
+             * @description VERIFICABLE: nombre del informe o documento que prueba la ejecución.
+             * @example Informe de Mantenimiento a Servidores y Servicios 01
              */
             evidencia?: string;
+            /**
+             * @description REPOSITORIO del verificable: carpeta compartida o URL http(s).
+             * @example Carpeta Compartida TICs/Interno
+             */
+            repositorioVerificable?: string;
             /** @description Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres). */
             motivoExcepcion?: string;
             /**
@@ -3031,23 +3316,56 @@ export interface components {
              */
             motivo: string;
         };
+        CorregirEjecucionDto: {
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+            /**
+             * Format: date-time
+             * @description Fecha REAL de mantenimiento.
+             */
+            fechaInicio?: string;
+            /**
+             * Format: date-time
+             * @description Fecha REAL de finalización (solo en una completada).
+             */
+            fechaFin?: string;
+            /** @description Persona encargada. */
+            tecnico?: string;
+            /**
+             * @description Tipo realmente ejecutado, si difiere del previsto (validado por la clase del activo).
+             * @enum {string}
+             */
+            tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+            /** @description Descripción de la ejecución (solo en una completada). */
+            resultado?: string;
+            /**
+             * @description Condición del equipo (solo en una completada).
+             * @enum {string}
+             */
+            estadoEquipo?: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO";
+            observaciones?: string;
+            /** @description Verificable. */
+            evidencia?: string;
+            /** @description Repositorio del verificable. */
+            repositorioVerificable?: string;
+        };
         EditarMantenimientoDto: {
             /**
              * @example PREVENTIVO
              * @enum {string}
              */
-            tipo?: "PREVENTIVO" | "CORRECTIVO";
+            tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
             /** @example Limpieza interna y actualización de firmware */
             actividad?: string;
             /**
              * Format: date-time
-             * @description Inicio previsto (puede ser futuro).
+             * @description Inicio previsto de esta ejecución (puede ser futuro).
              * @example 2026-10-15T08:00:00.000Z
              */
             fecha?: string;
             /**
              * Format: date-time
-             * @description Límite previsto para completarlo: no anterior al inicio previsto.
+             * @description Límite previsto para completarla: no anterior al inicio previsto.
              * @example 2026-10-17T18:00:00.000Z
              */
             fechaLimite?: string;
@@ -5874,8 +6192,12 @@ export interface operations {
                 responsable?: string;
                 /** @description false = oculta los registros anulados (por defecto se muestran, marcados). */
                 incluirAnulados?: boolean;
-                tipo?: "PREVENTIVO" | "CORRECTIVO";
+                tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
                 estado?: "VIGENTE" | "SUSPENDIDO";
+                /** @description Año planificado (de la fecha de inicio). */
+                anio?: number;
+                /** @description Semestre planificado (exige el año). */
+                semestre?: 1 | 2;
                 /** @description true = solo los vigentes cuya próxima intervención ya pasó. */
                 vencidos?: boolean;
             };
@@ -6298,6 +6620,113 @@ export interface operations {
             };
         };
     };
+    BitacoraMantenimientoController_general: {
+        parameters: {
+            query: {
+                anio: number;
+                /** @description S1 (ene–jun) o S2 (jul–dic); sin él, los dos y el total del año. */
+                semestre?: 1 | 2;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BitacoraGeneralDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    BitacoraMantenimientoController_especifica: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description Año planificado. */
+                anio?: number;
+                /** @description Semestre planificado (exige el año). */
+                semestre?: 1 | 2;
+                activoId?: number;
+                tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
+                /** @description Asignado o persona encargada (contiene el texto). */
+                responsable?: string;
+                /** @description Situación. PROGRAMADO (Pendiente) incluye también las planificaciones sin ejecución. */
+                situacion?: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO" | "SIN_EJECUCION";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedFilaBitacoraDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     MantenimientosController_findAll: {
         parameters: {
             query?: {
@@ -6313,7 +6742,7 @@ export interface operations {
                 planId?: number;
                 /** @description Finalizados sin verificar, o cerrados como operativos. */
                 cierre?: "PENDIENTE_VERIFICACION" | "CERRADO";
-                tipo?: "PREVENTIVO" | "CORRECTIVO";
+                tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
                 fase?: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO";
                 estadoEquipo?: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO";
                 /** @description Fecha programada desde (incluida). Útil para calendarios. */
@@ -6843,6 +7272,66 @@ export interface operations {
                 };
             };
             /** @description Fase no permitida. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    MantenimientosController_corregirEjecucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorregirEjecucionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MantenimientoDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Pendiente, cancelado, anulado o modificado entretanto. */
             409: {
                 headers: {
                     [name: string]: unknown;

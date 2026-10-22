@@ -13,10 +13,13 @@ interface Props {
   mantenimiento: Mantenimiento
 }
 
-/** Capa 2 · PROGRAMADO → EN_EJECUCION, con la fecha real de inicio. */
+/**
+ * Capa 2 · Pendiente → En ejecución, con la fecha REAL de mantenimiento. La indica
+ * el usuario (puede ser anterior al registro): no se rellena con la hora actual.
+ */
 export function IniciarModal({ opened, onClose, mantenimiento }: Props) {
   return (
-    <Modal opened={opened} onClose={onClose} title="Iniciar mantenimiento" size="lg">
+    <Modal opened={opened} onClose={onClose} title="Iniciar la ejecución" size="lg">
       <FormIniciar onClose={onClose} mantenimiento={mantenimiento} />
     </Modal>
   )
@@ -30,9 +33,9 @@ function fueraDelPlazo(m: Mantenimiento, real: string | null) {
 function FormIniciar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
   const iniciar = useIniciarMantenimiento()
   const form = useForm({
-    initialValues: { fechaInicio: ahoraLocal() as string | null, tecnico: '', motivoExcepcion: '' },
+    initialValues: { fechaInicio: null as string | null, tecnico: m.tecnico ?? '', motivoExcepcion: '' },
     validate: {
-      fechaInicio: (v) => (v ? null : 'Indica cuándo empezó'),
+      fechaInicio: (v) => (v ? null : 'Indica la fecha real en que empezó el trabajo'),
       tecnico: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
       motivoExcepcion: (v, valores) => errorExcepcion(fueraDelPlazo(m, valores.fechaInicio), v),
     },
@@ -53,8 +56,8 @@ function FormIniciar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
         onSuccess: () => {
           notifications.show({
             color: 'yellow',
-            title: 'Mantenimiento en ejecución',
-            message: 'Cuando termine, regístralo con "Finalizar".',
+            title: 'Ejecución iniciada',
+            message: 'Cuando termine, regístrela con "Completar".',
           })
           onClose()
         },
@@ -68,10 +71,13 @@ function FormIniciar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
         <Text size="sm" c="dimmed">
-          El mantenimiento pasará a <b>En ejecución</b>. Previsto: {fmt(m.fecha)} → {fmt(m.fechaLimite)}.
+          La ejecución pasará a <b>En ejecución</b>. Previsto: {fmt(m.fecha)} → {fmt(m.fechaLimite)}. La fecha de
+          registro la pone el sistema; aquí se indica cuándo empezó realmente el trabajo.
         </Text>
         <DateTimePicker
-          label="Fecha y hora real de inicio"
+          label="Fecha real de mantenimiento"
+          description="Cuándo empezó efectivamente (no puede ser futura)"
+          placeholder="Elija fecha y hora"
           valueFormat="DD MMM YYYY HH:mm"
           maxDate={ahoraLocal()}
           withAsterisk
@@ -84,7 +90,7 @@ function FormIniciar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           error={form.errors.motivoExcepcion as string | undefined}
         />
         <TextInput
-          label="Técnico asignado"
+          label="Persona encargada"
           placeholder="Usuario o nombre de quien ejecuta"
           description="Se puede indicar también al finalizar; es obligatorio para cerrarlo."
           {...form.getInputProps('tecnico')}
