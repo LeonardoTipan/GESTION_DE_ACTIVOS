@@ -139,9 +139,8 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       const capa2 = await agenda('mantenimientos', 2, ahora - 5 * DIA, ahora + DIA);
       const real = capa2.find((e) => e.clave === `m2r-${id}`)!;
       expect(real).toMatchObject({ tipo: 'REAL', estado: 'COMPLETADO', inicio: iso(ahora - 3 * DIA + HORA), fin: iso(ahora - 3 * DIA + 3 * HORA) });
-      const capa3 = await agenda('mantenimientos', 3, ahora - 5 * DIA, ahora + DIA);
-      expect(capa3.find((e) => e.clave === `m3r-${v.body.id}`)).toMatchObject({ tipo: 'REAL', estado: 'COMPLETADO', inicio: iso(ahora - HORA) });
-      expect(capa3.some((e) => e.clave === `m3p-${id}`)).toBe(false); // ya verificado: no queda pendiente
+      // El mantenimiento tiene solo dos fases: la agenda no tiene capa de verificación.
+      expect(await agenda('mantenimientos', 3, ahora - 5 * DIA, ahora + DIA)).toEqual([]);
     }, LENTO);
 
     it('tras una verificación que no lo cierra, el analista programa la siguiente (la ventana ya se usó)', async () => {

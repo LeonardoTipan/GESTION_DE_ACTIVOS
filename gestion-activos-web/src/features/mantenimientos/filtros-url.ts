@@ -8,11 +8,9 @@ import { FASES, TIPOS } from './fases.ts'
 
 export const TAMANO_PAGINA = 20
 
-/** Las tres capas del módulo y las bitácoras, cada una en su pestaña. */
-export const CAPAS = ['planificacion', 'ejecucion', 'verificacion', 'bitacoras'] as const
+/** Las DOS fases del módulo (planificación y ejecución) y las bitácoras, cada una en su pestaña. */
+export const CAPAS = ['planificacion', 'ejecucion', 'bitacoras'] as const
 export type Capa = (typeof CAPAS)[number]
-export const CIERRES = ['PENDIENTE_VERIFICACION', 'CERRADO'] as const
-export type FiltroCierre = (typeof CIERRES)[number]
 
 export interface FiltrosMantenimientos {
   page: number
@@ -27,7 +25,6 @@ export interface FiltrosMantenimientos {
   /** Búsqueda libre: activo, actividad, técnico… */
   q?: string
   tecnico?: string
-  cierre?: FiltroCierre
   /** Solo PROGRAMADOS con fecha ya pasada. */
   vencidos?: boolean
 }
@@ -43,7 +40,6 @@ export function leerFiltros(params: URLSearchParams): FiltrosMantenimientos {
     categoriaId: enteroPositivo(params.get('categoriaId')),
     q: params.get('q')?.trim() || undefined,
     tecnico: params.get('tecnico')?.trim() || undefined,
-    cierre: valorPermitido(params.get('cierre'), CIERRES),
     vencidos: params.get('vencidos') === '1' ? true : undefined,
   }
 }
@@ -58,7 +54,6 @@ export function escribirFiltros(filtros: FiltrosMantenimientos): URLSearchParams
   if (filtros.categoriaId) params.set('categoriaId', String(filtros.categoriaId))
   if (filtros.q) params.set('q', filtros.q)
   if (filtros.tecnico) params.set('tecnico', filtros.tecnico)
-  if (filtros.cierre) params.set('cierre', filtros.cierre)
   if (filtros.vencidos) params.set('vencidos', '1')
   if (filtros.page > 1) params.set('page', String(filtros.page))
   return params
@@ -76,8 +71,6 @@ export function aConsultaApi(filtros: FiltrosMantenimientos): FiltrosApiMantenim
     categoriaId: filtros.categoriaId,
     q: filtros.q,
     tecnico: filtros.tecnico,
-    // En la pestaña de verificación, por defecto, lo que falta verificar.
-    cierre: filtros.capa === 'verificacion' ? (filtros.cierre ?? 'PENDIENTE_VERIFICACION') : filtros.cierre,
     vencidos: filtros.vencidos,
   }
 }

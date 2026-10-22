@@ -1,11 +1,9 @@
 import type {
-  Cierre,
   ClaseMantenimiento,
   EstadoEquipo,
   Fase,
   FrecuenciaMantenimiento,
   Mantenimiento,
-  ResultadoVerificacion,
   TipoMantenimiento,
 } from './api/mantenimientos.ts'
 
@@ -66,23 +64,7 @@ export const INFO_FRECUENCIA: Record<FrecuenciaMantenimiento, string> = {
   ANUAL: 'Anual',
 }
 
-/** Capa 3: en qué punto del cierre está un mantenimiento. */
-export const INFO_CIERRE: Record<Cierre, Info> = {
-  NO_APLICA: { etiqueta: '—', color: 'gray' },
-  PENDIENTE_VERIFICACION: { etiqueta: 'Pendiente de verificar', color: 'yellow' },
-  CERRADO: { etiqueta: 'Cerrado · operativo', color: 'green' },
-  EN_SEGUIMIENTO: { etiqueta: 'Requiere seguimiento', color: 'orange' },
-  NO_SATISFACTORIO: { etiqueta: 'No satisfactorio', color: 'red' },
-}
-
-export const INFO_RESULTADO_VERIFICACION: Record<ResultadoVerificacion, Info> = {
-  OPERATIVO: { etiqueta: 'Operativo', color: 'green' },
-  REQUIERE_SEGUIMIENTO: { etiqueta: 'Requiere seguimiento', color: 'orange' },
-  NO_SATISFACTORIO: { etiqueta: 'No satisfactorio', color: 'red' },
-}
-
 export const FRECUENCIAS = Object.keys(INFO_FRECUENCIA) as FrecuenciaMantenimiento[]
-export const RESULTADOS_VERIFICACION = Object.keys(INFO_RESULTADO_VERIFICACION) as ResultadoVerificacion[]
 export const FASES = Object.keys(INFO_FASE) as Fase[]
 export const TIPOS = Object.keys(INFO_TIPO) as TipoMantenimiento[]
 export const ESTADOS_EQUIPO = Object.keys(INFO_ESTADO_EQUIPO) as EstadoEquipo[]
@@ -129,16 +111,6 @@ export function estadoPasos(
 export function pasoActivo(pasos: readonly EstadoPaso[]): number {
   const i = pasos.findIndex((p) => p !== 'completado')
   return i === -1 ? pasos.length : i
-}
-
-/** Lo que la API exige para cerrar como OPERATIVO y aún falta (para avisar antes de enviar). */
-export function faltantesParaCerrar(m: Pick<Mantenimiento, 'tecnico' | 'diagnostico' | 'duracionMin' | 'resultado'>): string[] {
-  return [
-    !m.tecnico && 'técnico',
-    !m.diagnostico && 'diagnóstico',
-    m.duracionMin === null && 'duración',
-    !m.resultado && 'actividades realizadas',
-  ].filter((x): x is string => Boolean(x))
 }
 
 /**

@@ -94,11 +94,10 @@ function Tablero() {
   if (error) return <Alert color="red">{error.message}</Alert>
   return (
     <Stack gap="sm">
-      <SimpleGrid cols={{ base: 1, xs: 2, md: 4 }}>
+      <SimpleGrid cols={{ base: 1, xs: 2, md: 3 }}>
         <Cifra titulo="Próximas intervenciones" valor={data?.proximas.length} pista="Planes y programados en 60 días" />
         <Cifra titulo="Activos sin plan preventivo" valor={data?.activosSinPlan} color="orange" pista="Operativos, sin plan vigente" />
         <Cifra titulo="Planes vencidos" valor={data?.planesVencidos} color="red" pista="Próxima fecha ya pasada" />
-        <Cifra titulo="Pendientes de verificar" valor={data?.pendientesVerificacion} color="yellow" pista="Finalizados sin verificación" />
       </SimpleGrid>
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
         <Card withBorder padding="sm">

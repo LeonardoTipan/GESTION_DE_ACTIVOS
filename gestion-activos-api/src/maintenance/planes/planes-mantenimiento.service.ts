@@ -206,12 +206,12 @@ export class PlanesMantenimientoService {
     return { mantenimientoId, plan: await this.findOne(id) };
   }
 
-  /** Agenda de las tres capas en un rango, con los filtros del calendario. */
+  /** Agenda de las dos fases (planificación y ejecución) en un rango, con los filtros del calendario. */
   async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
     const rango = { gte: q.desde, lte: q.hasta };
     const deActivo = q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {};
     const contiene = q.responsable ? { contains: q.responsable } : undefined;
-    const [mantenimientos, verificaciones, planes] = await Promise.all([
+    const [mantenimientos, planes] = await Promise.all([
       this.prisma.mantenimiento.findMany({
         where: {
           anuladoEn: null,
@@ -221,15 +221,9 @@ export class PlanesMantenimientoService {
             { fecha: { lte: q.hasta }, OR: [{ fechaLimite: { gte: q.desde } }, { fechaLimite: null, fecha: { gte: q.desde } }] },
             { fechaInicio: rango },
             { fechaFin: rango },
-            { verificacionPrevista: { lte: q.hasta }, OR: [{ verificacionLimite: { gte: q.desde } }, { verificacionLimite: null }] },
           ],
         },
-        include: { activo: SELECT_ACTIVO, verificaciones: { select: { resultado: true, anuladoEn: true }, orderBy: { id: 'asc' } } },
-        take: 2000,
-      }),
-      this.prisma.verificacionMantenimiento.findMany({
-        where: { anuladoEn: null, fecha: rango, mantenimiento: { anuladoEn: null, ...deActivo }, ...(contiene ? { responsable: contiene } : {}) },
-        include: { mantenimiento: { select: { activo: SELECT_ACTIVO } } },
+        include: { activo: SELECT_ACTIVO },
         take: 2000,
       }),
       this.prisma.planMantenimiento.findMany({
@@ -239,7 +233,6 @@ export class PlanesMantenimientoService {
     ]);
     const eventos = agendaMantenimientos({
       mantenimientos: mantenimientos.map((m) => ({ ...m, activo: activoBreve(m.activo) })),
-      verificaciones: verificaciones.map((v) => ({ ...v, activo: activoBreve(v.mantenimiento.activo) })),
       planes: planes.map((p) => ({ ...p, activo: activoBreve(p.activo) })),
       desde: q.desde,
       hasta: q.hasta,

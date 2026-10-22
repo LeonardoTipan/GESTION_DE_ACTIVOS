@@ -4,12 +4,13 @@ import { estaVencido, limiteEfectivo } from '../mantenimientos/transiciones.js';
 import { siguienteFecha } from './frecuencia.js';
 
 /**
- * Agenda de mantenimientos, en sus tres capas, a partir de lo que hay en la
+ * Agenda de mantenimientos, en sus DOS fases, a partir de lo que hay en la
  * base. Función pura. Distingue SIEMPRE lo previsto (un intervalo) de lo real.
- *   1 Planificación: intervalos previstos de los mantenimientos y próximas
- *     intervenciones de los planes vigentes (aún sin programar).
- *   2 Ejecución: pendientes (previstos sin iniciar) y lo realmente ejecutado.
- *   3 Verificación: ventanas previstas de verificación y las verificaciones hechas.
+ *   1 Planificación: intervalos previstos de las ejecuciones y próximas
+ *     intervenciones de las planificaciones vigentes (aún sin ejecución).
+ *   2 Ejecución: pendientes (previstas sin iniciar) y lo realmente ejecutado.
+ * El mantenimiento no tiene fase de verificación: una ejecución completada,
+ * con su verificable, está terminada. La capa 3 no devuelve eventos.
  */
 
 const DIA = 86_400_000;
@@ -27,10 +28,7 @@ export interface MantenimientoAgenda {
   tecnico: string | null;
   estadoEquipo: string | null;
   fueraDePlazo: boolean;
-  verificacionPrevista: Date | null;
-  verificacionLimite: Date | null;
   activo: ActivoBreveDto;
-  verificaciones: { resultado: string; anuladoEn: Date | null }[];
 }
 
 export interface PlanAgenda {
@@ -43,23 +41,12 @@ export interface PlanAgenda {
   activo: ActivoBreveDto;
 }
 
-export interface VerificacionAgenda {
-  id: number;
-  mantenimientoId: number;
-  fecha: Date;
-  resultado: 'OPERATIVO' | 'REQUIERE_SEGUIMIENTO' | 'NO_SATISFACTORIO';
-  responsable: string;
-  fueraDePlazo: boolean;
-  activo: ActivoBreveDto;
-}
-
-const TIPO = (t: string) => (t === 'PREVENTIVO' ? 'preventivo' : 'correctivo');
+const TIPO = (t: string) => t.toLowerCase();
 const folio = (id: number) => `PLM-${String(id).padStart(4, '0')}`;
 
 export function agendaMantenimientos(d: {
   mantenimientos: MantenimientoAgenda[];
   planes: PlanAgenda[];
-  verificaciones: VerificacionAgenda[];
   desde: Date;
   hasta: Date;
   ahora: Date;
@@ -95,22 +82,6 @@ export function agendaMantenimientos(d: {
         evento({ ...base, clave: `m2r-${m.id}`, capa: 2, tipo: 'REAL', titulo: `Ejecutado: mantenimiento #${m.id}`, inicio: m.fechaInicio ?? m.fechaFin!, fin: m.fechaFin, estado, detalle: m.actividad });
       }
     }
-    // Capa 3: la verificación pendiente (con su propia ventana).
-    if (quiere(3) && m.fase === 'FINALIZADO') {
-      const vigentes = m.verificaciones.filter((v) => !v.anuladoEn);
-      const cerrado = vigentes.at(-1)?.resultado === 'OPERATIVO';
-      if (!cerrado) {
-        const inicio = m.verificacionPrevista ?? m.fechaFin ?? m.fecha;
-        evento({ ...base, clave: `m3p-${m.id}`, capa: 3, tipo: 'PREVISTO', titulo: `Verificar mantenimiento #${m.id}`, inicio, fin: m.verificacionLimite, estado: m.verificacionLimite ? previsto(inicio, m.verificacionLimite) : 'PROGRAMADO', detalle: m.verificacionPrevista ? 'Verificación programada' : 'Verificación sin programar' });
-      }
-    }
-  }
-
-  if (quiere(3)) {
-    for (const v of d.verificaciones) {
-      const estado: EstadoEvento = v.resultado === 'OPERATIVO' ? 'COMPLETADO' : v.resultado === 'NO_SATISFACTORIO' ? 'FALLIDO' : 'EN_CURSO';
-      eventos.push({ modulo: 'mantenimientos', clave: `m3r-${v.id}`, capa: 3, tipo: 'REAL', titulo: `Verificación #${v.mantenimientoId}: ${v.resultado.replace(/_/g, ' ').toLowerCase()}`, inicio: v.fecha, fin: null, estado, fueraDePlazo: v.fueraDePlazo, responsable: v.responsable, activo: v.activo, ruta: `/mantenimientos/${v.mantenimientoId}`, detalle: null });
-    }
   }
 
   // Capa 1: próximas intervenciones de los planes vigentes (aún sin programar).
@@ -120,7 +91,7 @@ export function agendaMantenimientos(d: {
       for (let n = 0; fecha && fecha <= d.hasta && n < TOPE_POR_PLAN; n++) {
         const fin = new Date(fecha.getTime() + p.plazoDias * DIA);
         if (fin >= d.desde) {
-          eventos.push({ modulo: 'mantenimientos', clave: `p1-${p.id}-${n}`, capa: 1, tipo: 'PREVISTO', titulo: `Plan ${folio(p.id)}: ${TIPO(p.tipo)} por programar`, inicio: fecha, fin, estado: previsto(fecha, fin), fueraDePlazo: false, responsable: p.responsable, activo: p.activo, ruta: '/mantenimientos?capa=planificacion', detalle: `Frecuencia ${p.frecuencia.toLowerCase()}` });
+          eventos.push({ modulo: 'mantenimientos', clave: `p1-${p.id}-${n}`, capa: 1, tipo: 'PREVISTO', titulo: `Planificación ${folio(p.id)}: ${TIPO(p.tipo)} por ejecutar`, inicio: fecha, fin, estado: previsto(fecha, fin), fueraDePlazo: false, responsable: p.responsable, activo: p.activo, ruta: '/mantenimientos?capa=planificacion', detalle: `Período ${p.frecuencia.toLowerCase()}` });
         }
         fecha = siguienteFecha(fecha, p.frecuencia);
       }

@@ -1,16 +1,14 @@
-import { Alert, Badge, Button, Group, SimpleGrid, Text } from '@mantine/core'
+import { Alert, Button, Group, SimpleGrid, Text } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconCalendarPlus, IconClockPlus } from '@tabler/icons-react'
+import { IconClockPlus } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
-import { AmpliarPlazoModal, VentanaModal } from '../../../shared/plazos/componentes.tsx'
+import { AmpliarPlazoModal } from '../../../shared/plazos/componentes.tsx'
 import { fmt } from '../../../shared/plazos/plazos.ts'
-import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
+import { usePuedeAdministrar } from '../../auth/use-puede.ts'
 import {
   useAmpliarPlazoMantenimiento,
-  useProgramarVerificacionMantenimiento,
   type Mantenimiento,
-  type VerificacionMantenimiento,
 } from '../api/mantenimientos.ts'
 
 function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
@@ -79,76 +77,6 @@ export function PlazoEjecucion({ mantenimiento: m }: { mantenimiento: Mantenimie
         enviando={ampliar.isPending}
         onConfirmar={(nuevoLimite, motivo) =>
           ampliar.mutate({ id: m.id, datos: { campo: 'EJECUCION', nuevoLimite, motivo } }, avisar('Plazo ampliado', modal.close))
-        }
-      />
-    </>
-  )
-}
-
-/**
- * Capa 3 · Ventana prevista de la verificación, con su propio plazo (no tiene
- * que caber en el de la ejecución). Cambiar una ventana aún sin usar es mover
- * el plan: solo admin; tras una verificación que no lo cerró se programa la siguiente.
- */
-export function PlazoVerificacion({ mantenimiento: m, verificaciones }: { mantenimiento: Mantenimiento; verificaciones: VerificacionMantenimiento[] }) {
-  const operar = usePuedeOperar()
-  const admin = usePuedeAdministrar()
-  const programar = useProgramarVerificacionMantenimiento()
-  const ampliar = useAmpliarPlazoMantenimiento()
-  const [programando, modalProgramar] = useDisclosure()
-  const [ampliando, modalAmpliar] = useDisclosure()
-
-  const pendiente = !m.anuladoEn && m.fase === 'FINALIZADO' && m.cierre !== 'CERRADO'
-  const sinUsar =
-    m.verificacionPrevista !== null &&
-    !verificaciones.some((v) => !v.anuladoEn && new Date(v.fecha) >= new Date(m.verificacionPrevista!))
-  const puedeProgramar = pendiente && operar && (!sinUsar || admin)
-  const vencida = pendiente && sinUsar && m.verificacionLimite !== null && new Date(m.verificacionLimite) < new Date()
-
-  if (m.fase !== 'FINALIZADO') return null
-  return (
-    <>
-      <Group justify="space-between" align="flex-end" mb="sm">
-        <Group gap="lg">
-          <Dato etiqueta="Verificación prevista">
-            {m.verificacionPrevista ? `${fmt(m.verificacionPrevista)} → ${fmt(m.verificacionLimite)}` : 'Sin programar'}
-          </Dato>
-          {vencida && <Badge color="red">Verificación vencida</Badge>}
-        </Group>
-        <Group gap="xs">
-          {puedeProgramar && (
-            <Button size="xs" variant="light" leftSection={<IconCalendarPlus size={14} />} onClick={modalProgramar.open}>
-              {m.verificacionPrevista ? 'Reprogramar verificación' : 'Programar verificación'}
-            </Button>
-          )}
-          {pendiente && admin && m.verificacionLimite && (
-            <Button size="xs" variant="light" color="orange" leftSection={<IconClockPlus size={14} />} onClick={modalAmpliar.open}>
-              Ampliar plazo
-            </Button>
-          )}
-        </Group>
-      </Group>
-      <VentanaModal
-        abierto={programando}
-        onCerrar={modalProgramar.close}
-        titulo={`Programar la verificación del mantenimiento #${m.id}`}
-        explicacion="La verificación tiene su propio plazo; no puede empezar antes del fin del mantenimiento."
-        prevista={sinUsar ? m.verificacionPrevista : null}
-        limite={sinUsar ? m.verificacionLimite : null}
-        minimo={m.fechaFin}
-        enviando={programar.isPending}
-        onConfirmar={(prevista, limite) =>
-          programar.mutate({ id: m.id, prevista, limite }, avisar('Verificación programada', modalProgramar.close))
-        }
-      />
-      <AmpliarPlazoModal
-        abierto={ampliando}
-        onCerrar={modalAmpliar.close}
-        titulo={`Ampliar el plazo de verificación del mantenimiento #${m.id}`}
-        limiteActual={m.verificacionLimite}
-        enviando={ampliar.isPending}
-        onConfirmar={(nuevoLimite, motivo) =>
-          ampliar.mutate({ id: m.id, datos: { campo: 'VERIFICACION', nuevoLimite, motivo } }, avisar('Plazo ampliado', modalAmpliar.close))
         }
       />
     </>

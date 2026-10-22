@@ -1,5 +1,6 @@
 import {
   Button,
+  Divider,
   Group,
   Modal,
   NumberInput,
@@ -39,16 +40,14 @@ interface Valores {
   evidencia: string
   repositorioVerificable: string
   motivoExcepcion: string
-  verificacionPrevista: string | null
-  verificacionLimite: string | null
 }
 
 const maximo = (n: number) => (v: string) => (v.trim().length > n ? `Máximo ${n} caracteres` : null)
 
 /**
- * Capa 2 · En ejecución → Completado: fecha REAL de finalización (la indica el
- * usuario), descripción de la ejecución, condición del equipo, persona encargada,
- * verificable y su repositorio. Encargado, diagnóstico y duración son obligatorios.
+ * Fase de Ejecución · En ejecución → Completado, en UNA sola petición: lo que se
+ * hizo y, al final, el cierre (fecha REAL de finalización, verificable, repositorio
+ * y observación). Completado es definitivo: no hay fase de verificación posterior.
  */
 export function FinalizarModal({ opened, onClose, ...resto }: Props) {
   return (
@@ -80,8 +79,6 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       evidencia: '',
       repositorioVerificable: '',
       motivoExcepcion: '',
-      verificacionPrevista: null,
-      verificacionLimite: null,
     },
     validate: {
       resultado: (v) => (!v.trim() ? 'Describa lo ejecutado' : maximo(191)(v)),
@@ -101,18 +98,6 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       evidencia: maximo(191),
       repositorioVerificable: errorRepositorio,
       motivoExcepcion: (v, valores) => errorExcepcion(finFueraDePlazo(m, valores.fechaFin), v),
-      verificacionPrevista: (v, valores) =>
-        !v && valores.verificacionLimite
-          ? 'Indica también el inicio previsto'
-          : v && valores.fechaFin && instante(v).isBefore(instante(valores.fechaFin))
-            ? 'No puede ser anterior al fin'
-            : null,
-      verificacionLimite: (v, valores) =>
-        !v && valores.verificacionPrevista
-          ? 'Indica también el límite'
-          : v && valores.verificacionPrevista && instante(v).isBefore(instante(valores.verificacionPrevista))
-            ? 'No puede ser anterior al inicio previsto'
-            : null,
     },
   })
 
@@ -135,21 +120,19 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           evidencia: opcional(v.evidencia),
           repositorioVerificable: opcional(v.repositorioVerificable),
           motivoExcepcion: fuera ? v.motivoExcepcion.trim() : undefined,
-          verificacionPrevista: v.verificacionPrevista ? fechaHoraLocalAIso(v.verificacionPrevista) : undefined,
-          verificacionLimite: v.verificacionLimite ? fechaHoraLocalAIso(v.verificacionLimite) : undefined,
         },
       },
       {
-        onSuccess: (m) => {
+        onSuccess: () => {
           notifications.show({
-            color: m.estadoEquipo === 'OPERATIVO' ? 'green' : 'orange',
+            color: v.estadoEquipo === 'OPERATIVO' ? 'green' : 'orange',
             title: 'Ejecución completada',
-            message: `El equipo quedó ${INFO_ESTADO_EQUIPO[v.estadoEquipo].etiqueta.toLowerCase()}. Falta la verificación para cerrarlo.`,
+            message: `El equipo quedó ${INFO_ESTADO_EQUIPO[v.estadoEquipo].etiqueta.toLowerCase()}. La ejecución queda cerrada.`,
           })
           onClose()
         },
         onError: (e) =>
-          notifications.show({ color: 'red', title: 'No se pudo finalizar', message: e.message }),
+          notifications.show({ color: 'red', title: 'No se pudo completar', message: e.message }),
       },
     ),
   )
@@ -157,6 +140,7 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
   return (
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
+        {/* Lo que se hizo. */}
         <div>
           <Text size="sm" fw={500} mb={4}>
             Condición en que queda el equipo
@@ -166,18 +150,8 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             {...form.getInputProps('estadoEquipo')}
           />
         </div>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="sm">
           <TextInput label="Persona encargada" withAsterisk placeholder="jperez" {...form.getInputProps('tecnico')} />
-          <DateTimePicker
-            label="Fecha real de finalización"
-            description="Cuándo terminó efectivamente (no puede ser futura)"
-            placeholder="Elija fecha y hora"
-            valueFormat="DD MMM YYYY HH:mm"
-            minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
-            maxDate={ahoraLocal()}
-            withAsterisk
-            {...form.getInputProps('fechaFin')}
-          />
           <NumberInput
             label="Duración (minutos)"
             withAsterisk
@@ -194,12 +168,6 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             {...form.getInputProps('costo')}
           />
         </SimpleGrid>
-        <CampoExcepcion
-          fuera={fuera}
-          value={form.values.motivoExcepcion}
-          onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
-          error={form.errors.motivoExcepcion as string | undefined}
-        />
         <Textarea
           label="Diagnóstico"
           withAsterisk
@@ -217,13 +185,26 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           placeholder="Firmware actualizado a v2.4; limpieza interna."
           {...form.getInputProps('resultado')}
         />
+        <Textarea
+          label="Repuestos utilizados"
+          autosize
+          minRows={1}
+          placeholder="Fuente ATX 500 W"
+          {...form.getInputProps('repuestos')}
+        />
+
+        {/* Cierre de la ejecución: no hay fase posterior de verificación. */}
+        <Divider label="Cierre de la ejecución" labelPosition="left" mt="xs" />
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <Textarea
-            label="Repuestos utilizados"
-            autosize
-            minRows={1}
-            placeholder="Fuente ATX 500 W"
-            {...form.getInputProps('repuestos')}
+          <DateTimePicker
+            label="Fecha real de finalización"
+            description="Cuándo terminó efectivamente (no puede ser futura)"
+            placeholder="Elija fecha y hora"
+            valueFormat="DD MMM YYYY HH:mm"
+            minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
+            maxDate={ahoraLocal()}
+            withAsterisk
+            {...form.getInputProps('fechaFin')}
           />
           <TextInput
             label="Verificable"
@@ -232,43 +213,25 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
             {...form.getInputProps('evidencia')}
           />
         </SimpleGrid>
+        <CampoExcepcion
+          fuera={fuera}
+          value={form.values.motivoExcepcion}
+          onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
+          error={form.errors.motivoExcepcion as string | undefined}
+        />
         <TextInput
           label="Repositorio del verificable"
           placeholder="Carpeta Compartida TICs/Interno o https://…"
           description="Carpeta compartida o URL http(s) donde está guardado."
           {...form.getInputProps('repositorioVerificable')}
         />
-        <Textarea label="Observaciones" autosize minRows={1} {...form.getInputProps('observaciones')} />
-        <div>
-          <Text size="sm" fw={500}>
-            Verificación prevista (capa 3, opcional)
-          </Text>
-          <Text size="xs" c="dimmed" mb={4}>
-            Tiene su propio plazo: no tiene que caber en el de la ejecución. También se puede programar después.
-          </Text>
-          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-            <DateTimePicker
-              label="Inicio previsto"
-              valueFormat="DD MMM YYYY HH:mm"
-              clearable
-              minDate={form.values.fechaFin ?? undefined}
-              {...form.getInputProps('verificacionPrevista')}
-            />
-            <DateTimePicker
-              label="Límite"
-              valueFormat="DD MMM YYYY HH:mm"
-              clearable
-              minDate={form.values.verificacionPrevista ?? undefined}
-              {...form.getInputProps('verificacionLimite')}
-            />
-          </SimpleGrid>
-        </div>
+        <Textarea label="Observación" autosize minRows={1} {...form.getInputProps('observaciones')} />
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
             Volver
           </Button>
           <Button type="submit" color="green" loading={finalizar.isPending || finalizar.isSuccess}>
-            Completar
+            Marcar como completado
           </Button>
         </Group>
       </Stack>

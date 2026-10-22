@@ -1,6 +1,6 @@
 import { Anchor, Badge, Button, Group, Select, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconCalendarStats, IconChecklist, IconNotebook, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
+import { IconCalendarStats, IconNotebook, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
 import type { Dayjs } from 'dayjs'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
@@ -20,16 +20,15 @@ import {
   type TipoMantenimiento,
   useIndicadoresMantenimiento,
 } from './api/mantenimientos.ts'
-import { BadgeCierre, BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
+import { BadgeEstadoEquipo, BadgeFase, BadgeTipo, BadgeVencido } from './componentes/Badges.tsx'
 import { Bitacoras } from './componentes/Bitacoras.tsx'
 import { Planificacion } from './componentes/Planificacion.tsx'
 import { ProgramarModal } from './componentes/ProgramarModal.tsx'
-import { FASES, INFO_CIERRE, INFO_FASE, INFO_TIPO, TIPOS } from './fases.ts'
-import { aConsultaApi, CIERRES, escribirFiltros, leerFiltros, type Capa, type FiltroCierre } from './filtros-url.ts'
+import { FASES, INFO_FASE, INFO_TIPO, TIPOS } from './fases.ts'
+import { aConsultaApi, escribirFiltros, leerFiltros, type Capa } from './filtros-url.ts'
 
-function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Mantenimiento[]; capa: Capa }) {
+function TablaMantenimientos({ mantenimientos }: { mantenimientos: Mantenimiento[] }) {
   const navigate = useNavigate()
-  const verificacion = capa === 'verificacion'
   return (
     <Table.ScrollContainer minWidth={1000}>
       <Table striped highlightOnHover verticalSpacing="sm">
@@ -39,10 +38,10 @@ function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Manteni
             <Table.Th>Activo</Table.Th>
             <Table.Th>Tipo</Table.Th>
             <Table.Th>Descripción prevista</Table.Th>
-            <Table.Th>{verificacion ? 'Completado' : 'Inicio previsto'}</Table.Th>
+            <Table.Th>Inicio previsto</Table.Th>
             <Table.Th>Encargado</Table.Th>
             <Table.Th>Situación</Table.Th>
-            <Table.Th>{verificacion ? 'Verificación' : 'Condición del equipo'}</Table.Th>
+            <Table.Th>Condición del equipo</Table.Th>
             <Table.Th>Reg.</Table.Th>
           </Table.Tr>
         </Table.Thead>
@@ -82,7 +81,7 @@ function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Manteni
               </Table.Td>
               <Table.Td>
                 <Text size="sm" c={m.vencido ? 'red' : 'dimmed'} fw={m.vencido ? 600 : undefined}>
-                  {formatearFechaHora(verificacion ? m.fechaFin : m.fecha)}
+                  {formatearFechaHora(m.fecha)}
                 </Text>
               </Table.Td>
               <Table.Td>
@@ -95,7 +94,7 @@ function TablaMantenimientos({ mantenimientos, capa }: { mantenimientos: Manteni
                 </Group>
               </Table.Td>
               <Table.Td>
-                {verificacion ? <BadgeCierre cierre={m.cierre} /> : <BadgeEstadoEquipo estado={m.estadoEquipo} />}
+                <BadgeEstadoEquipo estado={m.estadoEquipo} />
               </Table.Td>
               <Table.Td>
                 <BadgeRegistro registro={m} />
@@ -146,10 +145,9 @@ function CampoTexto({ valor, onCambio, ...props }: { valor?: string; onCambio: (
 const CALENDARIO_CAPA = {
   1: { titulo: 'Calendario de planificación', descripcion: 'Inicio previsto y fecha límite de cada ejecución pendiente; las planificaciones, en su próxima fecha.' },
   2: { titulo: 'Calendario de ejecución', descripcion: 'Lo previsto (trazo discontinuo) frente a lo ejecutado realmente; en rojo, lo vencido.' },
-  3: { titulo: 'Calendario de verificación', descripcion: 'Ventanas de verificación previstas, con su propio plazo, y verificaciones registradas.' },
 } as const
 
-function CalendarioDeCapa({ capa, onCrear }: { capa: 1 | 2 | 3; onCrear?: (dia: Dayjs) => void }) {
+function CalendarioDeCapa({ capa, onCrear }: { capa: 1 | 2; onCrear?: (dia: Dayjs) => void }) {
   return <Calendario {...CALENDARIO_CAPA[capa]} modulos={['mantenimientos']} capa={capa} onCrear={onCrear} textoCrear="Nueva ejecución" />
 }
 
@@ -174,7 +172,6 @@ export function MantenimientosPage() {
     filtros.categoriaId !== undefined ||
     filtros.q !== undefined ||
     filtros.tecnico !== undefined ||
-    filtros.cierre !== undefined ||
     filtros.vencidos !== undefined
   // Quitar filtros conserva la pestaña.
   const quitarFiltros = () =>
@@ -187,7 +184,6 @@ export function MantenimientosPage() {
       categoriaId: undefined,
       q: undefined,
       tecnico: undefined,
-      cierre: undefined,
       vencidos: undefined,
     })
 
@@ -198,13 +194,13 @@ export function MantenimientosPage() {
         <div>
           <Title order={2}>Mantenimientos</Title>
           <Text c="dimmed" size="sm">
-            Planificación → ejecución → verificación y cierre
+            Dos fases: planificación → ejecución
           </Text>
           <Text c="dimmed" size="xs">
             ISO/IEC 27001:2022 · A.7.13 Mantenimiento de los equipos
           </Text>
         </div>
-        {puedeOperar && (capa === 'ejecucion' || capa === 'verificacion') && (
+        {puedeOperar && capa === 'ejecucion' && (
           <Button
             leftSection={<IconPlus size={18} />}
             onClick={() => {
@@ -217,16 +213,13 @@ export function MantenimientosPage() {
         )}
       </Group>
 
-      <Tabs value={capa} onChange={(v) => actualizar({ capa: v === 'ejecucion' ? undefined : (v as Capa), cierre: undefined, page: 1 })}>
+      <Tabs value={capa} onChange={(v) => actualizar({ capa: v === 'ejecucion' ? undefined : (v as Capa), page: 1 })}>
         <Tabs.List>
           <Tabs.Tab value="planificacion" leftSection={<IconCalendarStats size={16} />}>
             1 · Planificación
           </Tabs.Tab>
           <Tabs.Tab value="ejecucion" leftSection={<IconTool size={16} />}>
             2 · Ejecución
-          </Tabs.Tab>
-          <Tabs.Tab value="verificacion" leftSection={<IconChecklist size={16} />}>
-            3 · Verificación y cierre
           </Tabs.Tab>
           <Tabs.Tab value="bitacoras" leftSection={<IconNotebook size={16} />}>
             Bitácoras
@@ -261,26 +254,15 @@ export function MantenimientosPage() {
               onChange={(v) => actualizar({ categoriaId: v ? Number(v) : undefined, page: 1 })}
               w={{ base: '100%', sm: 190 }}
             />
-            {capa === 'ejecucion' ? (
-              <Select
-                label="Situación"
-                placeholder="Todas"
-                clearable
-                data={FASES.map((f) => ({ value: f, label: INFO_FASE[f].etiqueta }))}
-                value={filtros.fase ?? null}
-                onChange={(v) => actualizar({ fase: (v as Fase | null) ?? undefined, page: 1 })}
-                w={{ base: '100%', sm: 160 }}
-              />
-            ) : (
-              <Select
-                label="Cierre"
-                allowDeselect={false}
-                data={CIERRES.map((c) => ({ value: c, label: INFO_CIERRE[c].etiqueta }))}
-                value={filtros.cierre ?? 'PENDIENTE_VERIFICACION'}
-                onChange={(v) => actualizar({ cierre: (v as FiltroCierre | null) ?? undefined, page: 1 })}
-                w={{ base: '100%', sm: 200 }}
-              />
-            )}
+            <Select
+              label="Situación"
+              placeholder="Todas"
+              clearable
+              data={FASES.map((f) => ({ value: f, label: INFO_FASE[f].etiqueta }))}
+              value={filtros.fase ?? null}
+              onChange={(v) => actualizar({ fase: (v as Fase | null) ?? undefined, page: 1 })}
+              w={{ base: '100%', sm: 160 }}
+            />
             <Select
               label="Tipo"
               placeholder="Todos"
@@ -304,15 +286,13 @@ export function MantenimientosPage() {
               onChange={(id) => actualizar({ activoId: id ?? undefined, page: 1 })}
               w={{ base: '100%', sm: 260 }}
             />
-            {capa === 'ejecucion' && (
-              <Switch
-                label="Solo vencidos"
-                color="red"
-                checked={filtros.vencidos ?? false}
-                onChange={(e) => actualizar({ vencidos: e.currentTarget.checked || undefined, page: 1 })}
-                mb={8}
-              />
-            )}
+            <Switch
+              label="Solo vencidos"
+              color="red"
+              checked={filtros.vencidos ?? false}
+              onChange={(e) => actualizar({ vencidos: e.currentTarget.checked || undefined, page: 1 })}
+              mb={8}
+            />
           </Group>
           {filtros.planId && (
             <Group gap="xs">
@@ -333,15 +313,11 @@ export function MantenimientosPage() {
             vacio={
               <>
                 <Text c="dimmed">
-                  {capa === 'verificacion'
-                    ? (filtros.cierre ?? 'PENDIENTE_VERIFICACION') === 'PENDIENTE_VERIFICACION'
-                      ? 'No hay ejecuciones completadas pendientes de verificar.'
-                      : 'Ninguna ejecución cerrada coincide.'
-                    : filtros.vencidos
-                      ? 'No hay ejecuciones vencidas. ¡Todo al día!'
-                      : hayFiltros
-                        ? 'Ninguna ejecución coincide con los filtros.'
-                        : 'Todavía no hay ejecuciones de mantenimiento.'}
+                  {filtros.vencidos
+                    ? 'No hay ejecuciones vencidas. ¡Todo al día!'
+                    : hayFiltros
+                      ? 'Ninguna ejecución coincide con los filtros.'
+                      : 'Todavía no hay ejecuciones de mantenimiento.'}
                 </Text>
                 {hayFiltros && (
                   <Button variant="subtle" onClick={quitarFiltros}>
@@ -351,9 +327,9 @@ export function MantenimientosPage() {
               </>
             }
           >
-            {(mantenimientos) => <TablaMantenimientos mantenimientos={mantenimientos} capa={capa} />}
+            {(mantenimientos) => <TablaMantenimientos mantenimientos={mantenimientos} />}
           </TarjetaListado>
-          <CalendarioDeCapa capa={capa === 'verificacion' ? 3 : 2} />
+          <CalendarioDeCapa capa={2} />
         </>
       )}
 

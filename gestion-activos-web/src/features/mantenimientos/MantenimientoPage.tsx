@@ -11,32 +11,26 @@ import {
   SimpleGrid,
   Stack,
   Stepper,
-  Table,
   Text,
   Title,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconArchive, IconCheck, IconChecklist, IconEdit, IconPencil, IconPlayerPlay, IconX } from '@tabler/icons-react'
-import { useState, type ReactNode } from 'react'
+import { IconCheck, IconEdit, IconPencil, IconPlayerPlay, IconX } from '@tabler/icons-react'
+import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
 import { formatearDia, formatearFechaHora } from '../../shared/formato.ts'
-import { AvisoAnulado, BadgeRegistro, ControlRegistro, MotivoModal } from '../../shared/registro/componentes.tsx'
+import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import {
   useAnulacionMantenimiento,
-  useAnularVerificacionMantenimiento,
   useMantenimiento,
-  useVerificacionesMantenimiento,
   type Mantenimiento,
-  type VerificacionMantenimiento,
 } from './api/mantenimientos.ts'
 import { EditarMantenimientoModal } from './componentes/EditarMantenimientoModal.tsx'
 import {
-  BadgeCierre,
   BadgeEstadoEquipo,
   BadgeFase,
-  BadgeResultadoVerificacion,
   BadgeTipo,
   BadgeVencido,
 } from './componentes/Badges.tsx'
@@ -44,8 +38,7 @@ import { CancelarModal } from './componentes/CancelarModal.tsx'
 import { CorregirEjecucionModal } from './componentes/CorregirEjecucionModal.tsx'
 import { FinalizarModal } from './componentes/FinalizarModal.tsx'
 import { IniciarModal } from './componentes/IniciarModal.tsx'
-import { PlazoEjecucion, PlazoVerificacion } from './componentes/PlazosMantenimiento.tsx'
-import { VerificarModal } from './componentes/VerificarModal.tsx'
+import { PlazoEjecucion } from './componentes/PlazosMantenimiento.tsx'
 import { accionesPermitidas, estadoPasos, INFO_FRECUENCIA, pasoActivo, type EstadoPaso } from './fases.ts'
 
 /** Nombres de los campos, para las trazas. */
@@ -71,8 +64,6 @@ const ETIQUETAS_MANTENIMIENTO: Record<string, string> = {
   fueraDePlazo: 'Fuera de plazo',
   motivoExcepcion: 'Justificación de la excepción',
   excepcionPor: 'Excepción autorizada por',
-  verificacionPrevista: 'Verificación prevista',
-  verificacionLimite: 'Límite de la verificación',
 }
 
 /** Un paso cancelado se pinta en rojo con ✗ y cambia su etiqueta. */
@@ -144,121 +135,6 @@ function Acciones({ mantenimiento }: { mantenimiento: Mantenimiento }) {
   )
 }
 
-/** Capa 3 · Historial de verificaciones y alta de una nueva. */
-function Verificaciones({ mantenimiento: m }: { mantenimiento: Mantenimiento }) {
-  const verificaciones = useVerificacionesMantenimiento(m.id)
-  const puedeOperar = usePuedeOperar()
-  const puedeAnular = usePuedeAdministrar()
-  const anular = useAnularVerificacionMantenimiento()
-  const [verificando, verificacion] = useDisclosure()
-  const [anulando, setAnulando] = useState<VerificacionMantenimiento | null>(null)
-  const admiteVerificacion =
-    puedeOperar && m.anuladoEn === null && m.fase === 'FINALIZADO' && m.cierre !== 'CERRADO'
-
-  return (
-    <Card withBorder padding="lg">
-      <Group justify="space-between" mb="sm">
-        <Group gap="sm">
-          <Title order={4}>Verificación y cierre</Title>
-          <BadgeCierre cierre={m.cierre} />
-        </Group>
-        {admiteVerificacion && (
-          <Button color="teal" leftSection={<IconChecklist size={16} />} onClick={verificacion.open}>
-            Registrar verificación
-          </Button>
-        )}
-      </Group>
-      <PlazoVerificacion mantenimiento={m} verificaciones={verificaciones.data ?? []} />
-      {m.fase !== 'FINALIZADO' ? (
-        <Text size="sm" c="dimmed">
-          Se verifica cuando la ejecución esté completada.
-        </Text>
-      ) : verificaciones.isPending ? (
-        <Loader size="sm" />
-      ) : verificaciones.error ? (
-        <Alert color="red">{verificaciones.error.message}</Alert>
-      ) : verificaciones.data.length === 0 ? (
-        <Alert color="yellow" title="Pendiente de verificación">
-          El trabajo terminó, pero aún nadie comprobó el resultado. Solo una verificación «Operativo», con evidencia, lo
-          cierra.
-        </Alert>
-      ) : (
-        <Table.ScrollContainer minWidth={760}>
-          <Table verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Fecha</Table.Th>
-                <Table.Th>Resultado</Table.Th>
-                <Table.Th>Observaciones</Table.Th>
-                <Table.Th>Evidencia</Table.Th>
-                <Table.Th>Verificó / registró</Table.Th>
-                <Table.Th>Reg.</Table.Th>
-                <Table.Th />
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {verificaciones.data.map((v) => (
-                <Table.Tr key={v.id} style={{ opacity: v.anuladoEn ? 0.55 : 1 }}>
-                  <Table.Td>
-                    {formatearFechaHora(v.fecha)}
-                    {v.fueraDePlazo && (
-                      <Text size="xs" c="orange" title={`${v.motivoExcepcion ?? ''} (autorizó ${v.excepcionPor ?? '—'})`}>
-                        ⚠ fuera de la ventana prevista
-                      </Text>
-                    )}
-                  </Table.Td>
-                  <Table.Td>
-                    <BadgeResultadoVerificacion resultado={v.resultado} />
-                  </Table.Td>
-                  <Table.Td maw={280}>{v.observaciones}</Table.Td>
-                  <Table.Td>{v.evidencia ?? '—'}</Table.Td>
-                  <Table.Td>
-                    {v.responsable}
-                    <Text size="xs" c="dimmed">
-                      registró {v.registradoPor}
-                    </Text>
-                  </Table.Td>
-                  <Table.Td>
-                    <BadgeRegistro registro={v} />
-                  </Table.Td>
-                  <Table.Td>
-                    {puedeAnular && !v.anuladoEn && (
-                      <Button size="compact-xs" variant="light" color="red" leftSection={<IconArchive size={12} />} onClick={() => setAnulando(v)}>
-                        Anular
-                      </Button>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
-      <VerificarModal opened={verificando} onClose={verificacion.close} mantenimiento={m} />
-      <MotivoModal
-        abierto={anulando !== null}
-        modo="anular"
-        titulo="Anular la verificación"
-        enviando={anular.isPending}
-        onCerrar={() => setAnulando(null)}
-        onConfirmar={(motivo) =>
-          anulando &&
-          anular.mutate(
-            { id: anulando.id, motivo },
-            {
-              onSuccess: () => {
-                notifications.show({ color: 'green', title: 'Verificación anulada', message: 'Se conserva para auditoría; el cierre se recalcula.' })
-                setAnulando(null)
-              },
-              onError: (e) => notifications.show({ color: 'red', title: 'No se pudo anular', message: e.message }),
-            },
-          )
-        }
-      />
-    </Card>
-  )
-}
-
 export function MantenimientoPage() {
   const id = Number(useParams().id)
   const { data: m, isPending, error } = useMantenimiento(id)
@@ -309,7 +185,6 @@ export function MantenimientoPage() {
             <Title order={2}>Ejecución #{m.id}</Title>
             <BadgeTipo tipo={m.tipo} />
             <BadgeFase fase={m.fase} />
-            <BadgeCierre cierre={m.cierre} />
             {m.vencido && <BadgeVencido />}
           </Group>
           <Text c="dimmed" size="sm" mt={4}>
@@ -384,7 +259,7 @@ export function MantenimientoPage() {
       )}
 
       <Card withBorder padding="lg">
-        <Stepper active={m.cierre === 'CERRADO' ? 4 : pasoActivo(pasos)} allowNextStepsSelect={false}>
+        <Stepper active={pasoActivo(pasos)} allowNextStepsSelect={false}>
           <Stepper.Step label="Pendiente" description={formatearFechaHora(m.fecha)}>
             {null}
           </Stepper.Step>
@@ -400,15 +275,6 @@ export function MantenimientoPage() {
           <Stepper.Step {...paso(cierre, 'Completado', formatearFechaHora(cierre === 'cancelado' ? m.fechaCancelacion : m.fechaFin))}>
             {null}
           </Stepper.Step>
-          {!cancelado && (
-            <Stepper.Step
-              label="Verificado"
-              description={m.cierre === 'CERRADO' ? 'Cerrado · operativo' : undefined}
-              color={m.cierre === 'NO_SATISFACTORIO' ? 'red' : undefined}
-            >
-              {null}
-            </Stepper.Step>
-          )}
         </Stepper>
       </Card>
 
@@ -492,7 +358,7 @@ export function MantenimientoPage() {
           )}
           {m.diagnostico && <Dato etiqueta="Diagnóstico">{m.diagnostico}</Dato>}
           {m.repuestos && <Dato etiqueta="Repuestos">{m.repuestos}</Dato>}
-          {m.observaciones && <Dato etiqueta="Observaciones">{m.observaciones}</Dato>}
+          {m.observaciones && <Dato etiqueta="Observación">{m.observaciones}</Dato>}
           {cancelado && (
             <Alert color="gray" title={`Motivo de la cancelación${m.fechaCancelacion ? ` · ${formatearFechaHora(m.fechaCancelacion)}` : ''}`}>
               {m.resultado}
@@ -505,7 +371,6 @@ export function MantenimientoPage() {
         </Stack>
       </Card>
 
-      {!cancelado && <Verificaciones mantenimiento={m} />}
     </Stack>
   )
 }

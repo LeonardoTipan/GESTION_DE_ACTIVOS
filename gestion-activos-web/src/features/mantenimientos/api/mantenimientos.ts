@@ -176,7 +176,7 @@ export function usePlanesMantenimiento(filtros: FiltrosApiPlanes) {
   })
 }
 
-/** Próximas intervenciones, activos sin plan, planes vencidos y pendientes de verificar. */
+/** Próximas intervenciones, activos sin plan y planes vencidos. */
 export function useTableroMantenimientos() {
   return useQuery({
     queryKey: [...claves.todo, 'tablero'],
@@ -232,54 +232,13 @@ export function useAnulacionPlanMantenimiento() {
   })
 }
 
-// ── Capa 3 · Verificación y cierre ──────────────────────────────────────────
-
-export type VerificacionMantenimiento = components['schemas']['VerificacionMantenimientoDto']
-export type ResultadoVerificacion = VerificacionMantenimiento['resultado']
-export type Cierre = Mantenimiento['cierre']
-
-export function useVerificacionesMantenimiento(id: number) {
-  return useQuery({
-    queryKey: [...claves.detalle(id), 'verificaciones'],
-    queryFn: () =>
-      ejecutar(api.GET('/api/mantenimientos/{id}/verificaciones', { params: { path: { id } } })),
-  })
-}
-
-export function useVerificarMantenimiento() {
-  const invalidar = useInvalidarMantenimientos()
-  return useMutation({
-    mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['RegistrarVerificacionMantenimientoDto'] }) =>
-      ejecutar(api.POST('/api/mantenimientos/{id}/verificaciones', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
-  })
-}
-
-export function useAnularVerificacionMantenimiento() {
-  const invalidar = useInvalidarMantenimientos()
-  return useMutation({
-    mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
-      ejecutar(api.POST('/api/mantenimientos/verificaciones/{id}/anular', { params: { path: { id } }, body: { motivo } })),
-    onSuccess: invalidar,
-  })
-}
-
-// ── Plazos: ampliación formal (admin) y ventana de verificación ─────────────
+// ── Plazos: ampliación formal (admin) ──────────────────────────────────────
 
 export function useAmpliarPlazoMantenimiento() {
   const invalidar = useInvalidarMantenimientos()
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['AmpliarPlazoMantenimientoDto'] }) =>
       ejecutar(api.PATCH('/api/mantenimientos/{id}/plazo', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
-  })
-}
-
-export function useProgramarVerificacionMantenimiento() {
-  const invalidar = useInvalidarMantenimientos()
-  return useMutation({
-    mutationFn: ({ id, prevista, limite }: { id: number; prevista: string; limite: string }) =>
-      ejecutar(api.PATCH('/api/mantenimientos/{id}/verificacion-prevista', { params: { path: { id } }, body: { prevista, limite } })),
     onSuccess: invalidar,
   })
 }

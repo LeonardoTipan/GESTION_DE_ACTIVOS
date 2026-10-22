@@ -15,7 +15,7 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 | **Activos** | admin, analista | todos | admin, analista | admin: **baja lógica**: queda *Dado de baja* y conserva ficha, historial y registros |
 | **Categorías** y **criticidades** | admin | todos | admin | admin; **bloqueado** si algún activo las usa |
 | **Respaldos** · plan, ejecución y restauración | admin, analista | todos | admin, analista, **con motivo** (versión nueva) | admin: **anular** (eliminación lógica, con motivo) y **revertir** |
-| **Mantenimientos** · plan, mantenimiento y verificación | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad, inicio previsto y fecha límite, solo en fase Programado) | admin: anular y revertir (planes y mantenimientos); anular verificaciones |
+| **Mantenimientos** · planificación y ejecución | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad, inicio previsto y fecha límite, solo en fase Programado) | admin: anular y revertir (planificaciones y ejecuciones) |
 | **Vulnerabilidades** · registro, acciones y verificaciones | admin, analista | todos | admin, analista, con motivo: CVE, descripción, riesgo, fechas, fuente y evidencia, solo mientras está pendiente | admin: anular y revertir; anular acciones y verificaciones |
 | **Control de acceso** · solicitudes lógicas y físicas ([detalle](control-acceso.md)) | admin, analista | todos, incluido el historial | admin, analista: campos editables mientras no esté cerrada (cada cambio queda en el historial); pasar a pendiente y cerrar con la fecha atendida real. Corregir una cerrada y reabrir: solo admin, con motivo | No se eliminan; el historial no se modifica ni se borra |
 
@@ -51,13 +51,12 @@ Son **críticos** los activos operativos con criticidad *Alta* o *Crítica* (var
 
 Los **registros anteriores** (modelo de un solo registro con alcance, ejecución y prueba) se conservan intactos y solo se consultan (`/respaldos/anteriores`): les faltan datos obligatorios del plan y convertirlos obligaría a inventarlos.
 
-## Mantenimientos en tres capas (A.7.13)
+## Mantenimientos en dos fases (A.7.13)
 
-La página tiene una pestaña por capa y otra de **Bitácoras**. El diseño completo (campos, semestres, cálculo de las bitácoras y auditoría) está en [mantenimiento.md](mantenimiento.md).
+El módulo tiene **solo dos fases**, Planificación y Ejecución, cada una en su pestaña, más la de **Bitácoras**. No hay fase de verificación: completar una ejecución (con su verificable y repositorio) la cierra. El diseño completo (campos, semestres, cálculo de las bitácoras y auditoría) está en [mantenimiento.md](mantenimiento.md).
 
 1. **Planificación.** Planificaciones por activo (se crean varias a la vez): tipo según la clase del activo (hardware: preventivo, correctivo, predictivo; software: preventivo, correctivo, perfectivo, adaptativo, evolutivo), **período** (única, mensual, trimestral, semestral, anual), **fecha de inicio planificada** (de ella salen el año y el semestre), asignado y descripción planificada. Un activo tiene como mucho **una planificación vigente por tipo**. *Nueva ejecución* crea la de la próxima fecha y adelanta el período, en una sola transacción con actualización condicional (dos clics simultáneos no duplican); *Adicional* crea otra en la fecha que se elija sin mover la próxima. El tablero muestra las intervenciones de los próximos 60 días, los activos operativos sin plan preventivo, los planes vencidos y los mantenimientos pendientes de verificar.
 2. **Ejecución.** Toda ejecución nace de una planificación. Situación: Pendiente → En ejecución → Completado (o Cancelado, con motivo). Las **fechas reales** las indica el usuario (no se usa la hora del servidor); la fecha de registro es automática. Al completar se exigen la **persona encargada**, el **diagnóstico**, la descripción de la ejecución, la condición del equipo y la **duración**; el verificable y su repositorio (carpeta o URL http/https) son opcionales. Completar actualiza la *última revisión* del activo, con su entrada en la bitácora. Lo ejecutado se corrige con motivo (*Corregir ejecución*): en ejecución, admin y analista; completada, solo admin.
-3. **Verificación y cierre.** Sobre un mantenimiento finalizado se registran comprobaciones: **Operativo** lo cierra y exige que la ejecución esté completa y que haya **evidencia**; **Requiere seguimiento** lo deja abierto; **No satisfactorio** lo deja abierto y genera un aviso. Ya cerrado, no admite más verificaciones.
 
 La **condición física** que trae GLPI (Bueno, Regular, Malo) no es un estado administrativo: un equipo en condición *Malo* sigue en el inventario y puede recibir planes y mantenimientos. Solo bloquean las operaciones nuevas la baja y los estados de `ESTADOS_NO_OPERATIVOS`.
 
@@ -78,10 +77,10 @@ Cada etapa de los tres módulos guarda por separado **lo previsto** (un interval
 | Módulo | Capa 1 · previsto | Capa 2 · real (y su plazo) | Capa 3 · ventana propia |
 |---|---|---|---|
 | **Respaldos** | Inicio previsto del plan (`vigenteDesde`) y ventana horaria (nocturna 22–02, 00–04, fin de semana, laboral L–V 08–18, continua) | Fecha **y hora** real de cada ejecución | Prueba de restauración prevista [`pruebaPrevista`, `pruebaLimite`] de cada copia |
-| **Mantenimientos** | Inicio previsto (`fecha`) y **fecha límite** (`fechaLimite`); en los planes, `plazoDias` (límite = inicio + plazo) | Inicio y fin reales | Verificación prevista [`verificacionPrevista`, `verificacionLimite`] |
+| **Mantenimientos** | Inicio previsto (`fecha`) y **fecha límite** (`fechaLimite`); en los planes, `plazoDias` (límite = inicio + plazo) | Inicio y fin reales | — (solo dos fases) |
 | **Vulnerabilidades** | Detección (real, la registra una persona), inicio previsto del tratamiento y límite de remediación | Inicio real del tratamiento y fecha de cada acción | Verificación prevista [`verificacionPrevista`, `verificacionLimite`] |
 
-La verificación **no** tiene que caber en el plazo de la ejecución: tiene su propio plazo y su propio estado.
+En respaldos y vulnerabilidades, la verificación **no** tiene que caber en el plazo de la ejecución: tiene su propio plazo y su propio estado.
 
 **Fuera de plazo.** Si la fecha real cae fuera de lo previsto, la API responde 409 y pide una **excepción**: solo un **admin** la registra, con una justificación de al menos 20 caracteres. Se guardan `fueraDePlazo`, `motivoExcepcion` y `excepcionPor`, la fecha real queda como ocurrió y el plan no cambia. El analista ve el aviso y que no puede registrarla; el formulario no envía.
 
@@ -96,7 +95,7 @@ La verificación **no** tiene que caber en el plazo de la ejecución: tiene su p
 
 Se conserva el **límite original** (`fechaLimiteOriginal`) y el cambio queda en las trazas. Reevaluar una vulnerabilidad no puede alargar su límite (409: se usa *Ampliar plazo*).
 
-**Reprogramar una ventana de capa 3** que ya está programada también es mover el plan: solo admin. Excepción: en mantenimientos, tras una verificación que no lo cerró (seguimiento o no satisfactorio), la ventana ya se usó y el analista programa la siguiente.
+**Reprogramar una ventana de capa 3** (respaldos y vulnerabilidades) que ya está programada también es mover el plan: solo admin.
 
 **Otras reglas:**
 

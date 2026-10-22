@@ -13,7 +13,7 @@ Norma de referencia: ISO/IEC 27001:2022, A.7.13 *Mantenimiento de los equipos*.
 ## 1. Estructura
 
 ```
-Activo (GLPI) 1 ── N Planificación (plan_mantenimiento) 1 ── N Ejecución (mantenimiento) 1 ── N Verificación
+Activo (GLPI) 1 ── N Planificación (plan_mantenimiento) 1 ── N Ejecución (mantenimiento)
 ```
 
 - **Activo.** Es el activo real que trae la sincronización con GLPI (`activo`). El módulo no crea activos ni los duplica.
@@ -21,7 +21,8 @@ Activo (GLPI) 1 ── N Planificación (plan_mantenimiento) 1 ── N Ejecuci�
 - **Ejecución** (`mantenimiento`, con `planId`). Es cada intervención **realizada o por realizar** de una planificación.
   - Guarda las fechas reales, la persona encargada, la descripción de lo ejecutado, la condición del equipo, el verificable y su repositorio.
   - Una planificación tiene **N** ejecuciones: la del período, ejecuciones adicionales, reprogramaciones o intervenciones parciales.
-- **Verificación** (capa 3, ya existente). Es la comprobación posterior que cierra la ejecución.
+- **Solo dos fases.** No hay fase de verificación: completar una ejecución, en una sola petición con su fecha real de finalización, verificable, repositorio y observación, la deja cerrada. La interfaz no muestra la antigua capa 3 y la agenda de mantenimientos no devuelve eventos de verificación.
+  - La tabla `verificacion_mantenimiento` y sus endpoints (`/mantenimientos/:id/verificaciones`, `/verificacion-prevista`) se conservan en la API sin uso en la interfaz, para no perder el registro histórico que ya existía. Retirarlos es una decisión pendiente.
 
 Se evolucionó el módulo existente en lugar de crear tablas paralelas. `plan_mantenimiento → mantenimiento` ya era 1→N, con clave foránea real.
 

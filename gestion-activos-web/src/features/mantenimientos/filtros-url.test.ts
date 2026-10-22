@@ -32,15 +32,15 @@ describe('filtros de mantenimientos en la URL', () => {
     })
   })
 
-  it('capa, categoría, búsqueda, técnico y cierre', () => {
-    const filtros = leerFiltros(new URLSearchParams('capa=verificacion&categoriaId=3&q=%20pc%20&tecnico=jperez&cierre=CERRADO'))
-    expect(filtros).toMatchObject({ capa: 'verificacion', categoriaId: 3, q: 'pc', tecnico: 'jperez', cierre: 'CERRADO' })
+  it('capa, categoría, búsqueda y técnico', () => {
+    const filtros = leerFiltros(new URLSearchParams('capa=bitacoras&categoriaId=3&q=%20pc%20&tecnico=jperez'))
+    expect(filtros).toMatchObject({ capa: 'bitacoras', categoriaId: 3, q: 'pc', tecnico: 'jperez' })
     expect(leerFiltros(escribirFiltros(filtros))).toEqual(filtros)
-    expect(leerFiltros(new URLSearchParams('capa=otra&cierre=X'))).toMatchObject({ capa: undefined, cierre: undefined })
+    expect(leerFiltros(new URLSearchParams('capa=otra')).capa).toBeUndefined()
   })
 
-  it('la pestaña de verificación muestra, por defecto, lo pendiente de verificar', () => {
-    expect(aConsultaApi({ page: 1, capa: 'verificacion' }).cierre).toBe('PENDIENTE_VERIFICACION')
-    expect(aConsultaApi({ page: 1 }).cierre).toBeUndefined()
+  it('solo dos fases: la antigua pestaña de verificación ya no existe (cae en ejecución)', () => {
+    expect(leerFiltros(new URLSearchParams('capa=verificacion')).capa).toBeUndefined()
+    expect(aConsultaApi({ page: 1 })).not.toHaveProperty('cierre')
   })
 })

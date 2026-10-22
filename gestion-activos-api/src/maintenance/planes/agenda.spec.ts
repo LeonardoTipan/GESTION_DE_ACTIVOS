@@ -4,9 +4,9 @@ const activo = { id: 1, codigo: 'PC-1', nombre: 'PC', tipo: null, estado: 'Malo'
 const d = (s: string) => new Date(s);
 const base: MantenimientoAgenda = {
   id: 1, tipo: 'PREVENTIVO', fase: 'PROGRAMADO', actividad: 'Limpieza', fecha: d('2026-12-30T13:00:00Z'), fechaLimite: d('2027-01-02T22:00:00Z'),
-  fechaInicio: null, fechaFin: null, tecnico: null, estadoEquipo: null, fueraDePlazo: false, verificacionPrevista: null, verificacionLimite: null, activo, verificaciones: [],
+  fechaInicio: null, fechaFin: null, tecnico: null, estadoEquipo: null, fueraDePlazo: false, activo,
 };
-const rango = { desde: d('2026-12-01T00:00:00Z'), hasta: d('2027-01-31T23:59:59Z'), planes: [], verificaciones: [] };
+const rango = { desde: d('2026-12-01T00:00:00Z'), hasta: d('2027-01-31T23:59:59Z'), planes: [] };
 
 describe('agenda de mantenimientos', () => {
   it('capa 1: el intervalo previsto cruza mes y año; vencido solo al pasar el límite', () => {
@@ -26,12 +26,12 @@ describe('agenda de mantenimientos', () => {
     expect(eventos[1]).toMatchObject({ inicio: hecho.fechaInicio, fin: hecho.fechaFin, fueraDePlazo: true });
   });
 
-  it('capa 3: la verificación tiene su propia ventana; una verificación OPERATIVO la quita de pendientes', () => {
-    const fin = { ...base, fase: 'FINALIZADO' as const, fechaFin: d('2027-01-05T17:00:00Z'), verificacionPrevista: d('2027-01-06T13:00:00Z'), verificacionLimite: d('2027-01-08T22:00:00Z') };
-    const [p] = agendaMantenimientos({ ...rango, mantenimientos: [fin], ahora: d('2027-01-07T00:00:00Z'), capa: 3 });
-    expect(p).toMatchObject({ tipo: 'PREVISTO', inicio: fin.verificacionPrevista, fin: fin.verificacionLimite, estado: 'PROGRAMADO' });
-    const cerrado = { ...fin, verificaciones: [{ resultado: 'OPERATIVO', anuladoEn: null }] };
-    expect(agendaMantenimientos({ ...rango, mantenimientos: [cerrado], ahora: d('2027-01-07T00:00:00Z'), capa: 3 })).toEqual([]);
+  it('solo dos fases: una ejecución completada no deja nada pendiente de verificar (capa 3 vacía)', () => {
+    const fin = { ...base, tipo: 'PREDICTIVO', fase: 'FINALIZADO' as const, fechaInicio: d('2027-01-05T15:00:00Z'), fechaFin: d('2027-01-05T17:00:00Z') };
+    expect(agendaMantenimientos({ ...rango, mantenimientos: [fin], ahora: d('2027-01-07T00:00:00Z'), capa: 3 })).toEqual([]);
+    const todas = agendaMantenimientos({ ...rango, mantenimientos: [fin], ahora: d('2027-01-07T00:00:00Z') });
+    expect(todas.every((e) => e.capa !== 3)).toBe(true);
+    expect(todas[0].titulo).toContain('predictivo');
   });
 
   it('capa 1: proyecta las próximas intervenciones de un plan según su frecuencia, dentro del rango', () => {
