@@ -1,100 +1,71 @@
-import type {
-  EstadoVulnerabilidad,
-  Fuente,
-  NivelRiesgo,
-  Prioridad,
-  Vulnerabilidad,
-} from './api/vulnerabilidades.ts'
+import type { EstadoVulnerabilidad, NivelRiesgo, Vulnerabilidad } from './api/vulnerabilidades.ts'
 
 type Info = { etiqueta: string; color: string }
 
-/** Misma escala de colores que la criticidad de los activos (verde → rojo). */
+/** «Criticidad»: misma escala de colores que la criticidad de los activos (verde → rojo). */
 export const INFO_NIVEL: Record<NivelRiesgo, Info> = {
-  BAJO: { etiqueta: 'Bajo', color: 'green' },
-  MEDIO: { etiqueta: 'Medio', color: 'yellow' },
-  ALTO: { etiqueta: 'Alto', color: 'orange' },
-  CRITICO: { etiqueta: 'Crítico', color: 'red' },
+  BAJO: { etiqueta: 'Baja', color: 'green' },
+  MEDIO: { etiqueta: 'Media', color: 'yellow' },
+  ALTO: { etiqueta: 'Alta', color: 'orange' },
+  CRITICO: { etiqueta: 'Crítica', color: 'red' },
 }
 
+/** «Estado» (fase de Remediación): distinto de la criticidad. */
 export const INFO_ESTADO: Record<EstadoVulnerabilidad, Info> = {
-  ABIERTA: { etiqueta: 'Abierta', color: 'red' },
-  EN_MITIGACION: { etiqueta: 'En tratamiento', color: 'yellow' },
-  MITIGADA: { etiqueta: 'Mitigada', color: 'green' },
-  ACEPTADA: { etiqueta: 'Riesgo aceptado', color: 'grape' },
+  ABIERTO: { etiqueta: 'Abierto', color: 'red' },
+  EN_PROGRESO: { etiqueta: 'En progreso', color: 'yellow' },
+  REMEDIADO: { etiqueta: 'Remediado', color: 'green' },
 }
 
-/** De mayor a menor riesgo, como las ordena la API. */
+/** De mayor a menor criticidad, como las ordena la API. */
 export const NIVELES: NivelRiesgo[] = ['CRITICO', 'ALTO', 'MEDIO', 'BAJO']
 export const ESTADOS = Object.keys(INFO_ESTADO) as EstadoVulnerabilidad[]
-export const ESTADOS_PENDIENTES: EstadoVulnerabilidad[] = ['ABIERTA', 'EN_MITIGACION']
-export const ESTADOS_CERRADOS: EstadoVulnerabilidad[] = ['MITIGADA', 'ACEPTADA']
-
-/** De dónde viene el hallazgo. Se registra a mano: no hay escáner conectado. */
-export const INFO_FUENTE: Record<Fuente, string> = {
-  MANUAL: 'Registro manual',
-  ESCANEO: 'Escaneo (informe externo)',
-  AUDITORIA: 'Auditoría',
-  BOLETIN_PROVEEDOR: 'Boletín del proveedor',
-  PRUEBA_PENETRACION: 'Prueba de penetración',
-  REPORTE_USUARIO: 'Reporte de usuario',
-}
-export const FUENTES = Object.keys(INFO_FUENTE) as Fuente[]
-
-export const INFO_PRIORIDAD: Record<Prioridad, Info> = {
-  P1: { etiqueta: 'P1 · inmediata', color: 'red' },
-  P2: { etiqueta: 'P2 · alta', color: 'orange' },
-  P3: { etiqueta: 'P3 · media', color: 'yellow' },
-  P4: { etiqueta: 'P4 · baja', color: 'gray' },
-}
-export const PRIORIDADES = Object.keys(INFO_PRIORIDAD) as Prioridad[]
+export const ESTADOS_PENDIENTES: EstadoVulnerabilidad[] = ['ABIERTO', 'EN_PROGRESO']
 
 /** Formato oficial (el mismo que valida la API). */
 export const FORMATO_CVE = /^CVE-\d{4}-\d{4,}$/
 
-export type Accion =
-  | 'confirmar'
-  | 'evaluar'
-  | 'iniciar-mitigacion'
-  | 'registrar-accion'
-  | 'verificar'
-  | 'aceptar-riesgo'
-
-type Ciclo = Pick<Vulnerabilidad, 'estado' | 'confirmadaEn' | 'evaluadaEn'>
+export type Accion = 'iniciar' | 'remediar' | 'reabrir'
 
 /**
- * Lo que admite cada etapa (las mismas reglas que valida la API):
- * detectada → confirmar · confirmada → evaluar · evaluada → iniciar el tratamiento ·
- * en tratamiento → acciones, reevaluar y verificar · cerrada (mitigada) → solo
- * una verificación que detecte que persiste, que la reabre.
+ * Lo que admite cada estado (las mismas transiciones que valida la API):
+ * ABIERTO → iniciar o remediar · EN_PROGRESO → remediar · REMEDIADO → reabrir.
  */
-export function accionesPermitidas(v: Ciclo): Accion[] {
-  switch (v.estado) {
-    case 'ABIERTA':
-      return [
-        !v.confirmadaEn ? 'confirmar' : 'evaluar',
-        ...(v.evaluadaEn ? (['iniciar-mitigacion'] as const) : []),
-        'aceptar-riesgo',
-      ]
-    case 'EN_MITIGACION':
-      return ['registrar-accion', 'verificar', 'evaluar', 'aceptar-riesgo']
-    case 'MITIGADA':
-      return ['verificar']
-    default:
-      return []
+export function accionesPermitidas(estado: EstadoVulnerabilidad): Accion[] {
+  switch (estado) {
+    case 'ABIERTO':
+      return ['iniciar', 'remediar']
+    case 'EN_PROGRESO':
+      return ['remediar']
+    case 'REMEDIADO':
+      return ['reabrir']
   }
 }
 
-/** Se corrigen los datos de identificación mientras está pendiente. */
+/** Los datos de Detección se corrigen mientras está pendiente. */
 export const admiteEdicion = (estado: EstadoVulnerabilidad) => ESTADOS_PENDIENTES.includes(estado)
 
-// ── Semáforo del plazo (SLA) ────────────────────────────────────────────────
+/** Lo que falta para poder remediar (para avisar antes de enviar; la API lo exige igual). */
+export function faltantesParaRemediar(d: {
+  fechaRemediacion: string | null
+  evidencia: string
+  repositorioVerificable: string
+}): string[] {
+  return [
+    !d.fechaRemediacion && 'la fecha de remediación',
+    !d.evidencia.trim() && 'el verificable',
+    !d.repositorioVerificable.trim() && 'el repositorio del verificable',
+  ].filter((x): x is string => Boolean(x))
+}
+
+// ── Semáforo del plazo ──────────────────────────────────────────────────────
 
 /** Días antes de la fecha límite en que el semáforo pasa a amarillo. */
 export const DIAS_AVISO_SLA = 3
 const MS_DIA = 24 * 60 * 60 * 1000
 
 export type Semaforo = {
-  tipo: 'vencida' | 'por-vencer' | 'en-plazo' | 'sin-plazo' | 'cerrada-en-plazo' | 'cerrada-fuera'
+  tipo: 'vencida' | 'por-vencer' | 'en-plazo' | 'sin-plazo' | 'remediada-en-plazo' | 'remediada-fuera'
   color: string
   etiqueta: string
 }
@@ -102,23 +73,23 @@ export type Semaforo = {
 /**
  * Estado del plazo de remediación:
  * - Pendiente: rojo si ya venció, amarillo si vence en ≤ DIAS_AVISO_SLA días, verde si no.
- * - Cerrada: si se cerró antes o después de la fecha límite (útil para auditoría).
+ * - Remediada: si la fecha REAL de remediación cayó antes o después del plazo.
  */
 export function semaforoSla(
-  v: Pick<Vulnerabilidad, 'estado' | 'fechaLimite' | 'fechaCierre'>,
+  v: Pick<Vulnerabilidad, 'estado' | 'fechaLimite' | 'fechaRemediacion'>,
   ahora: Date = new Date(),
 ): Semaforo {
   const pendiente = ESTADOS_PENDIENTES.includes(v.estado)
   if (!v.fechaLimite) {
-    return { tipo: 'sin-plazo', color: 'gray', etiqueta: pendiente ? 'Sin plazo' : 'Cerrada' }
+    return { tipo: 'sin-plazo', color: 'gray', etiqueta: 'Sin plazo' }
   }
   const limite = new Date(v.fechaLimite).getTime()
 
   if (!pendiente) {
-    const cierre = v.fechaCierre ? new Date(v.fechaCierre).getTime() : limite
-    return cierre <= limite
-      ? { tipo: 'cerrada-en-plazo', color: 'green', etiqueta: 'Cerrada en plazo' }
-      : { tipo: 'cerrada-fuera', color: 'red', etiqueta: 'Cerrada fuera de plazo' }
+    const remediacion = v.fechaRemediacion ? new Date(v.fechaRemediacion).getTime() : limite
+    return remediacion <= limite
+      ? { tipo: 'remediada-en-plazo', color: 'green', etiqueta: 'Remediada en plazo' }
+      : { tipo: 'remediada-fuera', color: 'red', etiqueta: 'Remediada fuera de plazo' }
   }
 
   const restante = limite - ahora.getTime()
@@ -130,43 +101,4 @@ export function semaforoSla(
     return { tipo: 'por-vencer', color: 'yellow', etiqueta: `Vence en ${dias} d` }
   }
   return { tipo: 'en-plazo', color: 'green', etiqueta: `En plazo · ${dias} d` }
-}
-
-// ── Pasos del Stepper ───────────────────────────────────────────────────────
-
-export type Paso = {
-  clave: 'detectada' | 'confirmada' | 'evaluada' | 'tratamiento' | 'cerrada' | 'aceptada'
-  hecho: boolean
-}
-
-/**
- * Ciclo de tres capas: detectada → confirmada → evaluada → en tratamiento →
- * cerrada por verificación. Si se aceptó el riesgo, termina en "Riesgo aceptado"
- * con los pasos que realmente se dieron (no se inventan).
- */
-export function pasosCiclo(v: Ciclo): Paso[] {
-  const confirmada = v.confirmadaEn !== null
-  const evaluada = v.evaluadaEn !== null
-  if (v.estado === 'ACEPTADA') {
-    return [
-      { clave: 'detectada', hecho: true },
-      ...(confirmada ? [{ clave: 'confirmada' as const, hecho: true }] : []),
-      ...(evaluada ? [{ clave: 'evaluada' as const, hecho: true }] : []),
-      { clave: 'aceptada', hecho: true },
-    ]
-  }
-  const enTratamiento = v.estado === 'EN_MITIGACION' || v.estado === 'MITIGADA'
-  return [
-    { clave: 'detectada', hecho: true },
-    { clave: 'confirmada', hecho: confirmada },
-    { clave: 'evaluada', hecho: evaluada },
-    { clave: 'tratamiento', hecho: enTratamiento },
-    { clave: 'cerrada', hecho: v.estado === 'MITIGADA' },
-  ]
-}
-
-/** Paso "activo" del Stepper: el primero sin hacer (o todos). */
-export function pasoActivo(pasos: readonly Paso[]): number {
-  const i = pasos.findIndex((p) => !p.hecho)
-  return i === -1 ? pasos.length : i
 }

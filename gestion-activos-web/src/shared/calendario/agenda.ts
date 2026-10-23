@@ -30,11 +30,14 @@ export const NOMBRE_MODULO: Record<Modulo, string> = {
   vulnerabilidades: 'Vulnerabilidades',
 }
 
-/** Nombre de cada capa en cada módulo. */
+/**
+ * Nombre de cada capa en cada módulo. Mantenimientos y vulnerabilidades tienen solo
+ * dos fases: su capa 3 no tiene eventos.
+ */
 export const NOMBRE_CAPA: Record<Modulo, Record<Capa, string>> = {
   respaldos: { 1: 'Planificación', 2: 'Ejecución', 3: 'Restauración' },
-  mantenimientos: { 1: 'Planificación', 2: 'Ejecución', 3: 'Verificación y cierre' },
-  vulnerabilidades: { 1: 'Identificación y planificación', 2: 'Tratamiento', 3: 'Verificación y cierre' },
+  mantenimientos: { 1: 'Planificación', 2: 'Ejecución', 3: '—' },
+  vulnerabilidades: { 1: 'Detección', 2: 'Remediación', 3: '—' },
 }
 
 /** La semana empieza el lunes. */

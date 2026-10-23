@@ -16,10 +16,10 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 | **Categorías** y **criticidades** | admin | todos | admin | admin; **bloqueado** si algún activo las usa |
 | **Respaldos** · plan, ejecución y restauración | admin, analista | todos | admin, analista, **con motivo** (versión nueva) | admin: **anular** (eliminación lógica, con motivo) y **revertir** |
 | **Mantenimientos** · planificación y ejecución | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad, inicio previsto y fecha límite, solo en fase Programado) | admin: anular y revertir (planificaciones y ejecuciones) |
-| **Vulnerabilidades** · registro, acciones y verificaciones | admin, analista | todos | admin, analista, con motivo: CVE, descripción, riesgo, fechas, fuente y evidencia, solo mientras está pendiente | admin: anular y revertir; anular acciones y verificaciones |
+| **Vulnerabilidades** · detección y remediación | admin, analista | todos | admin, analista, con motivo: fecha de detección, descripción, criticidad, responsable, CVE y plazo, solo mientras está pendiente; remediación cerrada: solo admin, con motivo | admin: anular y revertir |
 | **Control de acceso** · solicitudes lógicas y físicas ([detalle](control-acceso.md)) | admin, analista | todos, incluido el historial | admin, analista: campos editables mientras no esté cerrada (cada cambio queda en el historial); pasar a pendiente y cerrar con la fecha atendida real. Corregir una cerrada y reabrir: solo admin, con motivo | No se eliminan; el historial no se modifica ni se borra |
 
-Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (programar desde el plan, iniciar, finalizar, cancelar y verificar; confirmar, evaluar, iniciar el tratamiento, registrar acciones, verificar y, solo admin, aceptar el riesgo). Todas las reglas se validan en la API: ocultar un botón en la interfaz no sustituye esa validación. Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
+Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (programar desde el plan, iniciar, finalizar, cancelar y verificar; iniciar la remediación, remediar con evidencia y reabrir). Todas las reglas se validan en la API: ocultar un botón en la interfaz no sustituye esa validación. Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
 
 ## Respaldos y restauración (A.8.13, A.5.30)
 
@@ -60,15 +60,16 @@ El módulo tiene **solo dos fases**, Planificación y Ejecución, cada una en su
 
 La **condición física** que trae GLPI (Bueno, Regular, Malo) no es un estado administrativo: un equipo en condición *Malo* sigue en el inventario y puede recibir planes y mantenimientos. Solo bloquean las operaciones nuevas la baja y los estados de `ESTADOS_NO_OPERATIVOS`.
 
-## Vulnerabilidades en tres capas (A.8.8)
+## Vulnerabilidades en dos fases (A.8.8)
 
-La aplicación **no tiene un escáner de vulnerabilidades conectado**: todo hallazgo se registra a mano, indicando su fuente (registro manual, escaneo externo, auditoría, boletín del proveedor, prueba de penetración, reporte de usuario) y su evidencia.
+Solo dos fases sobre el **mismo registro**, sin fase de verificación. El diseño completo (matriz, campos, estados, auditoría) está en [vulnerabilidades.md](vulnerabilidades.md).
 
-1. **Identificación.** Se registra en uno o varios activos (uno por activo; todos o ninguno). Queda *detectada*; alguien la **confirma** (se guarda quién y cuándo). Una crítica genera un aviso.
-2. **Evaluación y tratamiento.** Tras confirmarla se **evalúa**: prioridad (P1–P4), responsable y plan de remediación, con reajuste opcional del riesgo y del plazo. Sin evaluación no se puede iniciar el tratamiento. Durante el tratamiento se registran las **acciones correctivas** (fecha, descripción, responsable, evidencia).
-3. **Verificación y cierre.** Nadie la marca como resuelta a mano: la cierra una **verificación «Corregida»** con evidencia, que exige al menos una acción vigente y registra quién la cerró. Una verificación **«Persiste»** la mantiene en tratamiento o, si ya estaba cerrada, la **reabre** y genera un aviso. *Aceptar el riesgo* (solo admin, con justificación) es el único cierre sin remediación.
+La aplicación **no tiene un escáner de vulnerabilidades conectado**: todo hallazgo se registra a mano.
 
-Cada paso queda en las trazas (confirmación, evaluación, inicio del tratamiento, cierre, reapertura, aceptación), con el usuario, la fecha y los valores anteriores y nuevos.
+1. **Detección.** Se registra en uno o varios activos de GLPI (uno por activo; todos o ninguno), en estado **Abierto**: fecha de detección (puede ser histórica), sistema, vulnerabilidad, criticidad (crítica, alta, media, baja) y responsable; CVE y plazo, opcionales. Una crítica genera un aviso.
+2. **Remediación.** *Abierto → En progreso → Remediado*. Para marcarla **remediada** se exigen la **fecha real de remediación** (la indica el usuario; nunca la del servidor; no futura ni anterior a la detección), el **verificable** y su **repositorio** (carpeta o URL http/https). Se pueden guardar antes sin cerrarla. *Reabrir* (con motivo) la devuelve a *En progreso*, vacía la fecha vigente y genera un aviso.
+
+El estado de una vulnerabilidad **no modifica el activo**. Cada paso queda en las trazas (alta, correcciones, cambios de estado, fecha de remediación, reapertura), con el usuario de la sesión y los valores anteriores y nuevos, en la misma transacción que el cambio.
 
 ## Plazos: lo previsto, lo real y lo verificado
 
@@ -78,9 +79,9 @@ Cada etapa de los tres módulos guarda por separado **lo previsto** (un interval
 |---|---|---|---|
 | **Respaldos** | Inicio previsto del plan (`vigenteDesde`) y ventana horaria (nocturna 22–02, 00–04, fin de semana, laboral L–V 08–18, continua) | Fecha **y hora** real de cada ejecución | Prueba de restauración prevista [`pruebaPrevista`, `pruebaLimite`] de cada copia |
 | **Mantenimientos** | Inicio previsto (`fecha`) y **fecha límite** (`fechaLimite`); en los planes, `plazoDias` (límite = inicio + plazo) | Inicio y fin reales | — (solo dos fases) |
-| **Vulnerabilidades** | Detección (real, la registra una persona), inicio previsto del tratamiento y límite de remediación | Inicio real del tratamiento y fecha de cada acción | Verificación prevista [`verificacionPrevista`, `verificacionLimite`] |
+| **Vulnerabilidades** | Detección (real, la registra una persona) y plazo de remediación (opcional) | Inicio real y **fecha real de remediación** | — (solo dos fases) |
 
-En respaldos y vulnerabilidades, la verificación **no** tiene que caber en el plazo de la ejecución: tiene su propio plazo y su propio estado.
+En respaldos, la prueba de restauración **no** tiene que caber en el plazo de la ejecución: tiene su propio plazo y su propio estado.
 
 **Fuera de plazo.** Si la fecha real cae fuera de lo previsto, la API responde 409 y pide una **excepción**: solo un **admin** la registra, con una justificación de al menos 20 caracteres. Se guardan `fueraDePlazo`, `motivoExcepcion` y `excepcionPor`, la fecha real queda como ocurrió y el plan no cambia. El analista ve el aviso y que no puede registrarla; el formulario no envía.
 
@@ -89,13 +90,11 @@ En respaldos y vulnerabilidades, la verificación **no** tiene que caber en el p
 **Ampliar un plazo** es una acción formal y solo de admin, con motivo:
 
 - límite de ejecución del mantenimiento;
-- límite de remediación de la vulnerabilidad;
-- límite de verificación;
 - límite de la prueba de restauración.
 
-Se conserva el **límite original** (`fechaLimiteOriginal`) y el cambio queda en las trazas. Reevaluar una vulnerabilidad no puede alargar su límite (409: se usa *Ampliar plazo*).
+Se conserva el **límite original** (`fechaLimiteOriginal`) y el cambio queda en las trazas.
 
-**Reprogramar una ventana de capa 3** (respaldos y vulnerabilidades) que ya está programada también es mover el plan: solo admin.
+**Reprogramar una ventana de capa 3** (respaldos) que ya está programada también es mover el plan: solo admin.
 
 **Otras reglas:**
 
@@ -147,8 +146,8 @@ Con los campos que ya existen, sin añadir ninguno:
 | MAN-05 Duración media | ≤ 240 min |
 | VUL-01 Críticas o altas abiertas | 0 |
 | VUL-02 Fuera del plazo de remediación | 0 |
-| VUL-03 Mitigadas dentro del plazo | 100 % |
-| VUL-04 Tiempo medio de mitigación | ≤ 30 días |
+| VUL-03 Remediadas dentro del plazo (fecha real) | 100 % |
+| VUL-04 Tiempo medio de remediación (fecha real − detección) | ≤ 30 días |
 
 Las metas de MAN-04, MAN-05 y VUL-04 son valores de referencia propuestos: el prototipo no define estos módulos. Conviene validarlas con el responsable de seguridad.
 

@@ -138,12 +138,12 @@ export function Calendario({ titulo, descripcion, modulos, capa, onCrear, textoC
             <Select
               size="xs"
               label="Etapa"
-              placeholder="Las tres"
+              placeholder="Todas"
               clearable
               data={[
-                { value: '1', label: '1 · Planificación' },
-                { value: '2', label: '2 · Ejecución o tratamiento' },
-                { value: '3', label: '3 · Verificación o restauración' },
+                { value: '1', label: '1 · Planificación o detección' },
+                { value: '2', label: '2 · Ejecución o remediación' },
+                { value: '3', label: '3 · Restauración (respaldos)' },
               ]}
               value={capaElegida ? String(capaElegida) : null}
               onChange={(v) => setCapaElegida(v ? (Number(v) as Capa) : undefined)}

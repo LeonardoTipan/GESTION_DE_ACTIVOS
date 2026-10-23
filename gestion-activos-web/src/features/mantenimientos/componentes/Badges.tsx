@@ -1,6 +1,6 @@
 import { Badge } from '@mantine/core'
-import { IconAlertTriangle, IconCode, IconCpu, IconHelpCircle } from '@tabler/icons-react'
-import type { ClaseMantenimiento, EstadoEquipo, Fase, TipoMantenimiento } from '../api/mantenimientos.ts'
+import { IconAlertTriangle } from '@tabler/icons-react'
+import type { EstadoEquipo, Fase, TipoMantenimiento } from '../api/mantenimientos.ts'
 import { INFO_ESTADO_EQUIPO, INFO_FASE, INFO_TIPO } from '../fases.ts'
 
 export function BadgeFase({ fase }: { fase: Fase }) {
@@ -41,21 +41,5 @@ export function BadgeVencido() {
   )
 }
 
-const INFO_CLASE_BADGE = {
-  HARDWARE: { etiqueta: 'Hardware · físico', color: 'blue', icono: IconCpu },
-  SOFTWARE: { etiqueta: 'Software · lógico', color: 'grape', icono: IconCode },
-  SIN: { etiqueta: 'Sin clasificar', color: 'gray', icono: IconHelpCircle },
-} as const
-
-/**
- * Clase del activo para el mantenimiento, según su categoría (la elige el admin en
- * Catálogos, como las marcas de Control de acceso). Decide los tipos permitidos.
- */
-export function BadgeClase({ clase, size = 'sm' }: { clase: ClaseMantenimiento | null; size?: 'xs' | 'sm' | 'md' | 'lg' }) {
-  const { etiqueta, color, icono: Icono } = INFO_CLASE_BADGE[clase ?? 'SIN']
-  return (
-    <Badge color={color} variant="light" size={size} leftSection={<Icono size={12} />} style={{ minWidth: 'max-content' }}>
-      {etiqueta}
-    </Badge>
-  )
-}
+/** La clase es un dato de la categoría (inventario): la insignia vive allí. */
+export { BadgeClase } from '../../inventario/componentes/BadgeClase.tsx'

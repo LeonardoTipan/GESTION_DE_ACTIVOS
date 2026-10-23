@@ -11,7 +11,8 @@ import { INFO_ESTADO, INFO_NIVEL, semaforoSla } from '../riesgo.ts'
 export function BadgeNivel({ nivel }: { nivel: NivelRiesgo }) {
   const { etiqueta, color } = INFO_NIVEL[nivel]
   return (
-    <Badge color={color} variant={nivel === 'CRITICO' ? 'filled' : 'light'}>
+    // Sin recortar: la etiqueta completa siempre se lee.
+    <Badge color={color} variant={nivel === 'CRITICO' ? 'filled' : 'light'} style={{ minWidth: 'max-content' }}>
       {etiqueta}
     </Badge>
   )
@@ -20,7 +21,7 @@ export function BadgeNivel({ nivel }: { nivel: NivelRiesgo }) {
 export function BadgeEstado({ estado }: { estado: EstadoVulnerabilidad }) {
   const { etiqueta, color } = INFO_ESTADO[estado]
   return (
-    <Badge color={color} variant="light">
+    <Badge color={color} variant="light" style={{ minWidth: 'max-content' }}>
       {etiqueta}
     </Badge>
   )
@@ -30,13 +31,13 @@ export function BadgeEstado({ estado }: { estado: EstadoVulnerabilidad }) {
 export function BadgeSla({
   vulnerabilidad,
 }: {
-  vulnerabilidad: Pick<Vulnerabilidad, 'estado' | 'fechaLimite' | 'fechaCierre'>
+  vulnerabilidad: Pick<Vulnerabilidad, 'estado' | 'fechaLimite' | 'fechaRemediacion'>
 }) {
   const { tipo, color, etiqueta } = semaforoSla(vulnerabilidad)
   const badge = (
     <Badge
       color={color}
-      variant={tipo === 'vencida' ? 'filled' : tipo.startsWith('cerrada') ? 'outline' : 'light'}
+      variant={tipo === 'vencida' ? 'filled' : tipo.startsWith('remediada') ? 'outline' : 'light'}
       leftSection={tipo === 'vencida' ? <IconClockExclamation size={12} /> : undefined}
     >
       {etiqueta}

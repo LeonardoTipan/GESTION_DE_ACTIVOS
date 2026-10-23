@@ -415,7 +415,9 @@ export function TrazasModal({
           {trazas.data.map((t) => {
             const estado = t.cambios.find((c) => c.campo === CAMPO_ESTADO)
             const tituloTraza =
-              t.accion === 'MODIFICAR'
+              t.accion === 'REGISTRAR'
+                ? 'v1 · Registro'
+                : t.accion === 'MODIFICAR'
                 ? `v${t.version} → v${t.version + 1} · Modificación`
                 : t.accion === 'ANULAR'
                   ? `v${t.version} · Eliminación lógica`

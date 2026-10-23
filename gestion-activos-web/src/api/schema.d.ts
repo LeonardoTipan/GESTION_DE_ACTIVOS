@@ -1026,193 +1026,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/vulnerabilidades/agenda": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Agenda (calendario) de las tres capas
-         * @description Detecciones, tratamientos previstos, límites de remediación, acciones reales y verificaciones del rango, con filtros.
-         */
-        get: operations["TratamientoVulnerabilidadController_agenda"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/verificacion-prevista": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Capa 3 · Programar la verificación (admin, analista)
-         * @description Ventana prevista [prevista, límite] para verificar la remediación: tiene su propio plazo.
-         */
-        patch: operations["TratamientoVulnerabilidadController_programarVerificacion"];
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/plazo": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Ampliar el plazo (solo admin)
-         * @description Amplía formalmente el límite de remediación o de verificación, con motivo. Se conserva el original y queda la traza.
-         */
-        patch: operations["TratamientoVulnerabilidadController_ampliarPlazo"];
-        trace?: never;
-    };
-    "/api/vulnerabilidades/lote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Capa 1 · Registrar la misma vulnerabilidad en varios activos (admin, analista) */
-        post: operations["TratamientoVulnerabilidadController_lote"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/confirmar": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Capa 1 · Confirmar una vulnerabilidad detectada (admin, analista) */
-        patch: operations["TratamientoVulnerabilidadController_confirmar"];
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/evaluar": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /** Capa 2 · Evaluar: prioridad, responsable y plan de remediación (admin, analista) */
-        patch: operations["TratamientoVulnerabilidadController_evaluar"];
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/acciones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Capa 2 · Acciones correctivas */
-        get: operations["TratamientoVulnerabilidadController_acciones"];
-        put?: never;
-        /**
-         * Registrar una acción correctiva (admin, analista)
-         * @description Con la vulnerabilidad EN_MITIGACION.
-         */
-        post: operations["TratamientoVulnerabilidadController_registrarAccion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vulnerabilidades/acciones/{id}/anular": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Anular una acción correctiva (admin) */
-        post: operations["TratamientoVulnerabilidadController_anularAccion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vulnerabilidades/{id}/verificaciones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Capa 3 · Verificaciones */
-        get: operations["TratamientoVulnerabilidadController_verificaciones"];
-        put?: never;
-        /**
-         * Registrar la verificación posterior (admin, analista)
-         * @description CORREGIDA cierra la vulnerabilidad (exige al menos una acción correctiva) y registra quién la cerró. PERSISTE la mantiene en tratamiento o, si estaba cerrada, la reabre.
-         */
-        post: operations["TratamientoVulnerabilidadController_verificar"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/vulnerabilidades/verificaciones/{id}/anular": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Anular una verificación (admin) */
-        post: operations["TratamientoVulnerabilidadController_anularVerificacion"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/vulnerabilidades": {
         parameters: {
             query?: never;
@@ -1222,13 +1035,13 @@ export interface paths {
         };
         /**
          * Listar vulnerabilidades
-         * @description Ordenadas por urgencia: mayor riesgo primero y, dentro del nivel, la más antigua. Filtros por activo, riesgo, estado, CVE, abiertas, vencidas y sincronización incremental.
+         * @description Paginado; las más críticas y antiguas primero. Filtros por activo, categoría, criticidad, responsable, estado, rango de fechas de detección, CVE, pendientes, vencidas y sincronización incremental.
          */
         get: operations["VulnerabilidadesController_findAll"];
         put?: never;
         /**
-         * Registrar vulnerabilidad (admin, analista)
-         * @description Crea la vulnerabilidad en estado ABIERTA.
+         * Detección: registrar (admin, analista)
+         * @description Crea la vulnerabilidad en estado ABIERTO sobre un activo operativo de GLPI. No exige datos de remediación.
          */
         post: operations["VulnerabilidadesController_registrar"];
         delete?: never;
@@ -1246,9 +1059,29 @@ export interface paths {
         };
         /**
          * Indicadores (A.8.8)
-         * @description Del período indicado (por defecto, el trimestre actual). Los anulados no cuentan.
+         * @description Del período indicado (por defecto, el trimestre actual). Las anuladas no cuentan.
          */
         get: operations["VulnerabilidadesController_indicadores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/vulnerabilidades/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda (calendario)
+         * @description Capa 1 Detección (detección y plazo) y capa 2 Remediación (pendiente, inicio y remediación reales). No hay capa 3.
+         */
+        get: operations["VulnerabilidadesController_agenda"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1272,13 +1105,13 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Editar con motivo (admin, analista)
-         * @description Corrige los datos mientras está pendiente. Exige motivoCambio: sube la versión y conserva la anterior.
+         * Detección: corregir con motivo (admin, analista)
+         * @description Fecha de detección, descripción, criticidad, responsable, CVE y plazo, mientras está pendiente. Queda en la auditoría.
          */
         patch: operations["VulnerabilidadesController_update"];
         trace?: never;
     };
-    "/api/vulnerabilidades/{id}/iniciar-mitigacion": {
+    "/api/vulnerabilidades/lote": {
         parameters: {
             query?: never;
             header?: never;
@@ -1287,18 +1120,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
+        /**
+         * Detección: la misma vulnerabilidad en varios activos (admin, analista)
+         * @description Un registro por activo, o ninguno.
+         */
+        post: operations["VulnerabilidadesController_registrarLote"];
         delete?: never;
         options?: never;
         head?: never;
-        /**
-         * Iniciar mitigación (admin, analista)
-         * @description ABIERTA → EN_MITIGACION.
-         */
-        patch: operations["VulnerabilidadesController_iniciarMitigacion"];
+        patch?: never;
         trace?: never;
     };
-    "/api/vulnerabilidades/{id}/aceptar-riesgo": {
+    "/api/vulnerabilidades/{id}/iniciar": {
         parameters: {
             query?: never;
             header?: never;
@@ -1312,10 +1145,70 @@ export interface paths {
         options?: never;
         head?: never;
         /**
-         * Aceptar el riesgo (solo admin)
-         * @description ABIERTA o EN_MITIGACION → ACEPTADA. Decisión de gestión: exige justificación.
+         * Remediación: iniciar (admin, analista)
+         * @description ABIERTO → EN_PROGRESO.
          */
-        patch: operations["VulnerabilidadesController_aceptarRiesgo"];
+        patch: operations["VulnerabilidadesController_iniciar"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/remediacion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Remediación: guardar o corregir sus datos (admin, analista; remediada: solo admin con motivo)
+         * @description Fecha real de remediación, verificable, repositorio y observación. No cambia el estado.
+         */
+        patch: operations["VulnerabilidadesController_actualizarRemediacion"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/remediar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Remediación: marcar REMEDIADO (admin, analista)
+         * @description ABIERTO o EN_PROGRESO → REMEDIADO. Exige la fecha REAL de remediación (manual), el verificable y su repositorio.
+         */
+        patch: operations["VulnerabilidadesController_remediar"];
+        trace?: never;
+    };
+    "/api/vulnerabilidades/{id}/reabrir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Remediación: reabrir (admin, analista)
+         * @description REMEDIADO → EN_PROGRESO, con motivo. La fecha de remediación anterior queda en la auditoría.
+         */
+        patch: operations["VulnerabilidadesController_reabrir"];
         trace?: never;
     };
     "/api/vulnerabilidades/{id}/anular": {
@@ -2715,7 +2608,7 @@ export interface components {
             /** @description Versión del registro ANTES del cambio. */
             version: number;
             /** @enum {string} */
-            accion: "MODIFICAR" | "ANULAR" | "REVERSAR";
+            accion: "REGISTRAR" | "MODIFICAR" | "ANULAR" | "REVERSAR";
             motivo: string;
             cambios: components["schemas"]["CambioCampoDto"][];
             /** @example admin.test */
@@ -3377,80 +3270,61 @@ export interface components {
             id: number;
             /** @example 5 */
             activoId: number;
+            /** @description «Sistema»: el activo de GLPI (código, nombre, categoría). */
             activo: components["schemas"]["ActivoBreveDto"];
+            /**
+             * Format: date-time
+             * @description «Fecha Detección».
+             */
+            fecha: string;
+            /** @description «Vulnerabilidad». */
+            descripcion: string;
+            /**
+             * @description «Criticidad».
+             * @enum {string}
+             */
+            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /** @description «Responsable». */
+            responsable: string | null;
             /** @example CVE-2026-12345 */
             cve: string | null;
-            descripcion: string;
-            /** @enum {string} */
-            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
-            /** @enum {string} */
-            estado: "ABIERTA" | "EN_MITIGACION" | "MITIGADA" | "ACEPTADA";
+            /**
+             * Format: date-time
+             * @description Plazo opcional de remediación.
+             */
+            fechaLimite: string | null;
+            /**
+             * @description «Estado»: ABIERTO, EN_PROGRESO o REMEDIADO.
+             * @enum {string}
+             */
+            estado: "ABIERTO" | "EN_PROGRESO" | "REMEDIADO";
             /**
              * @description Pendiente y con la fecha límite ya pasada (calculado).
              * @example false
              */
             vencida: boolean;
-            /** @description Acción aplicada al mitigar, o justificación al aceptar el riesgo. */
-            mitigacion: string | null;
-            /** @enum {string} */
-            fuente: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-            evidencia: string | null;
             /**
              * Format: date-time
-             * @description Capa 1: confirmada tras comprobarla.
-             */
-            confirmadaEn: string | null;
-            confirmadaPor: string | null;
-            /**
-             * @description Capa 2: evaluación.
-             * @enum {string|null}
-             */
-            prioridad: "P1" | "P2" | "P3" | "P4" | null;
-            responsable: string | null;
-            planRemediacion: string | null;
-            /** Format: date-time */
-            evaluadaEn: string | null;
-            evaluadaPor: string | null;
-            /** @description Quién la cerró (verificación) o aceptó el riesgo. */
-            cerradaPor: string | null;
-            /**
-             * Format: date-time
-             * @description Fecha de detección.
-             */
-            fecha: string;
-            /**
-             * Format: date-time
-             * @description Límite de remediación (≠ detección).
-             */
-            fechaLimite: string | null;
-            /**
-             * Format: date-time
-             * @description Límite antes de ampliarlo.
-             */
-            fechaLimiteOriginal: string | null;
-            /**
-             * Format: date-time
-             * @description Inicio previsto del tratamiento.
-             */
-            tratamientoPrevisto: string | null;
-            /**
-             * Format: date-time
-             * @description Inicio real del tratamiento.
+             * @description Inicio real del trabajo (opcional).
              */
             tratamientoIniciadoEn: string | null;
             /**
              * Format: date-time
-             * @description Capa 3: inicio previsto de la verificación.
+             * @description «Fecha de Remediación»: fecha REAL de la solución, indicada por el usuario; null = no remediada.
              */
-            verificacionPrevista: string | null;
-            /** Format: date-time */
-            verificacionLimite: string | null;
+            fechaRemediacion: string | null;
+            /** @description «Verificable». */
+            evidencia: string | null;
+            /** @description «Repositorio Verificable». */
+            repositorioVerificable: string | null;
+            /** @description «Observación». */
+            observacion: string | null;
+            /** @description Usuario que registró la remediación. */
+            cerradaPor: string | null;
             /**
              * Format: date-time
-             * @description Se registra automáticamente al mitigar o aceptar el riesgo.
+             * @description Fecha de registro (automática).
              */
-            fechaCierre: string | null;
-            /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
@@ -3467,45 +3341,84 @@ export interface components {
             anuladoPor: string | null;
             motivoAnulacion: string | null;
         };
-        AmpliarPlazoVulnerabilidadDto: {
-            /** Format: date-time */
-            nuevoLimite: string;
-            motivo: string;
-            /** @enum {string} */
-            campo: "REMEDIACION" | "VERIFICACION";
+        PaginatedVulnerabilidadDto: {
+            data: components["schemas"]["VulnerabilidadDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
         };
-        RegistrarLoteDto: {
+        RegistrarVulnerabilidadDto: {
             /**
-             * @description Identificador público (se normaliza a mayúsculas).
-             * @example CVE-2026-12345
+             * @description «Sistema»: ID de un activo operativo de GLPI.
+             * @example 5
              */
-            cve?: string;
-            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
+            activoId: number;
+            /**
+             * Format: date-time
+             * @description «Fecha Detección»: cuándo se identificó (puede ser histórica; no futura). No es la fecha de registro.
+             * @example 2026-01-25T14:00:00.000Z
+             */
+            fecha: string;
+            /**
+             * @description «Vulnerabilidad»: descripción del problema detectado.
+             * @example Sistema operativo desactualizado
+             */
             descripcion: string;
             /**
+             * @description «Criticidad»: CRITICO, ALTO, MEDIO o BAJO.
              * @example ALTO
              * @enum {string}
              */
             nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
             /**
+             * @description «Responsable»: persona encargada de gestionarla.
+             * @example ANALISTA 1
+             */
+            responsable: string;
+            /**
+             * @description Identificador público opcional (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
+            /**
              * Format: date-time
-             * @description Fecha de detección (no puede ser futura).
-             * @example 2026-09-30T09:00:00.000Z
+             * @description Plazo opcional para remediarla. No puede ser anterior a la detección.
+             * @example 2026-04-30T23:59:59.000Z
+             */
+            fechaLimite?: string;
+        };
+        RegistrarLoteDto: {
+            /**
+             * Format: date-time
+             * @description «Fecha Detección»: cuándo se identificó (puede ser histórica; no futura). No es la fecha de registro.
+             * @example 2026-01-25T14:00:00.000Z
              */
             fecha: string;
             /**
-             * Format: date-time
-             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
-             * @example 2026-10-15T23:59:59.000Z
+             * @description «Vulnerabilidad»: descripción del problema detectado.
+             * @example Sistema operativo desactualizado
              */
-            fechaLimite?: string;
+            descripcion: string;
             /**
-             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
+             * @description «Criticidad»: CRITICO, ALTO, MEDIO o BAJO.
+             * @example ALTO
              * @enum {string}
              */
-            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
-            evidencia?: string;
+            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
+            /**
+             * @description «Responsable»: persona encargada de gestionarla.
+             * @example ANALISTA 1
+             */
+            responsable: string;
+            /**
+             * @description Identificador público opcional (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
+            /**
+             * Format: date-time
+             * @description Plazo opcional para remediarla. No puede ser anterior a la detección.
+             * @example 2026-04-30T23:59:59.000Z
+             */
+            fechaLimite?: string;
             /**
              * @description Activos operativos afectados.
              * @example [
@@ -3515,213 +3428,95 @@ export interface components {
              */
             activoIds: number[];
         };
-        EvaluarVulnerabilidadDto: {
-            /**
-             * @description P1 = atender de inmediato.
-             * @enum {string}
-             */
-            prioridad: "P1" | "P2" | "P3" | "P4";
-            /** @example Coordinación de Infraestructura */
-            responsable: string;
-            /** @example Actualizar OpenSSL a 3.0.15 en la próxima ventana de mantenimiento. */
-            planRemediacion: string;
-            /**
-             * @description Si la evaluación cambia el nivel de riesgo.
-             * @enum {string}
-             */
-            nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
-            /**
-             * Format: date-time
-             * @description Límite de remediación (SLA). Fijarlo o adelantarlo; para ampliarlo se usa PATCH /plazo (admin).
-             */
-            fechaLimite?: string;
-            /**
-             * Format: date-time
-             * @description Inicio previsto del tratamiento (distinto de la detección): no anterior a la detección ni posterior al límite.
-             */
-            tratamientoPrevisto?: string;
-        };
-        AccionRemediacionDto: {
-            /**
-             * @description Sube con cada modificación.
-             * @example 1
-             */
-            version: number;
-            /**
-             * Format: date-time
-             * @description null = vigente.
-             */
-            anuladoEn: string | null;
-            anuladoPor: string | null;
-            motivoAnulacion: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            fueraDePlazo: boolean;
-            motivoExcepcion: string | null;
-            excepcionPor: string | null;
-            id: number;
-            vulnerabilidadId: number;
-            /** Format: date-time */
-            fecha: string;
-            descripcion: string;
-            responsable: string;
-            evidencia: string | null;
-            registradoPor: string;
-        };
-        RegistrarAccionDto: {
-            /** Format: date-time */
-            fecha: string;
-            /** @example Aplicado el parche KB5031234 en el servidor. */
-            descripcion: string;
-            /** @example jperez */
-            responsable: string;
-            /** @example Ticket CHG-2026-118 */
-            evidencia?: string;
-            /** @description Acción posterior al límite de remediación: justificación (solo admin). */
-            motivoExcepcion?: string;
-        };
-        VerificacionVulnerabilidadDto: {
-            /**
-             * @description Sube con cada modificación.
-             * @example 1
-             */
-            version: number;
-            /**
-             * Format: date-time
-             * @description null = vigente.
-             */
-            anuladoEn: string | null;
-            anuladoPor: string | null;
-            motivoAnulacion: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            fueraDePlazo: boolean;
-            motivoExcepcion: string | null;
-            excepcionPor: string | null;
-            id: number;
-            vulnerabilidadId: number;
-            /** Format: date-time */
-            fecha: string;
-            /** @enum {string} */
-            resultado: "CORREGIDA" | "PERSISTE";
-            observaciones: string;
-            evidencia: string;
-            responsable: string;
-            registradoPor: string;
-        };
-        RegistrarVerificacionVulnerabilidadDto: {
-            /** Format: date-time */
-            fecha: string;
-            /**
-             * @description CORREGIDA cierra la vulnerabilidad; PERSISTE la mantiene en tratamiento (o la reabre si estaba cerrada).
-             * @enum {string}
-             */
-            resultado: "CORREGIDA" | "PERSISTE";
-            /** @example Escaneo posterior sin hallazgos para CVE-2026-12345. */
-            observaciones: string;
-            /** @example Informe de escaneo 2026-10-15 */
-            evidencia: string;
-            /** @example Oficial de Seguridad */
-            responsable: string;
-            /** @description Verificación fuera de su ventana prevista: justificación (solo admin). */
-            motivoExcepcion?: string;
-        };
-        PaginatedVulnerabilidadDto: {
-            data: components["schemas"]["VulnerabilidadDto"][];
-            meta: components["schemas"]["PaginationMetaDto"];
-        };
-        RegistrarVulnerabilidadDto: {
-            /**
-             * @description ID de un activo vigente.
-             * @example 5
-             */
-            activoId: number;
-            /**
-             * @description Identificador público (se normaliza a mayúsculas).
-             * @example CVE-2026-12345
-             */
-            cve?: string;
-            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
-            descripcion: string;
-            /**
-             * @example ALTO
-             * @enum {string}
-             */
-            nivelRiesgo: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
-            /**
-             * Format: date-time
-             * @description Fecha de detección (no puede ser futura).
-             * @example 2026-09-30T09:00:00.000Z
-             */
-            fecha: string;
-            /**
-             * Format: date-time
-             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
-             * @example 2026-10-15T23:59:59.000Z
-             */
-            fechaLimite?: string;
-            /**
-             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
-             * @enum {string}
-             */
-            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
-            evidencia?: string;
-        };
-        IniciarTratamientoDto: {
-            /**
-             * Format: date-time
-             * @description Inicio real (por defecto, ahora).
-             */
-            fecha?: string;
-            /** @description Fuera del intervalo previsto: justificación (solo admin). */
-            motivoExcepcion?: string;
-        };
-        AceptarRiesgoDto: {
-            /**
-             * @description Justificación formal (se guarda en "mitigacion").
-             * @example Sistema heredado sin parche del fabricante; aislado en VLAN sin acceso a Internet. Se reevalúa en 6 meses.
-             */
-            justificacion: string;
-        };
         EditarVulnerabilidadDto: {
             /**
-             * @description Identificador público (se normaliza a mayúsculas).
-             * @example CVE-2026-12345
+             * Format: date-time
+             * @description «Fecha Detección»: cuándo se identificó (puede ser histórica; no futura). No es la fecha de registro.
+             * @example 2026-01-25T14:00:00.000Z
              */
-            cve?: string;
-            /** @example OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509. */
+            fecha?: string;
+            /**
+             * @description «Vulnerabilidad»: descripción del problema detectado.
+             * @example Sistema operativo desactualizado
+             */
             descripcion?: string;
             /**
+             * @description «Criticidad»: CRITICO, ALTO, MEDIO o BAJO.
              * @example ALTO
              * @enum {string}
              */
             nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
             /**
-             * Format: date-time
-             * @description Fecha de detección (no puede ser futura).
-             * @example 2026-09-30T09:00:00.000Z
+             * @description «Responsable»: persona encargada de gestionarla.
+             * @example ANALISTA 1
              */
-            fecha?: string;
+            responsable?: string;
+            /**
+             * @description Identificador público opcional (se normaliza a mayúsculas).
+             * @example CVE-2026-12345
+             */
+            cve?: string;
             /**
              * Format: date-time
-             * @description Plazo para remediarla (SLA). No puede ser anterior a la detección.
-             * @example 2026-10-15T23:59:59.000Z
+             * @description Plazo opcional para remediarla. No puede ser anterior a la detección.
+             * @example 2026-04-30T23:59:59.000Z
              */
             fechaLimite?: string;
-            /**
-             * @description De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.
-             * @enum {string}
-             */
-            fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-            /** @example Informe Nessus 2026-09-30, hallazgo 4521 */
-            evidencia?: string;
             /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
             motivoCambio: string;
+        };
+        IniciarRemediacionDto: {
+            /**
+             * Format: date-time
+             * @description Cuándo empezó realmente el trabajo (opcional; no futura, no anterior a la detección).
+             */
+            fechaInicio?: string;
+        };
+        ActualizarRemediacionDto: {
+            /**
+             * Format: date-time
+             * @description «Fecha de Remediación»: cuándo se solucionó REALMENTE (la indica el usuario; puede ser histórica, no futura, no anterior a la detección).
+             * @example 2026-04-27T15:00:00.000Z
+             */
+            fechaRemediacion?: string;
+            /**
+             * @description «Verificable»: nombre del informe o documento que prueba la remediación.
+             * @example Informe de Mitigación de Amenazas y Vulnerabilidades 01
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta compartida o URL http(s) donde está la evidencia.
+             * @example Carpeta Compartida TICs/Vulnerabilidades/2026
+             */
+            repositorioVerificable?: string;
+            /** @description «Observación»: acciones realizadas, detalles técnicos, limitaciones. */
+            observacion?: string;
+            /** @description Obligatorio si la vulnerabilidad ya está REMEDIADA (mínimo 20 caracteres). */
+            motivoCambio?: string;
+        };
+        RemediarDto: {
+            /**
+             * Format: date-time
+             * @description «Fecha de Remediación»: cuándo se solucionó REALMENTE (la indica el usuario; puede ser histórica, no futura, no anterior a la detección).
+             * @example 2026-04-27T15:00:00.000Z
+             */
+            fechaRemediacion?: string;
+            /**
+             * @description «Verificable»: nombre del informe o documento que prueba la remediación.
+             * @example Informe de Mitigación de Amenazas y Vulnerabilidades 01
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta compartida o URL http(s) donde está la evidencia.
+             * @example Carpeta Compartida TICs/Vulnerabilidades/2026
+             */
+            repositorioVerificable?: string;
+            /** @description «Observación»: acciones realizadas, detalles técnicos, limitaciones. */
+            observacion?: string;
+        };
+        ReabrirDto: {
+            /** @example El escaneo de mayo vuelve a detectar la versión vulnerable del sistema operativo. */
+            motivo: string;
         };
         ContadoresSincronizacionDto: {
             /**
@@ -7446,642 +7241,32 @@ export interface operations {
             };
         };
     };
-    TratamientoVulnerabilidadController_agenda: {
-        parameters: {
-            query: {
-                desde: string;
-                hasta: string;
-                /** @description Sin capa: las tres. */
-                capa?: 1 | 2 | 3;
-                categoriaId?: number;
-                /** @description Contiene (responsable o técnico). */
-                responsable?: string;
-                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["EventoAgendaDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_programarVerificacion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProgramarVerificacionDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_ampliarPlazo: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AmpliarPlazoVulnerabilidadDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_lote: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarLoteDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_confirmar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_evaluar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["EvaluarVulnerabilidadDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_acciones: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccionRemediacionDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_registrarAccion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarAccionDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccionRemediacionDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_anularAccion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MotivoDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AccionRemediacionDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_verificaciones: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_verificar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarVerificacionVulnerabilidadDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TratamientoVulnerabilidadController_anularVerificacion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MotivoDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionVulnerabilidadDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Estado o etapa no permitidos. */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
     VulnerabilidadesController_findAll: {
         parameters: {
             query?: {
                 page?: number;
                 limit?: number;
+                /** @description «Sistema»: activo de GLPI. */
                 activoId?: number;
+                /** @description «Criticidad». */
                 nivelRiesgo?: "BAJO" | "MEDIO" | "ALTO" | "CRITICO";
                 /** @description Categoría del activo. */
                 categoriaId?: number;
-                /** @description Busca en el código y nombre del activo y en la descripción. */
+                /** @description Busca en el código y nombre del activo, la descripción y el CVE. */
                 q?: string;
-                /** @description Responsable del tratamiento (contiene el texto). */
+                /** @description «Responsable» (contiene el texto). */
                 responsable?: string;
-                prioridad?: "P1" | "P2" | "P3" | "P4";
-                fuente?: "MANUAL" | "ESCANEO" | "AUDITORIA" | "BOLETIN_PROVEEDOR" | "PRUEBA_PENETRACION" | "REPORTE_USUARIO";
-                /** @description true = confirmadas; false = solo detectadas. */
-                confirmada?: boolean;
-                estado?: "ABIERTA" | "EN_MITIGACION" | "MITIGADA" | "ACEPTADA";
+                /** @description «Estado». */
+                estado?: "ABIERTO" | "EN_PROGRESO" | "REMEDIADO";
                 /** @description Busca por CVE (coincidencia parcial). */
                 cve?: string;
-                /** @description true = solo pendientes (ABIERTA o EN_MITIGACION); false = solo cerradas. */
+                /** @description Detectadas desde esta fecha (incluida). */
+                desde?: string;
+                /** @description Detectadas hasta esta fecha (incluida). */
+                hasta?: string;
+                /** @description true = solo pendientes (ABIERTO o EN_PROGRESO); false = solo remediadas. */
                 abiertas?: boolean;
-                /** @description true = solo pendientes con fecha límite ya pasada (SLA incumplido); false = excluirlas. */
+                /** @description true = solo pendientes con la fecha límite ya pasada; false = excluirlas. */
                 vencidas?: boolean;
                 /** @description Sincronización incremental: solo vulnerabilidades modificadas después de esta fecha. */
                 actualizadoDesde?: string;
@@ -8151,7 +7336,7 @@ export interface operations {
                     "application/json": components["schemas"]["VulnerabilidadDto"];
                 };
             };
-            /** @description Datos inválidos, CVE mal formado, fecha límite anterior a la detección o activo inexistente/dado de baja. */
+            /** @description Datos inválidos o activo inexistente/no operativo. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -8209,6 +7394,52 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["IndicadorDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
                 };
             };
             /** @description Token ausente o inválido. */
@@ -8327,15 +7558,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Cerrado, anulado o modificado entretanto. */
+            /** @description Remediada, anulada o modificada entretanto. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8346,7 +7569,48 @@ export interface operations {
             };
         };
     };
-    VulnerabilidadesController_iniciarMitigacion: {
+    VulnerabilidadesController_registrarLote: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegistrarLoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_iniciar: {
         parameters: {
             query?: never;
             header?: never;
@@ -8357,7 +7621,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IniciarTratamientoDto"];
+                "application/json": components["schemas"]["IniciarRemediacionDto"];
             };
         };
         responses: {
@@ -8387,14 +7651,6 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
             /** @description Estado no permitido. */
             409: {
                 headers: {
@@ -8406,7 +7662,7 @@ export interface operations {
             };
         };
     };
-    VulnerabilidadesController_aceptarRiesgo: {
+    VulnerabilidadesController_actualizarRemediacion: {
         parameters: {
             query?: never;
             header?: never;
@@ -8417,7 +7673,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["AceptarRiesgoDto"];
+                "application/json": components["schemas"]["ActualizarRemediacionDto"];
             };
         };
         responses: {
@@ -8455,7 +7711,51 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorDto"];
                 };
             };
-            404: {
+        };
+    };
+    VulnerabilidadesController_remediar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemediarDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Falta la fecha o la evidencia, o la fecha no es válida. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8464,6 +7764,58 @@ export interface operations {
                 };
             };
             /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    VulnerabilidadesController_reabrir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReabrirDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VulnerabilidadDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description No está remediada. */
             409: {
                 headers: {
                     [name: string]: unknown;
