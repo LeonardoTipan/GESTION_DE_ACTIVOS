@@ -1,6 +1,7 @@
 /**
- * Pruebas e2e del módulo de vulnerabilidades contra MySQL
- * (gestion_activos_test) y el Keycloak de desarrollo.
+ * Vulnerabilidades en DOS fases (Detección y Remediación) contra MySQL
+ * (gestion_activos_test) y el Keycloak de desarrollo. Fechas de 2026 ya pasadas:
+ * la detección y la remediación son históricas, como en la matriz.
  */
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -13,56 +14,43 @@ import { setupSwagger } from './../src/swagger.js';
 import { limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
-describe('Vulnerabilidades (e2e)', () => {
+const LENTO = 30_000;
+const MOTIVO = 'Corrección registrada tras revisar el informe de vulnerabilidades.';
+const DETECCION = '2026-01-25T14:00:00.000Z';
+const REMEDIACION = '2026-04-27T15:00:00.000Z';
+const CIERRE = {
+  fechaRemediacion: REMEDIACION,
+  evidencia: 'Informe de Mitigación de Amenazas y Vulnerabilidades 01',
+  repositorioVerificable: 'Carpeta Compartida TICs/Vulnerabilidades/2026',
+  observacion: 'Se actualizó el sistema operativo a la versión soportada.',
+};
+
+describe('Vulnerabilidades: Detección y Remediación (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
-  let activoId: number;
-  let activoDeBajaId: number;
-
-  const DIA = 24 * 3600 * 1000;
-  const HACE_3_DIAS = new Date(Date.now() - 3 * DIA).toISOString();
-  const AYER = new Date(Date.now() - DIA).toISOString();
-  const EN_UNA_SEMANA = new Date(Date.now() + 7 * DIA).toISOString();
+  let servidor: number;
+  let aplicativo: number;
+  let deBaja: number;
 
   beforeAll(async () => {
-    const moduleFixture = await Test.createTestingModule({
-      imports: [AppModule],
-    }).compile();
+    const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleFixture.createNestApplication();
     configureApp(app);
     setupSwagger(app);
     await app.init();
-
     prisma = app.get(PrismaService);
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
 
-    const categoria = await prisma.categoria.create({
-      data: { nombre: 'Hardware', descripcion: '' },
-    });
-    const criticidad = await prisma.criticidad.create({
-      data: { nivel: 'Alta' },
-    });
-    const base = {
-      nombre: 'Servidor web',
-      sistemas: 'Portal',
-      custodio: 'Infraestructura',
-      ubicacion: 'DMZ',
-      cifrado: true,
-      ultimaRevision: new Date('2026-09-01'),
-      categoriaId: categoria.id,
-      criticidadId: criticidad.id,
-    };
-    activoId = (
-      await prisma.activo.create({ data: { ...base, codigo: 'WEB-01' } })
-    ).id;
-    activoDeBajaId = (
-      await prisma.activo.create({
-        data: { ...base, codigo: 'WEB-OLD', deletedAt: new Date() },
-      })
-    ).id;
-  });
+    const hw = await prisma.categoria.create({ data: { nombre: 'Servidores físicos', descripcion: '', claseMantenimiento: 'HARDWARE' } });
+    const sw = await prisma.categoria.create({ data: { nombre: 'Aplicativos', descripcion: '', claseMantenimiento: 'SOFTWARE' } });
+    const criticidadId = (await prisma.criticidad.create({ data: { nivel: 'Alta' } })).id;
+    const base = { sistemas: '', custodio: 'Infraestructura', ubicacion: 'Data center', cifrado: true, ultimaRevision: new Date('2026-01-01'), criticidadId, estado: 'Bueno' };
+    servidor = (await prisma.activo.create({ data: { ...base, codigo: 'SRV-V6', nombre: 'SERVIDOR PARA VIRTUALIZACIÓN V6', categoriaId: hw.id } })).id;
+    aplicativo = (await prisma.activo.create({ data: { ...base, codigo: 'AC-0001', nombre: 'SICET', categoriaId: sw.id } })).id;
+    deBaja = (await prisma.activo.create({ data: { ...base, codigo: 'SRV-OLD', nombre: 'Servidor retirado', categoriaId: hw.id, deletedAt: new Date() } })).id;
+  }, LENTO);
 
   afterAll(async () => {
     await app.close();
@@ -70,461 +58,279 @@ describe('Vulnerabilidades (e2e)', () => {
 
   const api = (token: string) => {
     const server = app.getHttpServer();
-    const auth = (req: request.Test) =>
-      req.set('Authorization', `Bearer ${token}`);
+    const auth = (req: request.Test) => req.set('Authorization', `Bearer ${token}`);
     return {
       get: (url: string) => auth(request(server).get(url)),
-      post: (url: string, body: object) =>
-        auth(request(server).post(url).send(body)),
-      patch: (url: string, body: object = {}) =>
-        auth(request(server).patch(url).send(body)),
+      post: (url: string, body: object = {}) => auth(request(server).post(url).send(body)),
+      patch: (url: string, body: object = {}) => auth(request(server).patch(url).send(body)),
     };
   };
-
-  const registrar = async (extra: Record<string, unknown> = {}) =>
-    (
-      await api(tokens.analista)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          descripcion: 'Versión de OpenSSL con vulnerabilidad conocida.',
-          nivelRiesgo: 'MEDIO',
-          fecha: HACE_3_DIAS,
-          ...extra,
-        })
-        .expect(201)
-    ).body as { id: number };
-
-  /** Capa 1 y 2: confirmar y evaluar, requisito para iniciar el tratamiento. */
-  const prepararTratamiento = async (id: number) => {
-    await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/confirmar`).expect(200);
-    await api(tokens.analista)
-      .patch(`/api/vulnerabilidades/${id}/evaluar`, {
-        prioridad: 'P2',
-        responsable: 'Infraestructura',
-        planRemediacion: 'Aplicar el parche del fabricante en la próxima ventana.',
-      })
-      .expect(200);
+  const DETECTADA = {
+    fecha: DETECCION,
+    descripcion: 'Sistema operativo desactualizado',
+    nivelRiesgo: 'ALTO',
+    responsable: 'ANALISTA 1',
   };
-  /** Capas 2 y 3: una acción correctiva y la verificación que la cierra. */
-  const cerrarConVerificacion = async (id: number, observaciones = 'Escaneo posterior sin hallazgos.') => {
-    await api(tokens.analista)
-      .post(`/api/vulnerabilidades/${id}/acciones`, {
-        fecha: new Date().toISOString(),
-        descripcion: 'Parche aplicado.',
-        responsable: 'jperez',
-      })
-      .expect(201);
-    return api(tokens.analista)
-      .post(`/api/vulnerabilidades/${id}/verificaciones`, {
-        fecha: new Date().toISOString(),
-        resultado: 'CORREGIDA',
-        observaciones,
-        evidencia: 'Informe de escaneo',
-        responsable: 'Seguridad',
-      })
-      .expect(201);
-  };
+  const detectar = async (extra: Record<string, unknown> = {}) =>
+    (await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA, ...extra }).expect(201)).body as { id: number; version: number };
+  const trazas = async (id: number) =>
+    (await api(tokens.auditor).get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${id}`).expect(200)).body as {
+      accion: string; version: number; responsable: string; motivo: string; cambios: { campo: string; antes: unknown; despues: unknown }[];
+    }[];
+  const activoAntes = () => prisma.activo.findUniqueOrThrow({ where: { id: servidor } });
 
-  describe('ciclo completo: registrar → confirmar → evaluar → tratar → verificar', () => {
-    let id: number;
+  let id: number;
 
-    it('registrar → 201 ABIERTA, con el CVE normalizado a mayúsculas', async () => {
-      const res = await api(tokens.analista)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          cve: '  cve-2026-12345 ',
-          descripcion: '  OpenSSL vulnerable a desbordamiento de búfer.  ',
-          nivelRiesgo: 'ALTO',
-          fecha: HACE_3_DIAS,
-          fechaLimite: EN_UNA_SEMANA,
-        })
-        .expect(201);
+  describe('Fase 1 · Detección', () => {
+    it('1, 2 y 5 · registra con los datos de la matriz, en ABIERTO y con la fecha de detección histórica', async () => {
+      const res = await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA }).expect(201);
       expect(res.body).toMatchObject({
-        activo: { id: activoId, codigo: 'WEB-01' },
-        cve: 'CVE-2026-12345',
-        descripcion: 'OpenSSL vulnerable a desbordamiento de búfer.',
+        activoId: servidor,
+        activo: { codigo: 'SRV-V6', nombre: 'SERVIDOR PARA VIRTUALIZACIÓN V6' },
+        fecha: DETECCION,
+        descripcion: 'Sistema operativo desactualizado',
         nivelRiesgo: 'ALTO',
-        estado: 'ABIERTA',
-        vencida: false,
-        mitigacion: null,
-        fechaLimite: EN_UNA_SEMANA,
-        fechaCierre: null,
+        responsable: 'ANALISTA 1',
+        estado: 'ABIERTO',
+        fechaRemediacion: null,
+        evidencia: null,
+        repositorioVerificable: null,
+        observacion: null,
       });
+      // La fecha de registro es automática y distinta de la detección.
+      expect(res.body.createdAt).not.toBe(DETECCION);
       id = res.body.id;
     });
 
-    it('el mismo CVE no puede estar pendiente dos veces en el activo → 409', async () => {
+    it('la traza del alta guarda quién la registró y sus datos', async () => {
+      const [alta] = await trazas(id);
+      expect(alta).toMatchObject({ accion: 'REGISTRAR', responsable: 'analista.test', version: 0 });
+      expect(alta.cambios).toEqual(expect.arrayContaining([
+        expect.objectContaining({ campo: 'nivelRiesgo', antes: null, despues: 'ALTO' }),
+        expect.objectContaining({ campo: 'estado', despues: 'ABIERTO' }),
+      ]));
+    });
+
+    it('3 · rechaza un activo inexistente o dado de baja', async () => {
+      await api(tokens.analista).post('/api/vulnerabilidades', { ...DETECTADA, activoId: 999999 }).expect(400);
+      const baja = await api(tokens.analista).post('/api/vulnerabilidades', { ...DETECTADA, activoId: deBaja }).expect(400);
+      expect(baja.body.message).toMatch(/dado de baja/);
+    });
+
+    it('4 · rechaza una criticidad no permitida y los datos obligatorios ausentes', async () => {
+      await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA, nivelRiesgo: 'URGENTE' }).expect(400);
+      const { responsable: _r, ...sinResponsable } = DETECTADA;
+      await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...sinResponsable }).expect(400);
+      await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA, fecha: new Date(Date.now() + 86_400_000).toISOString() }).expect(400);
+      // El estado y los datos de remediación no se aceptan al detectar.
+      await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA, estado: 'REMEDIADO' }).expect(400);
+      await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA, fechaRemediacion: REMEDIACION }).expect(400);
+    });
+
+    it('la misma vulnerabilidad en varios activos: uno por activo, o ninguno', async () => {
+      await api(tokens.analista).post('/api/vulnerabilidades/lote', { ...DETECTADA, activoIds: [aplicativo, deBaja] }).expect(400);
+      expect(await prisma.vulnerabilidad.count({ where: { activoId: aplicativo } })).toBe(0);
       const res = await api(tokens.analista)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          cve: 'CVE-2026-12345',
-          descripcion: 'Duplicado',
-          nivelRiesgo: 'ALTO',
-          fecha: HACE_3_DIAS,
-        })
-        .expect(409);
-      expect(res.body.message).toMatch(/ya tiene CVE-2026-12345 pendiente/);
-    });
-
-    it('no se puede verificar ni cerrar sin haber iniciado el tratamiento → 409', () =>
-      api(tokens.analista)
-        .post(`/api/vulnerabilidades/${id}/verificaciones`, {
-          fecha: new Date().toISOString(),
-          resultado: 'CORREGIDA',
-          observaciones: 'Intento de cierre directo.',
-          evidencia: 'Ninguna',
-          responsable: 'X',
-        })
-        .expect(409));
-
-    it('ya no existe el cierre manual: PATCH /mitigar → 404', () =>
-      api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/mitigar`, { mitigacion: 'X' })
-        .expect(404));
-
-    it('iniciar el tratamiento exige la evaluación; después → EN_MITIGACION', async () => {
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(409);
-      await prepararTratamiento(id);
-      const res = await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(200);
-      expect(res.body).toMatchObject({ estado: 'EN_MITIGACION', prioridad: 'P2', evaluadaPor: 'analista.test' });
-    });
-
-    it('no se puede iniciar dos veces → 409', () =>
-      api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(409));
-
-    it('una verificación CORREGIDA la cierra: MITIGADA, con quién la cerró y la fecha', async () => {
-      await cerrarConVerificacion(id, 'Actualizado OpenSSL a 3.0.15; verificado con escaneo.');
-      const res = await api(tokens.auditor).get(`/api/vulnerabilidades/${id}`).expect(200);
-      expect(res.body).toMatchObject({
-        estado: 'MITIGADA',
-        mitigacion: 'Actualizado OpenSSL a 3.0.15; verificado con escaneo.',
-        cerradaPor: 'analista.test',
-        vencida: false,
-      });
-      expect(res.body.fechaCierre).not.toBeNull();
-    });
-
-    it('cerrada, ya no admite aceptar el riesgo → 409', () =>
-      api(tokens.admin)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, {
-          justificacion: 'X',
-        })
-        .expect(409));
-
-    it('una vez cerrada, el mismo CVE se puede volver a registrar (reapareció)', () =>
-      registrar({ cve: 'CVE-2026-12345' }));
-  });
-
-  describe('aceptar el riesgo (solo admin)', () => {
-    it('analista NO puede aceptar riesgos → 403', async () => {
-      const { id } = await registrar({ descripcion: 'Sistema heredado' });
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, {
-          justificacion: 'Sin parche',
-        })
-        .expect(403);
-    });
-
-    it('admin acepta desde ABIERTA → ACEPTADA con la justificación', async () => {
-      const { id } = await registrar({
-        descripcion: 'Sin parche del fabricante',
-      });
-      const res = await api(tokens.admin)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, {
-          justificacion: 'Aislado en VLAN sin acceso a Internet.',
-        })
-        .expect(200);
-      expect(res.body).toMatchObject({
-        estado: 'ACEPTADA',
-        mitigacion: 'Aislado en VLAN sin acceso a Internet.',
-        fechaCierre: expect.any(String),
-      });
-    });
-
-    it('admin acepta desde EN_MITIGACION', async () => {
-      const { id } = await registrar({ descripcion: 'Mitigación inviable' });
-      await prepararTratamiento(id);
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(200);
-      const res = await api(tokens.admin)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, {
-          justificacion: 'El parche rompe el sistema.',
-        })
-        .expect(200);
-      expect(res.body.estado).toBe('ACEPTADA');
-    });
-
-    it('aceptar sin justificación → 400', async () => {
-      const { id } = await registrar({ descripcion: 'Sin justificación' });
-      await api(tokens.admin)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, {})
-        .expect(400);
-    });
-  });
-
-  describe('validaciones', () => {
-    it('activo inexistente o dado de baja → 400', async () => {
-      const cuerpo = { descripcion: 'X', nivelRiesgo: 'BAJO', fecha: AYER };
-      await api(tokens.analista)
-        .post('/api/vulnerabilidades', { ...cuerpo, activoId: 999999 })
-        .expect(400);
-      const res = await api(tokens.analista)
-        .post('/api/vulnerabilidades', { ...cuerpo, activoId: activoDeBajaId })
-        .expect(400);
-      expect(res.body.message).toMatch(/dado de baja/);
-    });
-
-    it('CVE con formato inválido → 400', async () => {
-      const cuerpo = {
-        activoId,
-        descripcion: 'X',
-        nivelRiesgo: 'BAJO',
-        fecha: AYER,
-      };
-      for (const cve of [
-        '2026-12345',
-        'CVE-26-12345',
-        'CVE-2026-123',
-        'CVE-2026-ABCD',
-      ]) {
-        const res = await api(tokens.analista)
-          .post('/api/vulnerabilidades', { ...cuerpo, cve })
-          .expect(400);
-        expect(res.body.message).toContain(
-          'cve debe tener el formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)',
-        );
-      }
-    });
-
-    it('nivel de riesgo inválido, fecha futura o campos extra → 400', async () => {
-      const cuerpo = {
-        activoId,
-        descripcion: 'X',
-        nivelRiesgo: 'BAJO',
-        fecha: AYER,
-      };
-      await api(tokens.analista)
-        .post('/api/vulnerabilidades', { ...cuerpo, nivelRiesgo: 'URGENTE' })
-        .expect(400);
-      await api(tokens.analista)
-        .post('/api/vulnerabilidades', { ...cuerpo, fecha: EN_UNA_SEMANA })
-        .expect(400);
-      await api(tokens.analista)
-        .post('/api/vulnerabilidades', { ...cuerpo, estado: 'MITIGADA' })
-        .expect(400);
-    });
-
-    it('fecha límite anterior a la detección → 400', async () => {
-      const res = await api(tokens.analista)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          descripcion: 'X',
-          nivelRiesgo: 'BAJO',
-          fecha: AYER,
-          fechaLimite: HACE_3_DIAS,
-        })
-        .expect(400);
-      expect(res.body.message).toMatch(/anterior a la fecha de detección/);
-    });
-
-    it('descripción larga (TEXT) se acepta', async () => {
-      const larga = 'Detalle técnico. '.repeat(150); // ~2 550 caracteres
-      const res = await api(tokens.analista)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          descripcion: larga,
-          nivelRiesgo: 'BAJO',
-          fecha: AYER,
-        })
+        .post('/api/vulnerabilidades/lote', { ...DETECTADA, descripcion: 'Certificado TLS caducado', nivelRiesgo: 'MEDIO', activoIds: [aplicativo] })
         .expect(201);
-      expect(res.body.descripcion).toBe(larga.trim());
+      expect(res.body).toHaveLength(1);
     });
 
-    it('inexistente → 404; id no numérico → 400', async () => {
-      await api(tokens.auditor).get('/api/vulnerabilidades/999999').expect(404);
-      await api(tokens.analista)
-        .patch('/api/vulnerabilidades/999999/iniciar-mitigacion')
-        .expect(404);
-      await api(tokens.auditor).get('/api/vulnerabilidades/abc').expect(400);
-    });
-  });
-
-  describe('permisos por rol', () => {
-    it('el auditor puede consultar pero no registrar ni cambiar el estado → 403', async () => {
-      const { id } = await registrar({ descripcion: 'Permisos' });
-      await api(tokens.auditor).get(`/api/vulnerabilidades/${id}`).expect(200);
-      await api(tokens.auditor)
-        .post('/api/vulnerabilidades', {
-          activoId,
-          descripcion: 'X',
-          nivelRiesgo: 'BAJO',
-          fecha: AYER,
-        })
-        .expect(403);
-      await api(tokens.auditor)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(403);
+    it('corregir la detección exige motivo; cambiar la criticidad queda en la auditoría', async () => {
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { nivelRiesgo: 'CRITICO' }).expect(400);
+      const res = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { nivelRiesgo: 'CRITICO', motivoCambio: MOTIVO }).expect(200);
+      expect(res.body.nivelRiesgo).toBe('CRITICO');
+      const [ultima] = await trazas(id);
+      expect(ultima).toMatchObject({ accion: 'MODIFICAR', responsable: 'analista.test', motivo: MOTIVO });
+      expect(ultima.cambios).toEqual([{ campo: 'nivelRiesgo', antes: 'ALTO', despues: 'CRITICO' }]);
+      // Pasar a CRÍTICA genera un aviso en la misma transacción.
+      expect(await prisma.notificacion.count({ where: { tipo: 'VULNERABILIDAD_CRITICA', activoId: servidor } })).toBe(1);
     });
   });
 
-  describe('consulta (GET /api/vulnerabilidades)', () => {
-    let vencidaId: number;
-    let criticaId: number;
+  describe('Fase 2 · Remediación', () => {
+    let estadoActivo: Awaited<ReturnType<typeof activoAntes>>;
 
     beforeAll(async () => {
-      await limpiarVulnerabilidades();
-      await registrar({
-        descripcion: 'Baja',
-        nivelRiesgo: 'BAJO',
-        fecha: AYER,
+      estadoActivo = await activoAntes();
+    });
+
+    it('6 · iniciar: ABIERTO → EN_PROGRESO; no dos veces', async () => {
+      const res = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar`, { fechaInicio: '2026-02-01T13:00:00.000Z' }).expect(200);
+      expect(res.body).toMatchObject({ estado: 'EN_PROGRESO', tratamientoIniciadoEn: '2026-02-01T13:00:00.000Z', fechaRemediacion: null });
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar`).expect(409);
+    });
+
+    it('guardar una fecha de remediación NO la marca como remediada', async () => {
+      const res = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/remediacion`, { fechaRemediacion: REMEDIACION }).expect(200);
+      expect(res.body).toMatchObject({ estado: 'EN_PROGRESO', fechaRemediacion: REMEDIACION });
+    });
+
+    it('7 y 8 · no se remedia sin fecha, sin verificable o sin repositorio', async () => {
+      const url = `/api/vulnerabilidades/${id}/remediar`;
+      const { fechaRemediacion: _f, ...sinFecha } = CIERRE;
+      const { evidencia: _e, ...sinVerificable } = CIERRE;
+      const { repositorioVerificable: _r, ...sinRepositorio } = CIERRE;
+      await api(tokens.analista).patch(url, sinFecha).expect(400);
+      await api(tokens.analista).patch(url, sinVerificable).expect(400);
+      await api(tokens.analista).patch(url, { ...sinRepositorio, repositorioVerificable: '' }).expect(400);
+      const repo = await api(tokens.analista).patch(url, { ...CIERRE, repositorioVerificable: 'javascript:alert(1)' }).expect(400);
+      expect(repo.body.message).toMatch(/http o https/);
+      expect((await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id } })).estado).toBe('EN_PROGRESO');
+    });
+
+    it('11 · rechaza una fecha de remediación anterior a la detección o futura', async () => {
+      const url = `/api/vulnerabilidades/${id}/remediar`;
+      const antes = await api(tokens.analista).patch(url, { ...CIERRE, fechaRemediacion: '2026-01-20T10:00:00.000Z' }).expect(400);
+      expect(antes.body.message).toMatch(/anterior a la fecha de detección/);
+      await api(tokens.analista).patch(url, { ...CIERRE, fechaRemediacion: new Date(Date.now() + 86_400_000).toISOString() }).expect(400);
+    });
+
+    it('9 y 10 · remedia con la fecha histórica indicada (no la del servidor)', async () => {
+      const res = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/remediar`, CIERRE).expect(200);
+      expect(res.body).toMatchObject({
+        estado: 'REMEDIADO',
+        fechaRemediacion: REMEDIACION,
+        evidencia: CIERRE.evidencia,
+        repositorioVerificable: CIERRE.repositorioVerificable,
+        observacion: CIERRE.observacion,
+        cerradaPor: 'analista.test',
       });
-      await registrar({
-        descripcion: 'Media antigua',
-        nivelRiesgo: 'MEDIO',
-        fecha: HACE_3_DIAS,
+      // Se registró hoy, pero la fecha de remediación es la real (27/04/2026).
+      expect(new Date(res.body.updatedAt).getTime()).toBeGreaterThan(new Date(REMEDIACION).getTime());
+    });
+
+    it('una remediada no admite cambios de detección ni un segundo cierre', async () => {
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { descripcion: 'Otra', motivoCambio: MOTIVO }).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/remediar`, CIERRE).expect(409);
+    });
+
+    it('12 · la auditoría registra estado, criticidad y la fecha de remediación con el usuario', async () => {
+      const t = await trazas(id);
+      const campos = t.flatMap((x) => x.cambios.map((c) => c.campo));
+      expect(campos).toEqual(expect.arrayContaining(['estado', 'nivelRiesgo', 'fechaRemediacion', 'evidencia', 'repositorioVerificable']));
+      const cierre = t.find((x) => x.cambios.some((c) => c.campo === 'estado' && c.despues === 'REMEDIADO'))!;
+      expect(cierre).toMatchObject({ accion: 'MODIFICAR', responsable: 'analista.test' });
+    });
+
+    it('13 · transaccional: lo rechazado no deja traza ni sube la versión; la versión cuadra con las trazas', async () => {
+      const antes = await trazas(id);
+      const v = await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id } });
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar`).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/remediar`, CIERRE).expect(409);
+      expect(await trazas(id)).toHaveLength(antes.length);
+      expect((await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id } })).version).toBe(v.version);
+      expect(v.version).toBe(1 + antes.filter((x) => x.accion === 'MODIFICAR').length);
+    });
+
+    it('corregir una remediación cerrada: el analista no (403); el admin con motivo', async () => {
+      const url = `/api/vulnerabilidades/${id}/remediacion`;
+      await api(tokens.analista).patch(url, { observacion: 'Otra', motivoCambio: MOTIVO }).expect(403);
+      await api(tokens.admin).patch(url, { observacion: 'Otra' }).expect(400);
+      await api(tokens.admin).patch(url, { evidencia: '', motivoCambio: MOTIVO }).expect(400); // no puede quedar sin evidencia
+      const res = await api(tokens.admin).patch(url, { observacion: 'Actualización y reinicio validados por el área.', motivoCambio: MOTIVO }).expect(200);
+      expect(res.body).toMatchObject({ estado: 'REMEDIADO', observacion: 'Actualización y reinicio validados por el área.' });
+    });
+
+    it('14 · reabrir exige motivo, vacía la fecha vigente y conserva el historial', async () => {
+      const antes = await trazas(id);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/reabrir`, { motivo: 'corto' }).expect(400);
+      const res = await api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/reabrir`, { motivo: 'El escaneo de mayo vuelve a detectar la versión vulnerable.' })
+        .expect(200);
+      expect(res.body).toMatchObject({ estado: 'EN_PROGRESO', fechaRemediacion: null, evidencia: CIERRE.evidencia });
+      const despues = await trazas(id);
+      expect(despues).toHaveLength(antes.length + 1);
+      const [reapertura] = despues;
+      expect(reapertura.cambios).toEqual(expect.arrayContaining([
+        expect.objectContaining({ campo: 'estado', antes: 'REMEDIADO', despues: 'EN_PROGRESO' }),
+        expect.objectContaining({ campo: 'fechaRemediacion', antes: REMEDIACION, despues: null }),
+      ]));
+      expect(await prisma.notificacion.count({ where: { tipo: 'VULNERABILIDAD_REABIERTA' } })).toBe(1);
+      // Se vuelve a remediar con una nueva fecha real.
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/remediar`, { ...CIERRE, fechaRemediacion: '2026-05-20T15:00:00.000Z' }).expect(200);
+    });
+
+    it('15 · el estado de la vulnerabilidad no altera el activo de GLPI', async () => {
+      const despues = await activoAntes();
+      expect({ estado: despues.estado, deletedAt: despues.deletedAt, inactivoDesde: despues.inactivoDesde, updatedAt: despues.updatedAt }).toEqual({
+        estado: estadoActivo.estado,
+        deletedAt: estadoActivo.deletedAt,
+        inactivoDesde: estadoActivo.inactivoDesde,
+        updatedAt: estadoActivo.updatedAt,
       });
-      await registrar({
-        descripcion: 'Media reciente',
-        nivelRiesgo: 'MEDIO',
-        fecha: AYER,
-      });
-      criticaId = (
-        await registrar({
-          descripcion: 'Crítica',
-          nivelRiesgo: 'CRITICO',
-          fecha: AYER,
-        })
-      ).id;
-      vencidaId = (
-        await registrar({
-          descripcion: 'Alta vencida',
-          nivelRiesgo: 'ALTO',
-          fecha: HACE_3_DIAS,
-          fechaLimite: AYER,
-        })
-      ).id;
     });
 
-    async function limpiarVulnerabilidades() {
-      await prisma.accionRemediacion.deleteMany();
-      await prisma.verificacionVulnerabilidad.deleteMany();
-      await prisma.vulnerabilidad.deleteMany();
-    }
-
-    it('orden por defecto: mayor riesgo primero y, en el mismo nivel, la más antigua', async () => {
-      const res = await api(tokens.auditor)
-        .get('/api/vulnerabilidades')
-        .expect(200);
-      expect(
-        res.body.data.map((v: { descripcion: string }) => v.descripcion),
-      ).toEqual([
-        'Crítica',
-        'Alta vencida',
-        'Media antigua',
-        'Media reciente',
-        'Baja',
-      ]);
-      expect(res.body.data[0].id).toBe(criticaId);
-    });
-
-    it('vencidas: pendiente con fecha límite pasada (campo y filtro)', async () => {
-      const detalle = await api(tokens.auditor)
-        .get(`/api/vulnerabilidades/${vencidaId}`)
-        .expect(200);
-      expect(detalle.body.vencida).toBe(true);
-
-      const res = await api(tokens.auditor)
-        .get('/api/vulnerabilidades?vencidas=true')
-        .expect(200);
-      expect(res.body.data.map((v: { id: number }) => v.id)).toEqual([
-        vencidaId,
-      ]);
-    });
-
-    it('abiertas=true / false y filtro por nivel de riesgo', async () => {
-      await prepararTratamiento(criticaId);
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${criticaId}/iniciar-mitigacion`)
-        .expect(200);
-      await cerrarConVerificacion(criticaId, 'Parcheado y verificado.');
-
-      const abiertas = await api(tokens.auditor)
-        .get('/api/vulnerabilidades?abiertas=true')
-        .expect(200);
-      expect(abiertas.body.meta.total).toBe(4);
-
-      const cerradas = await api(tokens.auditor)
-        .get('/api/vulnerabilidades?abiertas=false')
-        .expect(200);
-      expect(cerradas.body.data.map((v: { id: number }) => v.id)).toEqual([
-        criticaId,
-      ]);
-
-      const medias = await api(tokens.auditor)
-        .get('/api/vulnerabilidades?nivelRiesgo=MEDIO')
-        .expect(200);
-      expect(medias.body.meta.total).toBe(2);
-    });
-
-    it('búsqueda por CVE (parcial, sin importar mayúsculas)', async () => {
-      const { id } = await registrar({
-        cve: 'CVE-2025-99999',
-        descripcion: 'Con CVE',
-      });
-      const res = await api(tokens.auditor)
-        .get('/api/vulnerabilidades?cve=cve-2025')
-        .expect(200);
-      expect(res.body.data.map((v: { id: number }) => v.id)).toEqual([id]);
-    });
-
-    it('?actualizadoDesde devuelve solo lo modificado después de esa fecha', async () => {
-      const { id } = await registrar({ descripcion: 'Sincronización' });
-      await prepararTratamiento(id);
-      const desde = new Date().toISOString();
-      await new Promise((r) => setTimeout(r, 20));
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`)
-        .expect(200);
-      const res = await api(tokens.auditor)
-        .get(
-          `/api/vulnerabilidades?actualizadoDesde=${encodeURIComponent(desde)}`,
-        )
-        .expect(200);
-      expect(res.body.data.map((v: { id: number }) => v.id)).toEqual([id]);
-    });
-
-    it('filtros inválidos → 400', async () => {
-      await api(tokens.auditor)
-        .get('/api/vulnerabilidades?estado=CERRADA')
-        .expect(400);
-      await api(tokens.auditor)
-        .get('/api/vulnerabilidades?vencidas=quizas')
-        .expect(400);
+    it('un activo que sale de GLPI conserva sus vulnerabilidades, pero no admite nuevas', async () => {
+      await prisma.activo.update({ where: { id: servidor }, data: { inactivoDesde: new Date(), motivoInactivo: 'PAPELERA_GLPI' } });
+      await api(tokens.auditor).get(`/api/vulnerabilidades/${id}`).expect(200);
+      const res = await api(tokens.analista).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA }).expect(400);
+      expect(res.body.message).toMatch(/papelera de GLPI/);
+      await prisma.activo.update({ where: { id: servidor }, data: { inactivoDesde: null, motivoInactivo: null } });
     });
   });
 
-  it('Swagger documenta las rutas de vulnerabilidades', async () => {
-    const res = await request(app.getHttpServer())
-      .get('/api/docs-json')
-      .expect(200);
-    expect(Object.keys(res.body.paths)).toEqual(
-      expect.arrayContaining([
-        '/api/vulnerabilidades',
-        '/api/vulnerabilidades/{id}',
-        '/api/vulnerabilidades/{id}/iniciar-mitigacion',
-        '/api/vulnerabilidades/{id}/confirmar',
-        '/api/vulnerabilidades/{id}/evaluar',
-        '/api/vulnerabilidades/{id}/acciones',
-        '/api/vulnerabilidades/{id}/verificaciones',
-        '/api/vulnerabilidades/{id}/aceptar-riesgo',
-      ]),
-    );
+  describe('16 · permisos', () => {
+    it('el auditor consulta pero no detecta, remedia ni reabre (403); sin token, 401', async () => {
+      await api(tokens.auditor).get('/api/vulnerabilidades').expect(200);
+      await api(tokens.auditor).get(`/api/vulnerabilidades/${id}`).expect(200);
+      await api(tokens.auditor).post('/api/vulnerabilidades', { activoId: servidor, ...DETECTADA }).expect(403);
+      await api(tokens.auditor).patch(`/api/vulnerabilidades/${id}/iniciar`).expect(403);
+      await api(tokens.auditor).patch(`/api/vulnerabilidades/${id}/remediar`, CIERRE).expect(403);
+      await api(tokens.auditor).patch(`/api/vulnerabilidades/${id}/reabrir`, { motivo: MOTIVO }).expect(403);
+      await api(tokens.analista).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(403);
+      await request(app.getHttpServer()).get('/api/vulnerabilidades').expect(401);
+    });
+  });
+
+  describe('17 · filtros y paginación', () => {
+    beforeAll(async () => {
+      await detectar({ descripcion: 'Puerto SMB expuesto', nivelRiesgo: 'BAJO', fecha: '2026-03-10T14:00:00.000Z', responsable: 'ANALISTA 2' });
+      await detectar({ descripcion: 'Contraseña por defecto en el iLO', nivelRiesgo: 'MEDIO', fecha: '2026-06-15T14:00:00.000Z' });
+    }, LENTO);
+
+    it('por activo, criticidad, responsable, estado y rango de fechas de detección', async () => {
+      const total = async (q: string) => (await api(tokens.auditor).get(`/api/vulnerabilidades?${q}`).expect(200)).body.meta.total;
+      expect(await total(`activoId=${servidor}`)).toBe(3);
+      expect(await total(`activoId=${aplicativo}`)).toBe(1);
+      expect(await total('nivelRiesgo=CRITICO')).toBe(1);
+      expect(await total('responsable=ANALISTA 2')).toBe(1);
+      expect(await total('estado=REMEDIADO')).toBe(1);
+      expect(await total('estado=ABIERTO')).toBe(3);
+      expect(await total(`desde=${encodeURIComponent('2026-03-01T00:00:00.000Z')}&hasta=${encodeURIComponent('2026-06-30T23:59:59.000Z')}`)).toBe(2);
+      await api(tokens.auditor).get('/api/vulnerabilidades?nivelRiesgo=URGENTE').expect(400);
+      await api(tokens.auditor).get('/api/vulnerabilidades?estado=MITIGADA').expect(400);
+    });
+
+    it('paginación: páginas sin repetidos que cubren el total, con límite máximo', async () => {
+      const paginas = await Promise.all([1, 2].map((p) => api(tokens.auditor).get(`/api/vulnerabilidades?limit=2&page=${p}`).expect(200)));
+      expect(paginas[0].body.meta).toEqual({ total: 4, page: 1, limit: 2, totalPages: 2 });
+      const ids = paginas.flatMap((p) => p.body.data.map((v: { id: number }) => v.id));
+      expect(new Set(ids).size).toBe(4);
+      await api(tokens.auditor).get('/api/vulnerabilidades?limit=500').expect(400);
+    });
+  });
+
+  it('agenda: solo las capas de Detección y Remediación', async () => {
+    const q = `desde=${encodeURIComponent('2026-01-01T00:00:00.000Z')}&hasta=${encodeURIComponent('2026-12-31T00:00:00.000Z')}`;
+    const todo = (await api(tokens.auditor).get(`/api/vulnerabilidades/agenda?${q}`).expect(200)).body as { clave: string; capa: number; inicio: string }[];
+    expect(todo.every((e) => e.capa === 1 || e.capa === 2)).toBe(true);
+    expect(todo.find((e) => e.clave === `v2r-${id}`)?.inicio).toBe('2026-05-20T15:00:00.000Z');
+    expect((await api(tokens.auditor).get(`/api/vulnerabilidades/agenda?${q}&capa=3`).expect(200)).body).toEqual([]);
+  });
+
+  it('Swagger documenta las rutas de las dos fases y ya no las de verificación', async () => {
+    const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
+    const rutas = Object.keys(res.body.paths);
+    expect(rutas).toEqual(expect.arrayContaining([
+      '/api/vulnerabilidades',
+      '/api/vulnerabilidades/lote',
+      '/api/vulnerabilidades/{id}',
+      '/api/vulnerabilidades/{id}/iniciar',
+      '/api/vulnerabilidades/{id}/remediacion',
+      '/api/vulnerabilidades/{id}/remediar',
+      '/api/vulnerabilidades/{id}/reabrir',
+    ]));
+    expect(rutas.some((r) => /vulnerabilidades.*(verificaci|acciones|aceptar-riesgo|confirmar|evaluar)/.test(r))).toBe(false);
   });
 });

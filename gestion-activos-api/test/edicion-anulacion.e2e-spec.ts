@@ -201,6 +201,7 @@ describe('Editar con motivo y anular (e2e)', () => {
         activoId,
         descripcion: 'OpenSSL vulnerable',
         nivelRiesgo: 'ALTO',
+        responsable: 'ANALISTA 1',
         fecha: HACE_UNA_HORA,
         ...extra,
       });
@@ -220,7 +221,7 @@ describe('Editar con motivo y anular (e2e)', () => {
         cve: 'CVE-2026-11111',
         fechaLimite: MANANA,
         descripcion: 'OpenSSL vulnerable',
-        estado: 'ABIERTA',
+        estado: 'ABIERTO',
       });
     });
 
@@ -236,10 +237,10 @@ describe('Editar con motivo y anular (e2e)', () => {
       await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO,  cve: 'CVE-2026-22222' }).expect(409);
     });
 
-    it('una vez cerrada ya no se edita → 409', async () => {
+    it('una vez remediada ya no se edita su detección → 409', async () => {
       const { id } = await nueva();
-      await api(tokens.admin)
-        .patch(`/api/vulnerabilidades/${id}/aceptar-riesgo`, { justificacion: 'Sistema aislado' })
+      await api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/remediar`, { fechaRemediacion: new Date().toISOString(), evidencia: 'Informe 1', repositorioVerificable: 'Carpeta TIC' })
         .expect(200);
       await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { motivoCambio: MOTIVO,  descripcion: 'Otra' }).expect(409);
     });
@@ -249,19 +250,15 @@ describe('Editar con motivo y anular (e2e)', () => {
       await api(tokens.analista).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(403);
       await api(tokens.admin).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(200);
       await api(tokens.admin).post(`/api/vulnerabilidades/${id}/anular`, { motivo: MOTIVO }).expect(409);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(409);
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar`).expect(409);
       await api(tokens.admin).delete(`/api/vulnerabilidades/${id}`).expect(404);
       await api(tokens.admin).post(`/api/vulnerabilidades/${id}/reversar`, { motivo: MOTIVO }).expect(200);
-      // Tras revertir sigue el flujo normal: confirmar y evaluar antes del tratamiento.
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/confirmar`).expect(200);
-      await api(tokens.analista)
-        .patch(`/api/vulnerabilidades/${id}/evaluar`, { prioridad: 'P3', responsable: 'TIC', planRemediacion: 'Parche en la próxima ventana.' })
-        .expect(200);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(200);
+      // Tras revertir sigue el flujo normal: pasa a Remediación.
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar`).expect(200);
       const trazas = await api(tokens.auditor)
         .get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${id}`)
         .expect(200);
-      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['MODIFICAR', 'MODIFICAR', 'MODIFICAR', 'REVERSAR', 'ANULAR']);
+      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['MODIFICAR', 'REVERSAR', 'ANULAR', 'REGISTRAR']);
     });
 
     it('indicadores (A.8.8): una anulada deja de contar como abierta', async () => {

@@ -1,11 +1,16 @@
 import {
   ApiProperty,
   ApiPropertyOptional,
+  IntersectionType,
   OmitType,
-  PartialType, IntersectionType } from '@nestjs/swagger';
-import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
+  PartialType,
+} from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  ArrayMinSize,
+  ArrayUnique,
+  IsArray,
   IsDate,
   IsEnum,
   IsInt,
@@ -16,9 +21,11 @@ import {
   MaxDate,
   MaxLength,
   Min,
+  MinLength,
 } from 'class-validator';
+import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
-import { FuenteVulnerabilidad, NivelRiesgo } from '../../../generated/prisma/enums.js';
+import { NivelRiesgo } from '../../../generated/prisma/enums.js';
 
 /** Margen para diferencias de reloj entre el equipo del usuario y el servidor. */
 const AHORA_CON_MARGEN = () => new Date(Date.now() + 5 * 60 * 1000);
@@ -29,31 +36,30 @@ export const FORMATO_CVE = /^CVE-\d{4}-\d{4,}$/;
 /** Los campos TEXT admiten mucho más; 5000 caracteres es un tope razonable para la API. */
 const MAX_TEXTO_LARGO = 5000;
 
-/** Registrar: crea la vulnerabilidad en estado ABIERTA. */
+// ── Fase 1 · Detección ──────────────────────────────────────────────────────
+
+/** Detección: crea la vulnerabilidad en estado ABIERTO. */
 export class RegistrarVulnerabilidadDto {
-  @ApiProperty({ example: 5, description: 'ID de un activo vigente.' })
+  @ApiProperty({ example: 5, description: '«Sistema»: ID de un activo operativo de GLPI.' })
   @IsInt()
   @Min(1)
   activoId: number;
 
-  @ApiPropertyOptional({
-    example: 'CVE-2026-12345',
-    description: 'Identificador público (se normaliza a mayúsculas).',
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    example: '2026-01-25T14:00:00.000Z',
+    description: '«Fecha Detección»: cuándo se identificó (puede ser histórica; no futura). No es la fecha de registro.',
   })
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    typeof value === 'string' ? value.trim().toUpperCase() : value,
-  )
-  @IsString()
-  @Matches(FORMATO_CVE, {
-    message: 'cve debe tener el formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)',
-  })
-  cve?: string;
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(AHORA_CON_MARGEN, { message: 'fecha no puede estar en el futuro' })
+  fecha: Date;
 
   @ApiProperty({
-    example:
-      'OpenSSL 3.0.x vulnerable a desbordamiento de búfer en la verificación de certificados X.509.',
+    example: 'Sistema operativo desactualizado',
     maxLength: MAX_TEXTO_LARGO,
+    description: '«Vulnerabilidad»: descripción del problema detectado.',
   })
   @Trim()
   @IsString()
@@ -61,69 +67,168 @@ export class RegistrarVulnerabilidadDto {
   @MaxLength(MAX_TEXTO_LARGO)
   descripcion: string;
 
-  @ApiProperty({ enum: NivelRiesgo, example: 'ALTO' })
+  @ApiProperty({ enum: NivelRiesgo, example: 'ALTO', description: '«Criticidad»: CRITICO, ALTO, MEDIO o BAJO.' })
   @IsEnum(NivelRiesgo)
   nivelRiesgo: NivelRiesgo;
 
-  @ApiProperty({
-    type: String,
-    format: 'date-time',
-    example: '2026-09-30T09:00:00.000Z',
-    description: 'Fecha de detección (no puede ser futura).',
+  @ApiProperty({ example: 'ANALISTA 1', description: '«Responsable»: persona encargada de gestionarla.' })
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  responsable: string;
+
+  @ApiPropertyOptional({
+    example: 'CVE-2026-12345',
+    description: 'Identificador público opcional (se normaliza a mayúsculas).',
   })
-  @Type(() => Date)
-  @IsDate()
-  @MaxDate(AHORA_CON_MARGEN, { message: 'fecha no puede estar en el futuro' })
-  fecha: Date;
+  @IsOptional()
+  @Transform(({ value }: { value: unknown }) =>
+    typeof value === 'string' ? value.trim().toUpperCase() || undefined : value,
+  )
+  @IsString()
+  @Matches(FORMATO_CVE, {
+    message: 'cve debe tener el formato CVE-AAAA-NNNN (p. ej. CVE-2026-12345)',
+  })
+  cve?: string;
 
   @ApiPropertyOptional({
     type: String,
     format: 'date-time',
-    example: '2026-10-15T23:59:59.000Z',
-    description:
-      'Plazo para remediarla (SLA). No puede ser anterior a la detección.',
+    example: '2026-04-30T23:59:59.000Z',
+    description: 'Plazo opcional para remediarla. No puede ser anterior a la detección.',
   })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   fechaLimite?: Date;
-
-  @ApiPropertyOptional({
-    enum: FuenteVulnerabilidad,
-    // Sin "default" aquí: el cliente generado lo volvería obligatorio.
-    description:
-      'De dónde viene (MANUAL si se omite). Se registra a mano: la aplicación no tiene un escáner de vulnerabilidades conectado.',
-  })
-  @IsOptional()
-  @IsEnum(FuenteVulnerabilidad)
-  fuente?: FuenteVulnerabilidad;
-
-  @ApiPropertyOptional({ example: 'Informe Nessus 2026-09-30, hallazgo 4521' })
-  @IsOptional()
-  @Trim()
-  @IsString()
-  @MaxLength(191)
-  evidencia?: string;
 }
 
-/** Edición de los datos del registro; solo mientras está pendiente (ABIERTA o EN_MITIGACION). */
-/** Toda edición exige motivo: se conserva la versión anterior. */
+/** La misma vulnerabilidad detectada en varios activos: un registro por activo, o ninguno. */
+export class RegistrarLoteDto extends OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const) {
+  @ApiProperty({ type: [Number], example: [5, 8], description: 'Activos operativos afectados.' })
+  @IsArray()
+  @ArrayMinSize(1, { message: 'Seleccione al menos un activo.' })
+  @ArrayMaxSize(100)
+  @ArrayUnique()
+  @Type(() => Number)
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  activoIds: number[];
+}
+
+/**
+ * Corrección de los datos de Detección (fecha, descripción, criticidad, responsable,
+ * CVE, plazo) mientras está pendiente. Exige motivo: queda en la auditoría.
+ */
 export class EditarVulnerabilidadDto extends IntersectionType(
   PartialType(OmitType(RegistrarVulnerabilidadDto, ['activoId'] as const)),
   MotivoCambioDto,
 ) {}
 
-/** Aceptar riesgo (solo admin): ABIERTA o EN_MITIGACION → ACEPTADA. */
-export class AceptarRiesgoDto {
-  @ApiProperty({
-    example:
-      'Sistema heredado sin parche del fabricante; aislado en VLAN sin acceso a Internet. Se reevalúa en 6 meses.',
-    maxLength: MAX_TEXTO_LARGO,
-    description: 'Justificación formal (se guarda en "mitigacion").',
+// ── Fase 2 · Remediación ────────────────────────────────────────────────────
+
+/** ABIERTO → EN_PROGRESO. */
+export class IniciarRemediacionDto {
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Cuándo empezó realmente el trabajo (opcional; no futura, no anterior a la detección).',
   })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(AHORA_CON_MARGEN, { message: 'fechaInicio no puede estar en el futuro' })
+  fechaInicio?: Date;
+}
+
+/** Datos de la remediación. Se pueden guardar sin cerrar (no remedia por sí solo). */
+export class DatosRemediacionDto {
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    example: '2026-04-27T15:00:00.000Z',
+    description: '«Fecha de Remediación»: cuándo se solucionó REALMENTE (la indica el usuario; puede ser histórica, no futura, no anterior a la detección).',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(AHORA_CON_MARGEN, { message: 'fechaRemediacion no puede estar en el futuro' })
+  fechaRemediacion?: Date;
+
+  @ApiPropertyOptional({
+    example: 'Informe de Mitigación de Amenazas y Vulnerabilidades 01',
+    description: '«Verificable»: nombre del informe o documento que prueba la remediación.',
+  })
+  @IsOptional()
   @Trim()
   @IsString()
-  @IsNotEmpty()
+  @MaxLength(191)
+  evidencia?: string;
+
+  @ApiPropertyOptional({
+    example: 'Carpeta Compartida TICs/Vulnerabilidades/2026',
+    description: '«Repositorio Verificable»: carpeta compartida o URL http(s) donde está la evidencia.',
+  })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  repositorioVerificable?: string;
+
+  @ApiPropertyOptional({ description: '«Observación»: acciones realizadas, detalles técnicos, limitaciones.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
   @MaxLength(MAX_TEXTO_LARGO)
-  justificacion: string;
+  observacion?: string;
+}
+
+/**
+ * Guardar o corregir los datos de remediación. Pendiente: admin y analista, sin
+ * motivo obligatorio. Ya REMEDIADO: solo admin y con motivo.
+ */
+export class ActualizarRemediacionDto extends DatosRemediacionDto {
+  @ApiPropertyOptional({ description: 'Obligatorio si la vulnerabilidad ya está REMEDIADA (mínimo 20 caracteres).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(300)
+  motivoCambio?: string;
+}
+
+/**
+ * → REMEDIADO. Exige la fecha REAL de remediación, el verificable y su repositorio
+ * (la evidencia se comprueba aquí: no hay una fase de verificación aparte).
+ */
+export class RemediarDto extends DatosRemediacionDto {
+  @ApiProperty({ type: String, format: 'date-time', example: '2026-04-27T15:00:00.000Z' })
+  @Type(() => Date)
+  @IsDate()
+  @MaxDate(AHORA_CON_MARGEN, { message: 'fechaRemediacion no puede estar en el futuro' })
+  declare fechaRemediacion: Date;
+
+  @ApiProperty({ example: 'Informe de Mitigación de Amenazas y Vulnerabilidades 01' })
+  @Trim()
+  @IsString()
+  @IsNotEmpty({ message: 'El verificable es obligatorio para remediar.' })
+  @MaxLength(191)
+  declare evidencia: string;
+
+  @ApiProperty({ example: 'Carpeta Compartida TICs/Vulnerabilidades/2026' })
+  @Trim()
+  @IsString()
+  @IsNotEmpty({ message: 'El repositorio del verificable es obligatorio para remediar.' })
+  @MaxLength(191)
+  declare repositorioVerificable: string;
+}
+
+/** REMEDIADO → EN_PROGRESO: la vulnerabilidad persiste o reapareció. */
+export class ReabrirDto {
+  @ApiProperty({ example: 'El escaneo de mayo vuelve a detectar la versión vulnerable del sistema operativo.' })
+  @Trim()
+  @IsString()
+  @MinLength(20, { message: 'El motivo debe tener al menos 20 caracteres.' })
+  @MaxLength(MAX_TEXTO_LARGO)
+  motivo: string;
 }

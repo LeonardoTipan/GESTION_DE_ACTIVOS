@@ -2,19 +2,16 @@ import { Module } from '@nestjs/common';
 import { AuditModule } from '../audit/audit.module.js';
 import { InventoryModule } from '../inventory/inventory.module.js';
 import { VulnerabilidadesController } from './vulnerabilidades/vulnerabilidades.controller.js';
-import { TratamientoVulnerabilidadController } from './tratamiento/tratamiento.controller.js';
-import { TratamientoVulnerabilidadService } from './tratamiento/tratamiento.service.js';
 import { VulnerabilidadesService } from './vulnerabilidades/vulnerabilidades.service.js';
 
 /**
- * Control de vulnerabilidades: ABIERTA → EN_MITIGACION → MITIGADA (o ACEPTADA).
- * Módulo independiente: del inventario solo usa ActivosService (exportado)
- * para validar que el activo existe y está vigente.
+ * Vulnerabilidades en DOS fases sobre el mismo registro: Detección (ABIERTO) y
+ * Remediación (EN_PROGRESO → REMEDIADO, con evidencia). Módulo independiente: del
+ * inventario solo usa ActivosService (exportado) para validar el activo.
  */
 @Module({
   imports: [InventoryModule, AuditModule],
-  // Las rutas fijas (lote, acciones/…, verificaciones/…) antes que /vulnerabilidades/:id.
-  controllers: [TratamientoVulnerabilidadController, VulnerabilidadesController],
-  providers: [VulnerabilidadesService, TratamientoVulnerabilidadService],
+  controllers: [VulnerabilidadesController],
+  providers: [VulnerabilidadesService],
 })
 export class VulnerabilitiesModule {}

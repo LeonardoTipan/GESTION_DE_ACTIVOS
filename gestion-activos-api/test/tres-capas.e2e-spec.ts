@@ -1,5 +1,5 @@
 /**
- * Pruebas e2e de las TRES CAPAS de mantenimientos y vulnerabilidades, de los
+ * Pruebas e2e de las capas de mantenimientos, del registro de vulnerabilidades, de los
  * filtros por categoría y de los avisos que generan. Recorren la API real
  * contra MySQL (gestion_activos_test) y Keycloak y comprueban, además de la
  * respuesta HTTP, lo que quedó guardado en la base.
@@ -276,16 +276,14 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
     });
   });
 
-  describe('vulnerabilidades · tres capas', () => {
-    let idPc: number;
+  describe('vulnerabilidades · detección en lote, filtros y avisos', () => {
     let idMonitor: number;
     const base = {
       cve: 'CVE-2026-12345',
       descripcion: 'Servicio SMB expuesto con versión vulnerable.',
       nivelRiesgo: 'CRITICO',
       fecha: hace(2),
-      fuente: 'BOLETIN_PROVEEDOR',
-      evidencia: 'Informe del proveedor 2026-10',
+      responsable: 'Seguridad TIC',
     };
 
     it('lote: valida todos antes de crear; uno dado de baja rechaza el lote entero', async () => {
@@ -293,73 +291,21 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       expect(await prisma.vulnerabilidad.count()).toBe(0);
     });
 
-    it('lote: registra una por activo y avisa de las críticas', async () => {
+    it('lote: registra una por activo, en ABIERTO, y avisa de las críticas', async () => {
       await api(tokens.auditor).post('/api/vulnerabilidades/lote', { ...base, activoIds: [ids.pc] }).expect(403);
       const res = await api(tokens.analista)
         .post('/api/vulnerabilidades/lote', { ...base, activoIds: [ids.pc, ids.monitor] })
         .expect(201);
       expect(res.body).toHaveLength(2);
-      [idPc, idMonitor] = res.body.map((v: { id: number }) => v.id);
-      expect(res.body[0]).toMatchObject({ estado: 'ABIERTA', fuente: 'BOLETIN_PROVEEDOR', confirmadaEn: null });
+      idMonitor = res.body[1].id;
+      expect(res.body[0]).toMatchObject({ estado: 'ABIERTO', responsable: 'Seguridad TIC', fechaRemediacion: null });
       expect(await avisos('VULNERABILIDAD_CRITICA')).toHaveLength(2);
     }, LENTO);
 
-    it('filtros: por categoría del activo y por confirmación', async () => {
+    it('filtro por categoría del activo', async () => {
       const monitores = await api(tokens.auditor).get(`/api/vulnerabilidades?categoriaId=${ids.monitores}`).expect(200);
       expect(monitores.body.data.map((v: { id: number }) => v.id)).toEqual([idMonitor]);
       expect(monitores.body.data[0].activo.categoria).toBe('Monitores');
-      const sinConfirmar = await api(tokens.auditor).get('/api/vulnerabilidades?confirmada=false').expect(200);
-      expect(sinConfirmar.body.meta.total).toBe(2);
-    });
-
-    it('detectada → confirmada → evaluada; no se evalúa sin confirmar', async () => {
-      const plan = { prioridad: 'P1', responsable: 'Seguridad TIC', planRemediacion: 'Deshabilitar SMBv1 y aplicar el parche.' };
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${idPc}/evaluar`, plan).expect(409);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${idPc}/confirmar`).expect(200);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${idPc}/confirmar`).expect(409);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${idPc}/evaluar`, plan).expect(200);
-      const v = await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id: idPc } });
-      expect(v).toMatchObject({ confirmadaPor: 'analista.test', prioridad: 'P1', evaluadaPor: 'analista.test' });
-      const p1 = await api(tokens.auditor).get('/api/vulnerabilidades?prioridad=P1').expect(200);
-      expect(p1.body.meta.total).toBe(1);
-    });
-
-    it('cerrar sin acciones correctivas → 400; con acción y verificación → MITIGADA', async () => {
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${idPc}/iniciar-mitigacion`).expect(200);
-      const verificacion = (resultado: string) => ({
-        fecha: new Date().toISOString(),
-        resultado,
-        observaciones: resultado === 'CORREGIDA' ? 'Nuevo escaneo sin hallazgos.' : 'El puerto 445 sigue expuesto.',
-        evidencia: 'Escaneo 2026-10-14',
-        responsable: 'Seguridad TIC',
-      });
-      await api(tokens.analista).post(`/api/vulnerabilidades/${idPc}/verificaciones`, verificacion('CORREGIDA')).expect(400);
-      await api(tokens.analista)
-        .post(`/api/vulnerabilidades/${idPc}/acciones`, { fecha: new Date().toISOString(), descripcion: 'SMBv1 deshabilitado.', responsable: 'jperez' })
-        .expect(201);
-      await api(tokens.analista).post(`/api/vulnerabilidades/${idPc}/verificaciones`, verificacion('CORREGIDA')).expect(201);
-      let v = await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id: idPc } });
-      expect(v).toMatchObject({ estado: 'MITIGADA', cerradaPor: 'analista.test' });
-
-      // Una comprobación posterior detecta que persiste: se reabre y avisa.
-      await api(tokens.analista).post(`/api/vulnerabilidades/${idPc}/verificaciones`, verificacion('PERSISTE')).expect(201);
-      v = await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id: idPc } });
-      expect(v).toMatchObject({ estado: 'EN_MITIGACION', fechaCierre: null, cerradaPor: null });
-      expect(await avisos('VULNERABILIDAD_REABIERTA')).toHaveLength(1);
-
-      const trazas = await api(tokens.auditor).get(`/api/trazas?entidad=VULNERABILIDAD&registroId=${idPc}`).expect(200);
-      const motivos = trazas.body.map((t: { motivo: string }) => t.motivo).join(' | ');
-      expect(motivos).toContain('Cerrada');
-      expect(motivos).toContain('Reabierta');
-      expect(motivos).toContain('confirmada');
-      expect(motivos).toContain('Tratamiento iniciado');
-    }, LENTO);
-
-    it('solo el admin anula una acción correctiva', async () => {
-      const [accion] = (await api(tokens.auditor).get(`/api/vulnerabilidades/${idPc}/acciones`).expect(200)).body;
-      await api(tokens.analista).post(`/api/vulnerabilidades/acciones/${accion.id}/anular`, { motivo: MOTIVO }).expect(403);
-      await api(tokens.admin).post(`/api/vulnerabilidades/acciones/${accion.id}/anular`, { motivo: MOTIVO }).expect(200);
-      expect((await prisma.accionRemediacion.findUniqueOrThrow({ where: { id: accion.id } })).anuladoPor).toBe('admin.test');
     });
   });
 

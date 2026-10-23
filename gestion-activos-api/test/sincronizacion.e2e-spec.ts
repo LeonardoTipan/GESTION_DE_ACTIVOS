@@ -321,7 +321,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
     const operaciones = (id: number): [string, object][] => [
       ['/api/respaldos/planes', { ...PLAN, activoIds: [id] }],
       ['/api/mantenimientos', { planId: planDe.get(id), fecha: MANANA, fechaLimite: MANANA }],
-      ['/api/vulnerabilidades', { activoId: id, descripcion: 'Parche pendiente', nivelRiesgo: 'ALTO', fecha: AYER }],
+      ['/api/vulnerabilidades', { activoId: id, descripcion: 'Parche pendiente', nivelRiesgo: 'ALTO', responsable: 'Seguridad TIC', fecha: AYER }],
     ];
 
     it('mientras está activo admite respaldos, mantenimientos y vulnerabilidades', async () => {

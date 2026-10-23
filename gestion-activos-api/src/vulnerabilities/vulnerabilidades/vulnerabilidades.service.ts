@@ -1,32 +1,36 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import {
-  paginate,
-  skipFor,
-  type Paginated,
-} from '../../common/dto/paginated-response.dto.js';
-import type { Prisma } from '../../generated/prisma/client.js';
 import { AvisosService } from '../../audit/avisos.service.js';
+import { MOTIVO_MINIMO } from '../../audit/dto/traza.dto.js';
 import { TrazasService } from '../../audit/trazas.service.js';
-import { plazoOExcepcion } from '../../common/plazos/plazos.js';
-import type { IniciarTratamientoDto } from '../tratamiento/dto.js';
-import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
+import { paginate, skipFor, type Paginated } from '../../common/dto/paginated-response.dto.js';
+import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
+import { exigirRepositorioValido } from '../../common/evidencia/repositorio.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
+import type { Prisma } from '../../generated/prisma/client.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
-import { indicadoresVulnerabilidad } from './indicadores.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { agendaVulnerabilidades } from './agenda.js';
 import type {
-  AceptarRiesgoDto,
+  ActualizarRemediacionDto,
   EditarVulnerabilidadDto,
+  IniciarRemediacionDto,
+  ReabrirDto,
+  RegistrarLoteDto,
   RegistrarVulnerabilidadDto,
+  RemediarDto,
 } from './dto/acciones.dto.js';
 import type { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
 import type { VulnerabilidadDto } from './dto/vulnerabilidad.dto.js';
+import { indicadoresVulnerabilidad } from './indicadores.js';
+import { exigirCierre, exigirFechaRemediacion, exigirInicio } from './reglas.js';
 import {
   ESTADOS_ABIERTOS,
   estaVencida,
@@ -45,10 +49,20 @@ const INCLUDE = { activo: SELECT_ACTIVO } as const;
  */
 const CON_ACTIVO = { activo: { id: { gt: 0 } } } as const;
 
-type VulnerabilidadConActivo = Prisma.VulnerabilidadGetPayload<{
-  include: typeof INCLUDE;
-}>;
+type VulnerabilidadConActivo = Prisma.VulnerabilidadGetPayload<{ include: typeof INCLUDE }>;
 
+/** Quita las claves sin valor: lo no enviado no cambia. */
+const definidos = (o: Record<string, unknown>) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+/**
+ * Vulnerabilidades en DOS fases sobre el mismo registro:
+ *   Detección: se registra ABIERTO (fecha de detección, sistema, descripción,
+ *     criticidad, responsable).
+ *   Remediación: EN_PROGRESO → REMEDIADO con la fecha REAL de remediación, el
+ *     verificable y su repositorio; se puede reabrir.
+ * El estado de la vulnerabilidad nunca modifica el activo. Todo cambio pasa por la
+ * auditoría común (registro_cambio) en la misma transacción, con el usuario de la sesión.
+ */
 @Injectable()
 export class VulnerabilidadesService {
   constructor(
@@ -58,9 +72,7 @@ export class VulnerabilidadesService {
     private readonly avisos: AvisosService,
   ) {}
 
-  async findAll(
-    query: QueryVulnerabilidadesDto,
-  ): Promise<Paginated<VulnerabilidadDto>> {
+  async findAll(query: QueryVulnerabilidadesDto): Promise<Paginated<VulnerabilidadDto>> {
     const ahora = new Date();
     const vencidas: Prisma.VulnerabilidadWhereInput = {
       estado: { in: ESTADOS_ABIERTOS },
@@ -71,14 +83,11 @@ export class VulnerabilidadesService {
         activoId: query.activoId,
         nivelRiesgo: query.nivelRiesgo,
         estado: query.estado,
-        prioridad: query.prioridad,
-        fuente: query.fuente,
         ...(query.categoriaId ? { activo: { categoriaId: query.categoriaId } } : {}),
         ...(query.responsable ? { responsable: { contains: query.responsable } } : {}),
       },
     ];
-    if (query.confirmada === true) filtros.push({ confirmadaEn: { not: null } });
-    if (query.confirmada === false) filtros.push({ confirmadaEn: null });
+    if (query.desde || query.hasta) filtros.push({ fecha: { gte: query.desde, lte: query.hasta } });
     if (query.q) {
       filtros.push({
         OR: [
@@ -90,17 +99,11 @@ export class VulnerabilidadesService {
       });
     }
     if (query.cve) filtros.push({ cve: { contains: query.cve } });
-    if (query.abiertas === true) {
-      filtros.push({ estado: { in: ESTADOS_ABIERTOS } });
-    }
-    if (query.abiertas === false) {
-      filtros.push({ estado: { notIn: ESTADOS_ABIERTOS } });
-    }
+    if (query.abiertas === true) filtros.push({ estado: { in: ESTADOS_ABIERTOS } });
+    if (query.abiertas === false) filtros.push({ estado: { notIn: ESTADOS_ABIERTOS } });
     if (query.vencidas === true) filtros.push(vencidas);
     if (query.vencidas === false) filtros.push({ NOT: vencidas });
-    if (query.actualizadoDesde) {
-      filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
-    }
+    if (query.actualizadoDesde) filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
     if (!query.incluirAnulados) filtros.push({ anuladoEn: null });
     const where: Prisma.VulnerabilidadWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
@@ -109,228 +112,313 @@ export class VulnerabilidadesService {
       this.prisma.vulnerabilidad.findMany({
         where,
         include: INCLUDE,
-        // Lo más urgente primero: mayor riesgo y, dentro del nivel, la más antigua.
+        // Lo más urgente primero: mayor criticidad y, dentro del nivel, la más antigua.
         orderBy: [{ nivelRiesgo: 'desc' }, { fecha: 'asc' }, { id: 'asc' }],
         skip: skipFor(query),
         take: query.limit,
       }),
     ]);
-    return paginate(
-      filas.map((v) => conVencida(v, ahora)),
-      total,
-      query,
-    );
+    return paginate(filas.map((v) => aDto(v, ahora)), total, query);
   }
 
   async findOne(id: number): Promise<VulnerabilidadDto> {
-    const vulnerabilidad = await this.prisma.vulnerabilidad.findFirst({
-      where: { id, ...CON_ACTIVO },
-      include: INCLUDE,
-    });
-    if (!vulnerabilidad) {
-      throw new NotFoundException(`La vulnerabilidad ${id} no existe.`);
-    }
-    return conVencida(vulnerabilidad);
+    const v = await this.prisma.vulnerabilidad.findFirst({ where: { id, ...CON_ACTIVO }, include: INCLUDE });
+    if (!v) throw new NotFoundException(`La vulnerabilidad ${id} no existe.`);
+    return aDto(v);
   }
 
-  /** Registra la vulnerabilidad en estado ABIERTA (detectada). El activo debe estar operativo. */
-  async registrar(dto: RegistrarVulnerabilidadDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {
+  // ── Fase 1 · Detección ────────────────────────────────────────────────────
+
+  /**
+   * Registra la vulnerabilidad en estado ABIERTO, con la traza del alta (quién la
+   * registró y con qué datos) en la misma transacción. El activo debe estar operativo.
+   */
+  async registrar(dto: RegistrarVulnerabilidadDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
     await this.validarRegistro(dto);
     return this.prisma.$transaction(async (tx) => {
-      const v = await tx.vulnerabilidad.create({ data: dto, include: INCLUDE });
-      if (v.nivelRiesgo === 'CRITICO') {
-        await this.avisos.avisar(
-          {
-            tipo: 'VULNERABILIDAD_CRITICA',
-            titulo: `Vulnerabilidad crítica en ${v.activo.codigo} · ${v.activo.nombre}`,
-            mensaje: `${v.cve ?? 'Sin CVE'}: ${v.descripcion.slice(0, 300)} (registrada por ${usuario?.username ?? 'la API'}).`,
-            activoId: v.activoId,
-          },
-          tx,
-        );
-      }
-      return conVencida(v);
+      const { activoId, fecha, descripcion, nivelRiesgo, responsable, cve, fechaLimite } = dto;
+      const v = await tx.vulnerabilidad.create({
+        data: { activoId, fecha, descripcion, nivelRiesgo, responsable, cve, fechaLimite, estado: 'ABIERTO' },
+        include: INCLUDE,
+      });
+      await this.trazas.registrarAlta(
+        tx,
+        'VULNERABILIDAD',
+        v.id,
+        { activoId: v.activoId, fecha: v.fecha, descripcion: v.descripcion, nivelRiesgo: v.nivelRiesgo, responsable: v.responsable, cve: v.cve, fechaLimite: v.fechaLimite, estado: v.estado },
+        'Vulnerabilidad detectada (fase de Detección).',
+        usuario.username,
+      );
+      if (v.nivelRiesgo === 'CRITICO') await this.avisoCritica(tx, v, usuario);
+      return aDto(v);
     });
   }
 
-  /** Reglas del registro, sin escribir nada (también para el registro en lote). */
-  async validarRegistro(dto: RegistrarVulnerabilidadDto): Promise<void> {
-    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos,
-    // pero la regla no depende de ella.
+  /** La misma vulnerabilidad en varios activos: se valida todo antes de crear nada. */
+  async registrarLote(dto: RegistrarLoteDto, usuario: AuthUser): Promise<VulnerabilidadDto[]> {
+    const { activoIds, ...datos } = dto;
+    for (const activoId of activoIds) await this.validarRegistro({ ...datos, activoId });
+    const creadas: VulnerabilidadDto[] = [];
+    for (const activoId of activoIds) creadas.push(await this.registrar({ ...datos, activoId }, usuario));
+    return creadas;
+  }
+
+  /** Reglas del registro, sin escribir nada. */
+  private async validarRegistro(dto: RegistrarVulnerabilidadDto): Promise<void> {
+    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos.
     await this.activos.exigirOperativo(dto.activoId);
     if (dto.fechaLimite && dto.fechaLimite < dto.fecha) {
-      throw new BadRequestException(
-        'La fecha límite no puede ser anterior a la fecha de detección.',
-      );
+      throw new BadRequestException('La fecha límite no puede ser anterior a la fecha de detección.');
     }
-    if (dto.cve) {
-      const pendiente = await this.prisma.vulnerabilidad.findFirst({
-        where: {
-          activoId: dto.activoId,
-          cve: dto.cve,
-          estado: { in: ESTADOS_ABIERTOS },
-        },
-        select: { id: true },
-      });
-      if (pendiente) {
-        throw new ConflictException(
-          `El activo ya tiene ${dto.cve} pendiente (vulnerabilidad ${pendiente.id}).`,
-        );
-      }
-    }
+    if (dto.cve) await this.exigirCveNoPendiente(dto.activoId, dto.cve);
   }
 
-  /** Inicia el tratamiento: exige la evaluación (prioridad, responsable y plan). */
-  async iniciarMitigacion(id: number, usuario?: AuthUser, dto: IniciarTratamientoDto = {}): Promise<VulnerabilidadDto> {
-    const actual = await this.findOne(id);
-    if (!actual.prioridad || !actual.responsable || !actual.planRemediacion) {
-      throw new ConflictException(
-        'Registre la evaluación (prioridad, responsable y plan de remediación) antes de iniciar el tratamiento.',
-      );
-    }
-    // Inicio REAL contra lo previsto [inicio previsto del tratamiento, límite de remediación].
-    const inicio = dto.fecha ?? new Date();
-    const excepcion = plazoOExcepcion({
-      real: inicio,
-      inicio: actual.tratamientoPrevisto,
-      limite: actual.fechaLimite,
-      que: 'El inicio del tratamiento',
-      motivoExcepcion: dto.motivoExcepcion,
-      usuario,
+  private async exigirCveNoPendiente(activoId: number, cve: string, salvo?: number): Promise<void> {
+    const pendiente = await this.prisma.vulnerabilidad.findFirst({
+      where: { activoId, cve, estado: { in: ESTADOS_ABIERTOS }, anuladoEn: null, ...(salvo ? { id: { not: salvo } } : {}) },
+      select: { id: true },
     });
-    const motivo = excepcion.fueraDePlazo
-      ? `Tratamiento iniciado FUERA DE PLAZO (excepción de ${excepcion.excepcionPor}): ${excepcion.motivoExcepcion}`
-      : 'Tratamiento iniciado según el plan de remediación.';
-    return this.transicionar(id, 'iniciar-mitigacion', { tratamientoIniciadoEn: inicio }, motivo.slice(0, 5000), usuario);
+    if (pendiente) throw new ConflictException(`El activo ya tiene ${cve} pendiente (vulnerabilidad ${pendiente.id}).`);
   }
 
-  aceptarRiesgo(id: number, dto: AceptarRiesgoDto, usuario?: AuthUser): Promise<VulnerabilidadDto> {
+  /**
+   * Corrige los datos de Detección (criticidad, responsable, descripción, fechas,
+   * CVE) con motivo, mientras está pendiente. Queda en la auditoría.
+   */
+  async update(id: number, dto: EditarVulnerabilidadDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
+    const { motivoCambio, ...datos } = dto;
+    const actual = await this.exigirVigente(id);
+    if (!ESTADOS_ABIERTOS.includes(actual.estado)) {
+      throw new ConflictException(`La vulnerabilidad ${id} está ${actual.estado}: reábrala para corregir su detección.`);
+    }
+    const fecha = datos.fecha ?? actual.fecha;
+    const fechaLimite = datos.fechaLimite ?? actual.fechaLimite;
+    if (fechaLimite && fechaLimite < fecha) {
+      throw new BadRequestException('La fecha límite no puede ser anterior a la fecha de detección.');
+    }
+    exigirFechaRemediacion(fecha, actual.fechaRemediacion);
+    if (datos.cve && datos.cve !== actual.cve) await this.exigirCveNoPendiente(actual.activoId, datos.cve, id);
+    const pasaACritica = datos.nivelRiesgo === 'CRITICO' && actual.nivelRiesgo !== 'CRITICO';
+    await this.trazas.modificar('VULNERABILIDAD', id, definidos(datos), motivoCambio, usuario.username, { estado: { in: ESTADOS_ABIERTOS } }, async (tx) => {
+      if (pasaACritica) await this.avisoCritica(tx, actual, usuario);
+    });
+    return this.findOne(id);
+  }
+
+  // ── Fase 2 · Remediación ──────────────────────────────────────────────────
+
+  /** ABIERTO → EN_PROGRESO, opcionalmente con el inicio real del trabajo. */
+  async iniciar(id: number, dto: IniciarRemediacionDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
+    const actual = await this.findOne(id);
+    exigirInicio(actual.fecha, dto.fechaInicio);
+    return this.transicionar(id, 'iniciar', definidos({ tratamientoIniciadoEn: dto.fechaInicio }), 'Remediación en progreso.', usuario);
+  }
+
+  /**
+   * Guarda o corrige los datos de remediación SIN cambiar el estado: registrar una
+   * fecha no la marca como remediada. Pendiente: admin y analista. Ya REMEDIADO:
+   * solo admin, con motivo, y sin dejar de cumplir los requisitos de cierre.
+   */
+  async actualizarRemediacion(id: number, dto: ActualizarRemediacionDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
+    const { motivoCambio, ...datos } = dto;
+    const actual = await this.exigirVigente(id);
+    const remediada = actual.estado === 'REMEDIADO';
+    if (remediada && !usuario.roles.includes('admin')) {
+      throw new ForbiddenException(`La vulnerabilidad ${id} está REMEDIADA: solo un administrador corrige su remediación.`);
+    }
+    if (remediada && (motivoCambio?.trim().length ?? 0) < MOTIVO_MINIMO) {
+      throw new BadRequestException(`Para corregir una remediación cerrada indique el motivo (al menos ${MOTIVO_MINIMO} caracteres).`);
+    }
+    exigirFechaRemediacion(actual.fecha, datos.fechaRemediacion);
+    exigirRepositorioValido(datos.repositorioVerificable);
+    if (remediada) {
+      exigirCierre(actual.fecha, {
+        fechaRemediacion: datos.fechaRemediacion ?? actual.fechaRemediacion,
+        evidencia: datos.evidencia ?? actual.evidencia,
+        repositorioVerificable: datos.repositorioVerificable ?? actual.repositorioVerificable,
+      });
+    }
+    await this.trazas.modificar(
+      'VULNERABILIDAD',
+      id,
+      definidos(datos),
+      remediada ? motivoCambio!.trim() : (motivoCambio?.trim() || 'Datos de remediación actualizados.'),
+      usuario.username,
+      { estado: actual.estado },
+    );
+    return this.findOne(id);
+  }
+
+  /**
+   * → REMEDIADO. Exige la fecha REAL de remediación (manual: nunca la del servidor),
+   * el verificable y su repositorio. Se guarda quién registró la remediación.
+   */
+  async remediar(id: number, dto: RemediarDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
+    const actual = await this.findOne(id);
+    exigirCierre(actual.fecha, dto);
     return this.transicionar(
       id,
-      'aceptar-riesgo',
-      { mitigacion: dto.justificacion, fechaCierre: new Date(), cerradaPor: usuario?.username ?? null },
-      `Riesgo aceptado: ${dto.justificacion}`.slice(0, 5000),
+      'remediar',
+      definidos({
+        fechaRemediacion: dto.fechaRemediacion,
+        evidencia: dto.evidencia,
+        repositorioVerificable: dto.repositorioVerificable,
+        observacion: dto.observacion,
+        cerradaPor: usuario.username,
+      }),
+      `Remediada (fecha real ${dto.fechaRemediacion.toISOString().slice(0, 10)}). Verificable: ${dto.evidencia}.`.slice(0, 5000),
       usuario,
     );
   }
 
   /**
-   * Comprueba que la transición está permitida y la aplica con una
-   * actualización condicional (si otra petición se adelantó, 409), dejando
-   * la traza: quién, cuándo, por qué y el estado anterior y nuevo.
+   * REMEDIADO → EN_PROGRESO con motivo. La fecha de remediación vigente se vacía
+   * (la anterior queda en la auditoría, con quién y cuándo la registró); el
+   * verificable, el repositorio y la observación se conservan como referencia.
+   */
+  async reabrir(id: number, dto: ReabrirDto, usuario: AuthUser): Promise<VulnerabilidadDto> {
+    const actual = await this.findOne(id);
+    return this.transicionar(
+      id,
+      'reabrir',
+      { fechaRemediacion: null, cerradaPor: null },
+      `Reabierta: ${dto.motivo}`.slice(0, 5000),
+      usuario,
+      (tx) =>
+        this.avisos.avisar(
+          {
+            tipo: 'VULNERABILIDAD_REABIERTA',
+            titulo: `Vulnerabilidad reabierta: ${actual.cve ?? `#${actual.id}`} en ${actual.activo.codigo}`,
+            mensaje: `${dto.motivo} (reabierta por ${usuario.username}).`,
+            activoId: actual.activoId,
+          },
+          tx,
+        ),
+    );
+  }
+
+  /**
+   * Cambio de estado con la auditoría común: actualización condicional (si el
+   * estado cambió entretanto, 409) y traza en la MISMA transacción.
    */
   private async transicionar(
     id: number,
     accion: AccionVulnerabilidad,
-    data: Prisma.VulnerabilidadUpdateManyMutationInput,
+    data: Record<string, unknown>,
     motivo: string,
-    usuario?: AuthUser,
+    usuario: AuthUser,
+    ademas?: (tx: Prisma.TransactionClient) => Promise<unknown>,
   ): Promise<VulnerabilidadDto> {
-    const actual = await this.findOne(id);
-    if (actual.anuladoEn) {
-      throw new ConflictException(`La vulnerabilidad ${id} está anulada: no admite cambios de estado.`);
-    }
+    const actual = await this.exigirVigente(id);
     if (!puedeTransicionar(actual.estado, accion)) {
-      throw new ConflictException(
-        `No se puede ${accion} la vulnerabilidad ${id}: está en estado ${actual.estado}.`,
-      );
+      throw new ConflictException(`No se puede ${accion} la vulnerabilidad ${id}: está ${actual.estado}.`);
     }
     const { desde, hacia } = TRANSICIONES[accion];
-    await this.trazas.modificar(
-      'VULNERABILIDAD',
-      id,
-      { ...data, estado: hacia },
-      motivo,
-      usuario?.username ?? 'sistema',
-      { estado: { in: desde } },
-    );
+    await this.trazas.modificar('VULNERABILIDAD', id, { ...data, estado: hacia }, motivo, usuario.username, { estado: { in: desde } }, ademas);
     return this.findOne(id);
   }
 
+  private async exigirVigente(id: number): Promise<VulnerabilidadDto> {
+    const v = await this.findOne(id);
+    if (v.anuladoEn) throw new ConflictException(`La vulnerabilidad ${id} está anulada: reviértala antes de modificarla.`);
+    return v;
+  }
 
-  /**
-   * Edita con motivo: sube la versión y conserva la anterior en las trazas.
-   * Solo mientras está pendiente: una vez cerrada es evidencia y no se toca.
-   */
-  async update(
-    id: number,
-    dto: EditarVulnerabilidadDto,
+  private avisoCritica(
+    tx: Prisma.TransactionClient,
+    v: { id: number; cve: string | null; descripcion: string; activoId: number; activo: { codigo: string; nombre: string } },
     usuario: AuthUser,
-  ): Promise<VulnerabilidadDto> {
-    const { motivoCambio, ...datos } = dto;
-    const actual = await this.findOne(id);
-    if (actual.anuladoEn) {
-      throw new ConflictException(`La vulnerabilidad ${id} está anulada: reviértela antes de editarla.`);
-    }
-    if (!ESTADOS_ABIERTOS.includes(actual.estado)) {
-      throw new ConflictException(
-        `La vulnerabilidad ${id} está ${actual.estado}: solo se puede editar mientras está pendiente.`,
-      );
-    }
-    // Las mismas reglas que al registrar, sobre el resultado de la edición.
-    const fecha = datos.fecha ?? actual.fecha;
-    const fechaLimite = datos.fechaLimite ?? actual.fechaLimite;
-    if (fechaLimite && fechaLimite < fecha) {
-      throw new BadRequestException(
-        'La fecha límite no puede ser anterior a la fecha de detección.',
-      );
-    }
-    if (datos.cve && datos.cve !== actual.cve) {
-      const pendiente = await this.prisma.vulnerabilidad.findFirst({
-        where: {
-          id: { not: id },
-          activoId: actual.activoId,
-          cve: datos.cve,
-          estado: { in: ESTADOS_ABIERTOS },
-        },
-        select: { id: true },
-      });
-      if (pendiente) {
-        throw new ConflictException(
-          `El activo ya tiene ${datos.cve} pendiente (vulnerabilidad ${pendiente.id}).`,
-        );
-      }
-    }
-    await this.trazas.modificar('VULNERABILIDAD', id, datos, motivoCambio, usuario.username, { estado: { in: ESTADOS_ABIERTOS } });
-    return this.findOne(id);
+  ) {
+    return this.avisos.avisar(
+      {
+        tipo: 'VULNERABILIDAD_CRITICA',
+        titulo: `Vulnerabilidad crítica en ${v.activo.codigo} · ${v.activo.nombre}`,
+        mensaje: `${v.cve ?? `#${v.id}`}: ${v.descripcion.slice(0, 300)} (${usuario.username}).`,
+        activoId: v.activoId,
+      },
+      tx,
+    );
   }
 
-  /** Eliminación lógica (solo admin): se conserva y deja de contar en los indicadores. */
+  // ── Registro: anulación lógica ────────────────────────────────────────────
+
   async anular(id: number, motivo: string, usuario: AuthUser): Promise<VulnerabilidadDto> {
     await this.findOne(id);
     await this.trazas.anular('VULNERABILIDAD', id, motivo, usuario.username);
     return this.findOne(id);
   }
 
-  /** Deshace la anulación (solo admin). */
   async reversar(id: number, motivo: string, usuario: AuthUser): Promise<VulnerabilidadDto> {
     await this.findOne(id);
     await this.trazas.reversar('VULNERABILIDAD', id, motivo, usuario.username);
     return this.findOne(id);
   }
 
-  /**
-   * Indicadores: los de pendientes, sobre el estado de hoy; los de cierre,
-   * sobre las detectadas en el período. Las anuladas no cuentan.
-   */
+  // ── Consultas ─────────────────────────────────────────────────────────────
+
+  /** Indicadores: pendientes sobre el estado de hoy; cierre sobre las detectadas en el período. */
   async indicadores(desde: Date, hasta: Date): Promise<IndicadorDto[]> {
     const [actuales, delPeriodo] = await Promise.all([
       this.prisma.vulnerabilidad.findMany({ where: { anuladoEn: null, ...CON_ACTIVO } }),
-      this.prisma.vulnerabilidad.findMany({
-        where: { anuladoEn: null, fecha: { gte: desde, lte: hasta }, ...CON_ACTIVO },
-      }),
+      this.prisma.vulnerabilidad.findMany({ where: { anuladoEn: null, fecha: { gte: desde, lte: hasta }, ...CON_ACTIVO } }),
     ]);
     return indicadoresVulnerabilidad(actuales, delPeriodo, new Date());
   }
+
+  /** Agenda (calendario) de las dos fases en un rango. */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const rango = { gte: q.desde, lte: q.hasta };
+    const vulnerabilidades = await this.prisma.vulnerabilidad.findMany({
+      where: {
+        anuladoEn: null,
+        ...(q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {}),
+        ...(q.responsable ? { responsable: { contains: q.responsable } } : {}),
+        OR: [
+          { fecha: rango },
+          { fechaLimite: rango },
+          { tratamientoIniciadoEn: rango },
+          { fechaRemediacion: rango },
+          { estado: { in: ESTADOS_ABIERTOS }, fecha: { lte: q.hasta } },
+        ],
+      },
+      include: INCLUDE,
+      take: 2000,
+    });
+    const eventos = agendaVulnerabilidades({
+      vulnerabilidades: vulnerabilidades.map((v) => ({ ...v, activo: activoBreve(v.activo) })),
+      desde: q.desde,
+      hasta: q.hasta,
+      ahora: new Date(),
+      capa: q.capa,
+    });
+    return q.estado ? eventos.filter((e) => e.estado === q.estado) : eventos;
+  }
 }
 
-function conVencida(
-  vulnerabilidad: VulnerabilidadConActivo,
-  ahora = new Date(),
-): VulnerabilidadDto {
+function aDto(v: VulnerabilidadConActivo, ahora = new Date()): VulnerabilidadDto {
   return {
-    ...vulnerabilidad,
-    activo: activoBreve(vulnerabilidad.activo),
-    vencida: estaVencida(vulnerabilidad, ahora),
+    id: v.id,
+    activoId: v.activoId,
+    activo: activoBreve(v.activo),
+    fecha: v.fecha,
+    descripcion: v.descripcion,
+    nivelRiesgo: v.nivelRiesgo,
+    responsable: v.responsable,
+    cve: v.cve,
+    fechaLimite: v.fechaLimite,
+    estado: v.estado,
+    vencida: estaVencida(v, ahora),
+    tratamientoIniciadoEn: v.tratamientoIniciadoEn,
+    fechaRemediacion: v.fechaRemediacion,
+    evidencia: v.evidencia,
+    repositorioVerificable: v.repositorioVerificable,
+    observacion: v.observacion,
+    cerradaPor: v.cerradaPor,
+    createdAt: v.createdAt,
+    updatedAt: v.updatedAt,
+    version: v.version,
+    anuladoEn: v.anuladoEn,
+    anuladoPor: v.anuladoPor,
+    motivoAnulacion: v.motivoAnulacion,
   };
 }

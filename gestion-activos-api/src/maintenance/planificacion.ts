@@ -79,24 +79,8 @@ export function cumplimiento(conEjecucionCompletada: number, esperables: number)
 
 // ── Verificable ─────────────────────────────────────────────────────────────
 
-/**
- * El repositorio del verificable es una carpeta compartida o una URL. Si parece
- * una URL, debe ser http(s) válida (nada de javascript:, file:…).
- */
-export function exigirRepositorioValido(repositorio: string | null | undefined): void {
-  if (!repositorio) return;
-  // Sin esquema (o una letra de unidad, C:\…): ruta o carpeta compartida.
-  if (!/^[a-z][a-z0-9+.-]+:/i.test(repositorio)) return;
-  let url: URL;
-  try {
-    url = new URL(repositorio);
-  } catch {
-    throw new BadRequestException('El repositorio del verificable no es una URL válida.');
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new BadRequestException('El repositorio del verificable solo admite URL http o https, o una carpeta compartida.');
-  }
-}
+/** Compartida con Vulnerabilidades: vive en common/evidencia. */
+export { exigirRepositorioValido } from '../common/evidencia/repositorio.js';
 
 // ── Fechas reales ───────────────────────────────────────────────────────────
 

@@ -1,33 +1,29 @@
 import type { EstadoVulnerabilidad } from '../../generated/prisma/enums.js';
 
-export type AccionVulnerabilidad =
-  'iniciar-mitigacion' | 'mitigar' | 'aceptar-riesgo';
+export type AccionVulnerabilidad = 'iniciar' | 'remediar' | 'reabrir';
 
 /**
- * Ciclo de vida de una vulnerabilidad: desde qué estados se permite cada
- * acción y a qué estado lleva. MITIGADA y ACEPTADA son finales.
+ * Dos fases sobre el MISMO registro: Detección (se registra ABIERTO) y Remediación.
+ * No hay fase de verificación: la evidencia se exige al remediar.
  *
- *   ABIERTA ──iniciar-mitigacion──► EN_MITIGACION ──mitigar──► MITIGADA
- *      │                                  │
- *      └──────────aceptar-riesgo──────────┴───────────────────► ACEPTADA
+ *   ABIERTO ──iniciar──► EN_PROGRESO ──remediar──► REMEDIADO
+ *      └──────────────remediar──────────────────────┘    │
+ *                        ▲                                │
+ *                        └────────────reabrir─────────────┘
+ *
+ * Remediar desde ABIERTO cubre lo que se corrigió antes de registrarlo.
  */
 export const TRANSICIONES: Record<
   AccionVulnerabilidad,
   { desde: EstadoVulnerabilidad[]; hacia: EstadoVulnerabilidad }
 > = {
-  'iniciar-mitigacion': { desde: ['ABIERTA'], hacia: 'EN_MITIGACION' },
-  mitigar: { desde: ['EN_MITIGACION'], hacia: 'MITIGADA' },
-  'aceptar-riesgo': {
-    desde: ['ABIERTA', 'EN_MITIGACION'],
-    hacia: 'ACEPTADA',
-  },
+  iniciar: { desde: ['ABIERTO'], hacia: 'EN_PROGRESO' },
+  remediar: { desde: ['ABIERTO', 'EN_PROGRESO'], hacia: 'REMEDIADO' },
+  reabrir: { desde: ['REMEDIADO'], hacia: 'EN_PROGRESO' },
 };
 
-/** Estados en los que la vulnerabilidad sigue pendiente de resolver. */
-export const ESTADOS_ABIERTOS: EstadoVulnerabilidad[] = [
-  'ABIERTA',
-  'EN_MITIGACION',
-];
+/** Estados en los que la vulnerabilidad sigue pendiente de remediar. */
+export const ESTADOS_ABIERTOS: EstadoVulnerabilidad[] = ['ABIERTO', 'EN_PROGRESO'];
 
 export function puedeTransicionar(
   estado: EstadoVulnerabilidad,
@@ -36,7 +32,7 @@ export function puedeTransicionar(
   return TRANSICIONES[accion].desde.includes(estado);
 }
 
-/** Sigue abierta y ya pasó su fecha límite (SLA incumplido). */
+/** Sigue pendiente y ya pasó su fecha límite (plazo incumplido). */
 export function estaVencida(
   vulnerabilidad: {
     estado: EstadoVulnerabilidad;

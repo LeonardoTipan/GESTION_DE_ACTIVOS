@@ -23,7 +23,8 @@ export const ENTIDADES = {
 export type Entidad = keyof typeof ENTIDADES;
 export const NOMBRES_ENTIDAD = Object.keys(ENTIDADES) as Entidad[];
 
-export type AccionTraza = 'MODIFICAR' | 'ANULAR' | 'REVERSAR';
+/** REGISTRAR: alta del registro (quién lo creó y con qué valores). */
+export type AccionTraza = 'REGISTRAR' | 'MODIFICAR' | 'ANULAR' | 'REVERSAR';
 
 /** Un campo que cambió: valor anterior y nuevo. */
 export interface CambioCampo {
@@ -98,6 +99,7 @@ export class TrazasService {
   /**
    * Modifica un registro vigente: exige motivo, sube la versión y guarda la
    * versión anterior. `condicion` añade requisitos al registro (p. ej. una fase).
+   * `ademas` escribe algo más (p. ej. un aviso) en la MISMA transacción.
    */
   async modificar(
     entidad: Entidad,
@@ -106,6 +108,7 @@ export class TrazasService {
     motivo: string,
     responsable: string,
     condicion: Record<string, unknown> = {},
+    ademas?: (tx: Prisma.TransactionClient) => Promise<unknown>,
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const actual = await this.cargar(tx, entidad, id);
@@ -137,6 +140,7 @@ export class TrazasService {
         cambios,
         responsable,
       });
+      if (ademas) await ademas(tx);
     });
   }
 
@@ -200,6 +204,24 @@ export class TrazasService {
         responsable,
       });
     });
+  }
+
+  /**
+   * Alta de un registro: guarda quién lo creó y sus valores iniciales, dentro de la
+   * transacción `tx` en la que se crea (si falla la traza, no queda el registro).
+   */
+  async registrarAlta(
+    tx: Prisma.TransactionClient,
+    entidad: Entidad,
+    id: number,
+    valores: Record<string, unknown>,
+    motivo: string,
+    responsable: string,
+  ): Promise<void> {
+    const cambios = Object.entries(valores)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([campo, despues]) => ({ campo, antes: null, despues: despues instanceof Date ? despues.toISOString() : despues }));
+    await this.registrar(tx, { entidad, registroId: id, version: 0, accion: 'REGISTRAR', motivo, cambios: cambios as CambioCampo[], responsable });
   }
 
   async listar(entidad: Entidad, registroId: number): Promise<TrazaDto[]> {

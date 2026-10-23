@@ -11,12 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto.js';
-import {
-  EstadoVulnerabilidad,
-  FuenteVulnerabilidad,
-  NivelRiesgo,
-  PrioridadVulnerabilidad,
-} from '../../../generated/prisma/enums.js';
+import { EstadoVulnerabilidad, NivelRiesgo } from '../../../generated/prisma/enums.js';
 
 /** En la query string todo llega como texto: "true"/"false" → boolean. */
 const toBoolean = () =>
@@ -25,14 +20,14 @@ const toBoolean = () =>
   );
 
 export class QueryVulnerabilidadesDto extends PaginationQueryDto {
-  @ApiPropertyOptional({ example: 5 })
+  @ApiPropertyOptional({ example: 5, description: '«Sistema»: activo de GLPI.' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   activoId?: number;
 
-  @ApiPropertyOptional({ enum: NivelRiesgo })
+  @ApiPropertyOptional({ enum: NivelRiesgo, description: '«Criticidad».' })
   @IsOptional()
   @IsEnum(NivelRiesgo)
   nivelRiesgo?: NivelRiesgo;
@@ -44,43 +39,24 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @Min(1)
   categoriaId?: number;
 
-  @ApiPropertyOptional({ description: 'Busca en el código y nombre del activo y en la descripción.' })
+  @ApiPropertyOptional({ description: 'Busca en el código y nombre del activo, la descripción y el CVE.' })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   q?: string;
 
-  @ApiPropertyOptional({ description: 'Responsable del tratamiento (contiene el texto).' })
+  @ApiPropertyOptional({ description: '«Responsable» (contiene el texto).' })
   @IsOptional()
   @IsString()
   @MaxLength(100)
   responsable?: string;
 
-  @ApiPropertyOptional({ enum: PrioridadVulnerabilidad })
-  @IsOptional()
-  @IsEnum(PrioridadVulnerabilidad)
-  prioridad?: PrioridadVulnerabilidad;
-
-  @ApiPropertyOptional({ enum: FuenteVulnerabilidad })
-  @IsOptional()
-  @IsEnum(FuenteVulnerabilidad)
-  fuente?: FuenteVulnerabilidad;
-
-  @ApiPropertyOptional({ description: 'true = confirmadas; false = solo detectadas.' })
-  @IsOptional()
-  @Transform(({ value }: { value: unknown }) => (value === 'true' ? true : value === 'false' ? false : value))
-  @IsBoolean()
-  confirmada?: boolean;
-
-  @ApiPropertyOptional({ enum: EstadoVulnerabilidad })
+  @ApiPropertyOptional({ enum: EstadoVulnerabilidad, description: '«Estado».' })
   @IsOptional()
   @IsEnum(EstadoVulnerabilidad)
   estado?: EstadoVulnerabilidad;
 
-  @ApiPropertyOptional({
-    example: 'CVE-2026',
-    description: 'Busca por CVE (coincidencia parcial).',
-  })
+  @ApiPropertyOptional({ example: 'CVE-2026', description: 'Busca por CVE (coincidencia parcial).' })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toUpperCase() : value,
@@ -89,19 +65,25 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @MaxLength(50)
   cve?: string;
 
-  @ApiPropertyOptional({
-    description:
-      'true = solo pendientes (ABIERTA o EN_MITIGACION); false = solo cerradas.',
-  })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Detectadas desde esta fecha (incluida).' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  desde?: Date;
+
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Detectadas hasta esta fecha (incluida).' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  hasta?: Date;
+
+  @ApiPropertyOptional({ description: 'true = solo pendientes (ABIERTO o EN_PROGRESO); false = solo remediadas.' })
   @IsOptional()
   @toBoolean()
   @IsBoolean()
   abiertas?: boolean;
 
-  @ApiPropertyOptional({
-    description:
-      'true = solo pendientes con fecha límite ya pasada (SLA incumplido); false = excluirlas.',
-  })
+  @ApiPropertyOptional({ description: 'true = solo pendientes con la fecha límite ya pasada; false = excluirlas.' })
   @IsOptional()
   @toBoolean()
   @IsBoolean()
@@ -110,8 +92,7 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @ApiPropertyOptional({
     type: String,
     format: 'date-time',
-    description:
-      'Sincronización incremental: solo vulnerabilidades modificadas después de esta fecha.',
+    description: 'Sincronización incremental: solo vulnerabilidades modificadas después de esta fecha.',
   })
   @IsOptional()
   @Type(() => Date)
@@ -123,9 +104,7 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
     description: 'false = oculta los anulados (por defecto se muestran, marcados).',
   })
   @IsOptional()
-  @Transform(({ value }: { value: unknown }) =>
-    value === 'true' ? true : value === 'false' ? false : value,
-  )
+  @toBoolean()
   @IsBoolean()
   incluirAnulados: boolean = true;
 }

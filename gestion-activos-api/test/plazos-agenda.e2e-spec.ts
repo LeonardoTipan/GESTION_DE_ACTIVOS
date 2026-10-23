@@ -275,64 +275,37 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
     });
   });
 
-  describe('Vulnerabilidades', () => {
+  describe('Vulnerabilidades (dos fases)', () => {
     let id: number;
 
     beforeAll(async () => {
       id = (
         await api(tokens.analista)
-          .post('/api/vulnerabilidades', { activoId, descripcion: 'Servicio expuesto sin parche.', nivelRiesgo: 'ALTO', fecha: iso(ahora - 5 * DIA), fechaLimite: iso(ahora - DIA) })
+          .post('/api/vulnerabilidades', { activoId, descripcion: 'Servicio expuesto sin parche.', nivelRiesgo: 'ALTO', responsable: 'Seguridad', fecha: iso(ahora - 5 * DIA), fechaLimite: iso(ahora - DIA) })
           .expect(201)
       ).body.id;
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/confirmar`).expect(200);
     }, LENTO);
 
-    it('evaluar: el inicio previsto del tratamiento no puede pasar del límite; ampliar el límite no se hace aquí', async () => {
-      const base = { prioridad: 'P1', responsable: 'Seguridad', planRemediacion: 'Aplicar el parche del fabricante.' };
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/evaluar`, { ...base, tratamientoPrevisto: iso(ahora) }).expect(400);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/evaluar`, { ...base, fechaLimite: iso(ahora + 9 * DIA) }).expect(409);
-      const ok = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/evaluar`, { ...base, tratamientoPrevisto: iso(ahora - 4 * DIA) }).expect(200);
-      // La detección y el inicio previsto del tratamiento son fechas distintas.
-      expect(ok.body.fecha).toBe(iso(ahora - 5 * DIA));
-      expect(ok.body.tratamientoPrevisto).toBe(iso(ahora - 4 * DIA));
+    it('el plazo no puede ser anterior a la detección', async () => {
+      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}`, { fechaLimite: iso(ahora - 6 * DIA), motivoCambio: MOTIVO }).expect(400);
     });
 
-    it('iniciar después del límite de remediación: 409; el admin amplía el plazo formalmente y entonces se inicia en plazo', async () => {
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(409);
-      const amp = await api(tokens.admin).patch(`/api/vulnerabilidades/${id}/plazo`, { campo: 'REMEDIACION', nuevoLimite: iso(ahora + 5 * DIA), motivo: MOTIVO }).expect(200);
-      expect(amp.body).toMatchObject({ fechaLimite: iso(ahora + 5 * DIA), fechaLimiteOriginal: iso(ahora - DIA) });
-      const res = await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/iniciar-mitigacion`).expect(200);
-      expect(res.body.estado).toBe('EN_MITIGACION');
-      expect(res.body.tratamientoIniciadoEn).not.toBeNull();
-    });
-
-    it('acción después del límite: excepción de admin; la verificación tiene su propia ventana', async () => {
-      await api(tokens.analista).post(`/api/vulnerabilidades/${id}/acciones`, { fecha: iso(ahora - HORA), descripcion: 'Parche aplicado.', responsable: 'jperez' }).expect(201);
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora + DIA), limite: iso(ahora + 2 * DIA) }).expect(200);
-      const verificar = { fecha: iso(ahora - 10 * 60_000), resultado: 'CORREGIDA', observaciones: 'Escaneo sin hallazgos.', evidencia: 'Informe 1', responsable: 'Seguridad' };
-      await api(tokens.analista).post(`/api/vulnerabilidades/${id}/verificaciones`, verificar).expect(409);
-      const ok = await api(tokens.admin).post(`/api/vulnerabilidades/${id}/verificaciones`, { ...verificar, motivoExcepcion: JUSTIFICACION }).expect(201);
-      expect(ok.body).toMatchObject({ fueraDePlazo: true, excepcionPor: 'admin.test' });
-      expect((await prisma.vulnerabilidad.findUniqueOrThrow({ where: { id } })).estado).toBe('MITIGADA');
-    });
-
-    it('agenda: detección (real) y límite de remediación (previsto) son eventos distintos', async () => {
-      const capa1 = await agenda('vulnerabilidades', 1, ahora - 10 * DIA, ahora + 10 * DIA);
+    it('agenda: detección (real), plazo (previsto, vencido) y remediación (real) son eventos distintos; sin capa 3', async () => {
+      let capa1 = await agenda('vulnerabilidades', 1, ahora - 10 * DIA, ahora + 10 * DIA);
       expect(capa1.find((e) => e.clave === `v1d-${id}`)).toMatchObject({ tipo: 'REAL', inicio: iso(ahora - 5 * DIA) });
-      expect(capa1.find((e) => e.clave === `v1l-${id}`)).toMatchObject({ tipo: 'PREVISTO', inicio: iso(ahora + 5 * DIA), estado: 'COMPLETADO' });
-      const capa3 = await agenda('vulnerabilidades', 3, ahora - 10 * DIA, ahora + 10 * DIA);
-      expect(capa3.filter((e) => e.tipo === 'REAL')).toMatchObject([{ estado: 'COMPLETADO', fueraDePlazo: true }]);
+      expect(capa1.find((e) => e.clave === `v1l-${id}`)).toMatchObject({ tipo: 'PREVISTO', inicio: iso(ahora - DIA), estado: 'VENCIDO' });
+      await api(tokens.analista)
+        .patch(`/api/vulnerabilidades/${id}/remediar`, { fechaRemediacion: iso(ahora - 2 * HORA), evidencia: 'Informe 1', repositorioVerificable: 'Carpeta TIC' })
+        .expect(200);
+      const capa2 = await agenda('vulnerabilidades', 2, ahora - 10 * DIA, ahora + 10 * DIA);
+      // Remediada después de su plazo: se marca fuera de plazo, con la fecha real.
+      expect(capa2.find((e) => e.clave === `v2r-${id}`)).toMatchObject({ tipo: 'REAL', inicio: iso(ahora - 2 * HORA), estado: 'COMPLETADO', fueraDePlazo: true });
+      capa1 = await agenda('vulnerabilidades', 1, ahora - 10 * DIA, ahora + 10 * DIA);
+      expect(capa1.find((e) => e.clave === `v1l-${id}`)?.estado).toBe('COMPLETADO');
+      expect(await agenda('vulnerabilidades', 3, ahora - 10 * DIA, ahora + 10 * DIA)).toEqual([]);
     });
 
-    it('una verificación ya programada solo la reprograma un admin', async () => {
-      await api(tokens.analista).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora + 2 * DIA), limite: iso(ahora + 3 * DIA) }).expect(403);
-      const ok = await api(tokens.admin).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora + 2 * DIA), limite: iso(ahora + 3 * DIA) }).expect(200);
-      expect(ok.body).toMatchObject({ verificacionPrevista: iso(ahora + 2 * DIA), verificacionLimite: iso(ahora + 3 * DIA) });
-    });
-
-    it('permisos: el auditor no programa ni amplía', async () => {
-      await api(tokens.auditor).patch(`/api/vulnerabilidades/${id}/verificacion-prevista`, { prevista: iso(ahora), limite: iso(ahora + DIA) }).expect(403);
-      await api(tokens.auditor).patch(`/api/vulnerabilidades/${id}/plazo`, { campo: 'REMEDIACION', nuevoLimite: iso(ahora + 9 * DIA), motivo: MOTIVO }).expect(403);
+    it('permisos: el auditor no amplía plazos', async () => {
       await api(tokens.auditor).patch(`/api/respaldos/ejecuciones/1/prueba`, { prevista: iso(ahora), limite: iso(ahora + DIA) }).expect(403);
       await api(tokens.auditor).patch(`/api/mantenimientos/1/plazo`, { campo: 'EJECUCION', nuevoLimite: iso(ahora + DIA), motivo: MOTIVO }).expect(403);
     });

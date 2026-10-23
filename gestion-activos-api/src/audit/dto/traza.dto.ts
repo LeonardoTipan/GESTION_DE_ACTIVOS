@@ -81,7 +81,7 @@ export class TrazaDto {
   @ApiProperty({ description: 'Versión del registro ANTES del cambio.' })
   version: number;
 
-  @ApiProperty({ enum: ['MODIFICAR', 'ANULAR', 'REVERSAR'] })
+  @ApiProperty({ enum: ['REGISTRAR', 'MODIFICAR', 'ANULAR', 'REVERSAR'] })
   accion: AccionTraza;
 
   @ApiProperty()

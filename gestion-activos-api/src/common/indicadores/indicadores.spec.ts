@@ -81,19 +81,19 @@ describe('indicadores de vulnerabilidades (A.8.8)', () => {
     id,
     cve: `CVE-${id}`,
     nivelRiesgo: 'ALTO',
-    estado: 'ABIERTA',
+    estado: 'ABIERTO',
     fecha: new Date('2026-09-01T00:00:00Z'),
     fechaLimite: new Date('2026-10-01T00:00:00Z'),
-    fechaCierre: null,
+    fechaRemediacion: null,
     ...extra,
   });
 
-  it('abiertas graves, fuera de plazo, mitigadas a tiempo y tiempo medio', () => {
+  it('abiertas graves, fuera de plazo, remediadas a tiempo y tiempo medio', () => {
     const todas = [
       v(1, {}),
       v(2, { nivelRiesgo: 'BAJO', fechaLimite: null }),
-      v(3, { estado: 'MITIGADA', fechaCierre: new Date('2026-09-11T00:00:00Z') }),
-      v(4, { estado: 'MITIGADA', fechaCierre: new Date('2026-10-11T00:00:00Z') }),
+      v(3, { estado: 'REMEDIADO', fechaRemediacion: new Date('2026-09-11T00:00:00Z') }),
+      v(4, { estado: 'REMEDIADO', fechaRemediacion: new Date('2026-10-11T00:00:00Z') }),
     ];
     const ind = indicadoresVulnerabilidad(todas, todas, ahora);
     const valores = Object.fromEntries(ind.map((i) => [i.id, i.valor]));

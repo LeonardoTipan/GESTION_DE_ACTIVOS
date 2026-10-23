@@ -338,57 +338,69 @@ enum EstadoEquipo {
 }
 
 model Vulnerabilidad {
-  id                    Int                      @id @default(autoincrement())
-  activoId              Int
+  // Dos fases sobre el MISMO registro: Detección y Remediación (no hay fase de verificación).
+  id                     Int                      @id @default(autoincrement())
+  // «Sistema»: el activo real de GLPI (clave foránea, sin copiar su nombre)
+  activoId               Int
   // Identificador público opcional, p. ej. CVE-2026-12345
-  cve                   String?
-  descripcion           String                   @db.Text
-  nivelRiesgo           NivelRiesgo
-  // Ciclo: ABIERTA → EN_MITIGACION → MITIGADA (o ACEPTADA)
-  estado                EstadoVulnerabilidad     @default(ABIERTA)
-  // Acción aplicada al mitigar, o justificación al aceptar el riesgo
-  mitigacion            String?                  @db.Text
-  // Fecha de detección
-  fecha                 DateTime
-  // Plazo para remediarla (SLA) y fecha en que se cerró
-  fechaLimite           DateTime?
-  fechaCierre           DateTime?
-  // Capa 1 · Identificación: de dónde viene y su confirmación
-  fuente                FuenteVulnerabilidad     @default(MANUAL)
-  evidencia             String?
+  cve                    String?
+  // «Vulnerabilidad»: descripción del problema detectado
+  descripcion            String                   @db.Text
+  // «Criticidad»: CRITICO, ALTO, MEDIO o BAJO
+  nivelRiesgo            NivelRiesgo
+  // «Estado»: ABIERTO → EN_PROGRESO → REMEDIADO (reabrir: REMEDIADO → EN_PROGRESO)
+  estado                 EstadoVulnerabilidad     @default(ABIERTO)
+  // «Observación»: acciones, detalles técnicos, limitaciones (no sustituye la descripción)
+  observacion            String?                  @db.Text
+  // «Fecha Detección»: la indica el usuario (puede ser histórica); ≠ createdAt
+  fecha                  DateTime
+  // Plazo opcional para remediarla (SLA)
+  fechaLimite            DateTime?
+  // «Fecha de Remediación»: fecha REAL de la solución, indicada por el usuario. Sin valor
+  // por defecto: nunca la pone el servidor. Vacía mientras no está remediada.
+  fechaRemediacion       DateTime?
+  // Origen del registro (MANUAL: la aplicación no tiene escáner conectado)
+  fuente                 FuenteVulnerabilidad     @default(MANUAL)
+  // «Verificable»: nombre del informe o documento que prueba la remediación
+  evidencia              String?
+  // «Repositorio Verificable»: carpeta compartida o URL http(s) donde está la evidencia
+  repositorioVerificable String?
+  // «Responsable»: persona encargada (texto: las identidades viven en Keycloak)
+  responsable            String?
+  // Quién registró la remediación (usuario de la sesión)
+  cerradaPor             String?
+  // Inicio real del trabajo (opcional, lo indica el usuario al pasar a EN_PROGRESO)
+  tratamientoIniciadoEn  DateTime?
+
+  // Conservados del diseño anterior en tres capas; sin uso en el flujo de dos fases.
   confirmadaEn          DateTime?
   confirmadaPor         String?
-  // Capa 2 · Evaluación y tratamiento
   prioridad             PrioridadVulnerabilidad?
-  responsable           String?
   planRemediacion       String?                  @db.Text
   evaluadaEn            DateTime?
   evaluadaPor           String?
-  // Quién la cerró (verificación) o aceptó el riesgo
-  cerradaPor            String?
-  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
-  // fechaLimite = límite de remediación. fechaLimiteOriginal: antes de una ampliación.
   fechaLimiteOriginal   DateTime?
-  // Inicio previsto del tratamiento (≠ detección) y cuándo empezó de verdad.
   tratamientoPrevisto   DateTime?
-  tratamientoIniciadoEn DateTime?
-  // Capa 3: ventana prevista para la verificación (la fecha real está en la verificación).
   verificacionPrevista  DateTime?
   verificacionLimite    DateTime?
 
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
   version         Int       @default(1)
   // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
   anuladoEn       DateTime?
   anuladoPor      String?
   motivoAnulacion String?   @db.Text
+  // Fecha de registro (automática)
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
   activo         Activo                       @relation(fields: [activoId], references: [id])
+  // Tablas del diseño anterior (acciones y verificaciones), conservadas sin uso.
   acciones       AccionRemediacion[]
   verificaciones VerificacionVulnerabilidad[]
 
   @@index([updatedAt])
+  @@index([activoId, estado])
   @@map("vulnerabilidad")
 }
 
@@ -478,10 +490,9 @@ enum NivelRiesgo {
 }
 
 enum EstadoVulnerabilidad {
-  ABIERTA
-  EN_MITIGACION
-  MITIGADA
-  ACEPTADA
+  ABIERTO
+  EN_PROGRESO
+  REMEDIADO
 }
 
 // ---------------------------------------------------------------------------
