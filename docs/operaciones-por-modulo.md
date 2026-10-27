@@ -17,6 +17,7 @@ Qué se puede hacer en cada módulo, quién puede hacerlo y qué reglas protegen
 | **Respaldos** · plan, ejecución y restauración | admin, analista | todos | admin, analista, **con motivo** (versión nueva) | admin: **anular** (eliminación lógica, con motivo) y **revertir** |
 | **Mantenimientos** · planificación y ejecución | admin, analista | todos | admin, analista, con motivo: plan (cualquier dato) y mantenimiento (tipo, actividad, inicio previsto y fecha límite, solo en fase Programado) | admin: anular y revertir (planificaciones y ejecuciones) |
 | **Vulnerabilidades** · detección y remediación | admin, analista | todos | admin, analista, con motivo: fecha de detección, descripción, criticidad, responsable, CVE y plazo, solo mientras está pendiente; remediación cerrada: solo admin, con motivo | admin: anular y revertir |
+| **Renovaciones** · planificación, ejecución y cierre | admin, analista | todos | admin, analista, con motivo: planificación (sistema y tipo solo abierta); renovación cerrada: solo admin, con motivo | admin: anular y revertir |
 | **Control de acceso** · solicitudes lógicas y físicas ([detalle](control-acceso.md)) | admin, analista | todos, incluido el historial | admin, analista: campos editables mientras no esté cerrada (cada cambio queda en el historial); pasar a pendiente y cerrar con la fecha atendida real. Corregir una cerrada y reabrir: solo admin, con motivo | No se eliminan; el historial no se modifica ni se borra |
 
 Además, mantenimientos y vulnerabilidades avanzan por sus propias acciones (programar desde el plan, iniciar, finalizar, cancelar y verificar; iniciar la remediación, remediar con evidencia y reabrir). Todas las reglas se validan en la API: ocultar un botón en la interfaz no sustituye esa validación. Un registro anulado no admite ni modificaciones ni cambios de fase hasta que se revierta.
@@ -70,6 +71,10 @@ La aplicación **no tiene un escáner de vulnerabilidades conectado**: todo hall
 2. **Remediación.** *Abierto → En progreso → Remediado*. Para marcarla **remediada** se exigen la **fecha real de remediación** (la indica el usuario; nunca la del servidor; no futura ni anterior a la detección), el **verificable** y su **repositorio** (carpeta o URL http/https). Se pueden guardar antes sin cerrarla. *Reabrir* (con motivo) la devuelve a *En progreso*, vacía la fecha vigente y genera un aviso.
 
 El estado de una vulnerabilidad **no modifica el activo**. Cada paso queda en las trazas (alta, correcciones, cambios de estado, fecha de remediación, reapertura), con el usuario de la sesión y los valores anteriores y nuevos, en la misma transacción que el cambio.
+
+## Renovaciones en dos fases
+
+Licencias, garantías, certificados y contratos de servicio: **Planificación** (sistema, tipo, responsable, fecha planificada y caducidad actual) y **Ejecución y cierre** (fecha real de renovación, nueva caducidad, verificable, repositorio y descripción), sobre el mismo registro y sin fase de verificación. La **vigencia** del elemento (vigente, próximo a caducar, caducado, sin caducidad) se calcula y es distinta del estado del proceso; el umbral es `RENOVACIONES_DIAS_AVISO` (30 días). Detalle en [renovaciones.md](renovaciones.md).
 
 ## Plazos: lo previsto, lo real y lo verificado
 

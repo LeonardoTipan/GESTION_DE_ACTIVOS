@@ -4,6 +4,7 @@ import {
   IconDatabaseExport,
   IconKey,
   IconLayoutDashboard,
+  IconRefresh,
   IconServer,
   IconShieldExclamation,
   IconTool,
@@ -62,6 +63,13 @@ export const MENU: readonly ItemMenu[] = [
     ruta: '/control-acceso',
     icono: IconKey,
     descripcion: 'Solicitudes de acceso lógico y físico, con historial.',
+    roles: [],
+  },
+  {
+    etiqueta: 'Renovaciones',
+    ruta: '/renovaciones',
+    icono: IconRefresh,
+    descripcion: 'Licencias, garantías, certificados y contratos: planificación, ejecución y caducidad.',
     roles: [],
   },
   {

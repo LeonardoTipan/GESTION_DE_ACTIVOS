@@ -1493,6 +1493,205 @@ export interface paths {
         patch: operations["ControlAccesoController_reabrir"];
         trace?: never;
     };
+    "/api/renovaciones": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Listar renovaciones
+         * @description Paginado. Filtros por sistema, categoría, tipo, estado del proceso, responsable, vigencia del elemento y rango de caducidad.
+         */
+        get: operations["RenovacionesController_findAll"];
+        put?: never;
+        /**
+         * Planificar (admin, analista)
+         * @description Crea la renovación en ABIERTO. Exige la caducidad actual o «sin caducidad» justificado. Enlaza con la renovación anterior del mismo elemento.
+         */
+        post: operations["RenovacionesController_crear"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renovaciones/resumen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumen de vigencias
+         * @description Vigentes, próximas a caducar (umbral RENOVACIONES_DIAS_AVISO), caducadas y sin caducidad.
+         */
+        get: operations["RenovacionesController_resumen"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renovaciones/caducidades": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Próximas caducidades
+         * @description Lo que caduca en los próximos días y lo ya caducado, de lo que rige hoy, por urgencia.
+         */
+        get: operations["RenovacionesController_caducidades"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renovaciones/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detalle de una renovación */
+        get: operations["RenovacionesController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Corregir la planificación con motivo (admin, analista)
+         * @description Mientras está pendiente; sistema y tipo solo en ABIERTO.
+         */
+        patch: operations["RenovacionesController_editar"];
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/iniciar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Iniciar la ejecución (admin, analista)
+         * @description ABIERTO → EN_PROGRESO.
+         */
+        patch: operations["RenovacionesController_iniciar"];
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/ejecucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Guardar o corregir lo ejecutado (admin, analista; cerrada: solo admin con motivo)
+         * @description Fecha real, nueva caducidad, verificable, repositorio, descripción y observación. No cambia el estado.
+         */
+        patch: operations["RenovacionesController_actualizarEjecucion"];
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cerrar (admin, analista)
+         * @description ABIERTO o EN_PROGRESO → CERRADO. Exige fecha REAL de renovación, nueva caducidad (o «sin caducidad» justificado), verificable y repositorio. El mensaje dice qué falta.
+         */
+        patch: operations["RenovacionesController_cerrar"];
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/reabrir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reabrir (admin, analista)
+         * @description CERRADO → EN_PROGRESO, con motivo. No si ya la sustituyó otra renovación.
+         */
+        patch: operations["RenovacionesController_reabrir"];
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/anular": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular (eliminación lógica, solo admin) */
+        post: operations["RenovacionesController_anular"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/renovaciones/{id}/reversar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revertir la anulación (solo admin) */
+        post: operations["RenovacionesController_reversar"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2603,7 +2802,7 @@ export interface components {
         TrazaDto: {
             id: number;
             /** @enum {string} */
-            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
+            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
             registroId: number;
             /** @description Versión del registro ANTES del cambio. */
             version: number;
@@ -3836,6 +4035,239 @@ export interface components {
         };
         ReabrirControlAccesoDto: {
             /** @description Por qué se reabre (solo admin; queda en el historial). */
+            motivo: string;
+        };
+        RenovacionBreveDto: {
+            id: number;
+            /** Format: date */
+            fechaRenovacion: string | null;
+            /** Format: date */
+            nuevaFechaCaducidad: string | null;
+        };
+        RenovacionDto: {
+            id: number;
+            activoId: number;
+            /** @description «Sistema». */
+            activo: components["schemas"]["ActivoBreveDto"];
+            /** @enum {string} */
+            tipo: "LICENCIA" | "GARANTIA" | "CERTIFICADO" | "CONTRATO_SERVICIO" | "OTRO";
+            /** @description «Responsable». */
+            responsable: string;
+            /**
+             * Format: date
+             * @description «Fecha Planificada».
+             */
+            fechaPlanificada: string;
+            /**
+             * Format: date
+             * @description Caducidad antes de renovar (referencia histórica).
+             */
+            fechaCaducidadActual: string | null;
+            sinCaducidadActual: boolean;
+            /**
+             * @description Estado del proceso.
+             * @enum {string}
+             */
+            estado: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
+            /**
+             * Format: date
+             * @description «Fecha Ejecutada Renovación» (real).
+             */
+            fechaRenovacion: string | null;
+            /**
+             * Format: date
+             * @description Caducidad después de renovar.
+             */
+            nuevaFechaCaducidad: string | null;
+            nuevaSinCaducidad: boolean;
+            /** @description «Verificable». */
+            evidencia: string | null;
+            /** @description «Repositorio Verificable». */
+            repositorioVerificable: string | null;
+            /** @description «Descripción». */
+            descripcion: string | null;
+            /** @description «Observación». */
+            observacion: string | null;
+            cerradaPor: string | null;
+            /**
+             * @description Vigencia del ELEMENTO hoy (calculada), distinta del estado del proceso.
+             * @enum {string}
+             */
+            vigencia: "VIGENTE" | "PROXIMA" | "CADUCADA" | "SIN_CADUCIDAD" | "SUSTITUIDA";
+            /**
+             * Format: date
+             * @description Fecha de caducidad que rige hoy.
+             */
+            venceEl: string | null;
+            /** @description Días hasta la caducidad (negativo: ya caducó). */
+            diasRestantes: number | null;
+            /** @description Renovación anterior del mismo elemento. */
+            renovacionAnterior: components["schemas"]["RenovacionBreveDto"] | null;
+            /** @description Renovación posterior que la sustituye. */
+            sustituidaPor: number | null;
+            /**
+             * Format: date-time
+             * @description Fecha de registro (automática).
+             */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            version: number;
+            /** Format: date-time */
+            anuladoEn: string | null;
+            anuladoPor: string | null;
+            motivoAnulacion: string | null;
+        };
+        PaginatedRenovacionDto: {
+            data: components["schemas"]["RenovacionDto"][];
+            meta: components["schemas"]["PaginationMetaDto"];
+        };
+        ResumenVigenciasDto: {
+            /** @description Umbral de «próximo a caducar», en días. */
+            diasAviso: number;
+            vigentes: number;
+            proximas: number;
+            caducadas: number;
+            sinCaducidad: number;
+        };
+        CrearRenovacionDto: {
+            /**
+             * @description «Sistema»: activo operativo de GLPI.
+             * @example 5
+             */
+            activoId: number;
+            /**
+             * @example CONTRATO_SERVICIO
+             * @enum {string}
+             */
+            tipo: "LICENCIA" | "GARANTIA" | "CERTIFICADO" | "CONTRATO_SERVICIO" | "OTRO";
+            /**
+             * @description «Responsable»: persona encargada de gestionarla.
+             * @example ANALISTA 1
+             */
+            responsable: string;
+            /**
+             * Format: date
+             * @description «Fecha Planificada»: día previsto para renovar.
+             * @example 2026-01-25
+             */
+            fechaPlanificada: string;
+            /**
+             * Format: date
+             * @description Hasta cuándo vale HOY lo que se renueva. Obligatoria salvo sinCaducidadActual. Se conserva como referencia histórica.
+             * @example 2026-04-27
+             */
+            fechaCaducidadActual?: string;
+            /** @description true = sin caducidad conocida o aplicable (p. ej. licencia perpetua): exige justificarlo en la observación. */
+            sinCaducidadActual?: boolean;
+            /** @description «Observación». */
+            observacion?: string;
+        };
+        EditarPlanificacionDto: {
+            /**
+             * @description «Sistema»: activo operativo de GLPI.
+             * @example 5
+             */
+            activoId?: number;
+            /**
+             * @example CONTRATO_SERVICIO
+             * @enum {string}
+             */
+            tipo?: "LICENCIA" | "GARANTIA" | "CERTIFICADO" | "CONTRATO_SERVICIO" | "OTRO";
+            /**
+             * @description «Responsable»: persona encargada de gestionarla.
+             * @example ANALISTA 1
+             */
+            responsable?: string;
+            /**
+             * Format: date
+             * @description «Fecha Planificada»: día previsto para renovar.
+             * @example 2026-01-25
+             */
+            fechaPlanificada?: string;
+            /**
+             * Format: date
+             * @description Hasta cuándo vale HOY lo que se renueva. Obligatoria salvo sinCaducidadActual. Se conserva como referencia histórica.
+             * @example 2026-04-27
+             */
+            fechaCaducidadActual?: string;
+            /** @description true = sin caducidad conocida o aplicable (p. ej. licencia perpetua): exige justificarlo en la observación. */
+            sinCaducidadActual?: boolean;
+            /** @description «Observación». */
+            observacion?: string;
+            /** @description Por qué se modifica el registro y la evidencia que lo respalda. */
+            motivoCambio: string;
+        };
+        ActualizarEjecucionDto: {
+            /**
+             * Format: date
+             * @description «Fecha Ejecutada Renovación»: fecha REAL, la indica el usuario (puede ser histórica; no futura).
+             * @example 2026-04-27
+             */
+            fechaRenovacion?: string;
+            /**
+             * Format: date
+             * @description Hasta cuándo vale tras renovar: posterior a la renovación y a la caducidad actual. Obligatoria al cerrar salvo nuevaSinCaducidad.
+             * @example 2029-04-27
+             */
+            nuevaFechaCaducidad?: string;
+            /** @description true = la nueva vigencia no tiene caducidad: exige justificarlo en la observación. */
+            nuevaSinCaducidad?: boolean;
+            /**
+             * @description «Verificable».
+             * @example Informe de Satisfacción del Contrato de Renovación
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta o URL http(s).
+             * @example Carpeta Compartida TICs/Interno
+             */
+            repositorioVerificable?: string;
+            /**
+             * @description «Descripción»: detalle de la renovación realizada.
+             * @example El servidor fue migrado a la nube con el proveedor XXXXX.
+             */
+            descripcion?: string;
+            /** @description «Observación». */
+            observacion?: string;
+            /** @description Obligatorio si ya está CERRADA (mínimo 20 caracteres). */
+            motivoCambio?: string;
+        };
+        DatosEjecucionDto: {
+            /**
+             * Format: date
+             * @description «Fecha Ejecutada Renovación»: fecha REAL, la indica el usuario (puede ser histórica; no futura).
+             * @example 2026-04-27
+             */
+            fechaRenovacion?: string;
+            /**
+             * Format: date
+             * @description Hasta cuándo vale tras renovar: posterior a la renovación y a la caducidad actual. Obligatoria al cerrar salvo nuevaSinCaducidad.
+             * @example 2029-04-27
+             */
+            nuevaFechaCaducidad?: string;
+            /** @description true = la nueva vigencia no tiene caducidad: exige justificarlo en la observación. */
+            nuevaSinCaducidad?: boolean;
+            /**
+             * @description «Verificable».
+             * @example Informe de Satisfacción del Contrato de Renovación
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta o URL http(s).
+             * @example Carpeta Compartida TICs/Interno
+             */
+            repositorioVerificable?: string;
+            /**
+             * @description «Descripción»: detalle de la renovación realizada.
+             * @example El servidor fue migrado a la nube con el proveedor XXXXX.
+             */
+            descripcion?: string;
+            /** @description «Observación». */
+            observacion?: string;
+        };
+        ReabrirRenovacionDto: {
+            /** @example El proveedor anuló la factura: la renovación no se completó. */
             motivo: string;
         };
     };
@@ -5853,7 +6285,7 @@ export interface operations {
     TrazasController_listar: {
         parameters: {
             query: {
-                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
+                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
                 registroId: number;
             };
             header?: never;
@@ -8665,6 +9097,606 @@ export interface operations {
             };
             /** @description No está cerrada. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_findAll: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description «Sistema». */
+                activoId?: number;
+                /** @description Categoría del activo. */
+                categoriaId?: number;
+                tipo?: "LICENCIA" | "GARANTIA" | "CERTIFICADO" | "CONTRATO_SERVICIO" | "OTRO";
+                /** @description Estado del proceso. */
+                estado?: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
+                /** @description «Responsable» (contiene el texto). */
+                responsable?: string;
+                /** @description true = solo pendientes (ABIERTO o EN_PROGRESO); false = solo cerradas. */
+                pendientes?: boolean;
+                /** @description Vigencia del elemento (no el estado del proceso). */
+                vigencia?: "VIGENTE" | "PROXIMA" | "CADUCADA" | "SIN_CADUCIDAD" | "SUSTITUIDA";
+                /** @description Caduca desde este día (vigencia que rige hoy). */
+                caducaDesde?: string;
+                /** @description Caduca hasta este día (incluido). */
+                caducaHasta?: string;
+                /** @description Busca en el código y nombre del activo, la descripción y el verificable. */
+                q?: string;
+                /** @description false = oculta las anuladas. */
+                incluirAnulados?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedRenovacionDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_crear: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CrearRenovacionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Datos inválidos o activo inexistente/no operativo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Ese elemento ya tiene una renovación pendiente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_resumen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResumenVigenciasDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_caducidades: {
+        parameters: {
+            query?: {
+                /** @description Horizonte en días (por defecto, el umbral configurado). Incluye las ya caducadas. */
+                dias?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_editar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EditarPlanificacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_iniciar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_actualizarEjecucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActualizarEjecucionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_cerrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatosEjecucionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Falta algún dato obligatorio o las fechas no son coherentes. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_reabrir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReabrirRenovacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_anular: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    RenovacionesController_reversar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MotivoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RenovacionDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
