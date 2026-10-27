@@ -1,9 +1,9 @@
-import { Button, Group, Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
+import { Modal, Select, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
-import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
+import { BloqueEjecucionCierre } from '../../../shared/cierre/BloqueEjecucionCierre.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { instante } from '../../../shared/zona.ts'
 import { useCategorias } from '../../inventario/api/catalogos.ts'
@@ -116,40 +116,37 @@ function Formulario({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
         <Text size="sm" c="dimmed">
           Corrige lo realmente ejecutado. Lo planificado no cambia. {completada ? 'Al estar completada, solo un administrador puede hacerlo.' : ''}
         </Text>
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <DateTimePicker label="Fecha real de mantenimiento" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fechaInicio')} />
-          {completada && (
-            <DateTimePicker label="Fecha real de finalización" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fechaFin')} />
-          )}
-          <TextInput label="Persona encargada" {...form.getInputProps('tecnico')} />
-          <Select
-            label="Tipo realmente ejecutado"
-            data={tiposPermitidos(clase).map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
-            allowDeselect={false}
-            {...form.getInputProps('tipo')}
-          />
-          {completada && (
+        <BloqueEjecucionCierre
+          verificable={form.getInputProps('evidencia')}
+          repositorio={{ label: 'Repositorio del verificable', placeholder: 'Carpeta compartida o https://…', ...form.getInputProps('repositorioVerificable') }}
+          detalle={completada && <Textarea label="Descripción de la ejecución" autosize minRows={2} {...form.getInputProps('resultado')} />}
+          observacion={form.getInputProps('observaciones')}
+          motivoCambio={form.getInputProps('motivoCambio')}
+          volver={onClose}
+          guardar={{ etiqueta: 'Guardar corrección', cargando: corregir.isPending || corregir.isSuccess, deshabilitado: !form.isDirty(), principal: true }}
+        >
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <DateTimePicker label="Fecha real de mantenimiento" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fechaInicio')} />
+            {completada && (
+              <DateTimePicker label="Fecha real de finalización" valueFormat="DD MMM YYYY HH:mm" maxDate={ahoraLocal()} withAsterisk {...form.getInputProps('fechaFin')} />
+            )}
+            <TextInput label="Persona encargada" {...form.getInputProps('tecnico')} />
             <Select
-              label="Condición del equipo"
-              data={ESTADOS_EQUIPO.map((e) => ({ value: e, label: INFO_ESTADO_EQUIPO[e].etiqueta }))}
+              label="Tipo realmente ejecutado"
+              data={tiposPermitidos(clase).map((t) => ({ value: t, label: INFO_TIPO[t].etiqueta }))}
               allowDeselect={false}
-              {...form.getInputProps('estadoEquipo')}
+              {...form.getInputProps('tipo')}
             />
-          )}
-          <TextInput label="Verificable" {...form.getInputProps('evidencia')} />
-        </SimpleGrid>
-        <TextInput label="Repositorio del verificable" placeholder="Carpeta compartida o https://…" {...form.getInputProps('repositorioVerificable')} />
-        {completada && <Textarea label="Descripción de la ejecución" autosize minRows={2} {...form.getInputProps('resultado')} />}
-        <Textarea label="Observación" autosize minRows={1} {...form.getInputProps('observaciones')} />
-        <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={onClose}>
-            Volver
-          </Button>
-          <Button type="submit" loading={corregir.isPending || corregir.isSuccess} disabled={!form.isDirty()}>
-            Guardar corrección
-          </Button>
-        </Group>
+            {completada && (
+              <Select
+                label="Condición del equipo"
+                data={ESTADOS_EQUIPO.map((e) => ({ value: e, label: INFO_ESTADO_EQUIPO[e].etiqueta }))}
+                allowDeselect={false}
+                {...form.getInputProps('estadoEquipo')}
+              />
+            )}
+          </SimpleGrid>
+        </BloqueEjecucionCierre>
       </Stack>
     </form>
   )

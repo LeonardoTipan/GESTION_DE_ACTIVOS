@@ -1,7 +1,5 @@
 import {
-  Button,
   Divider,
-  Group,
   Modal,
   NumberInput,
   SegmentedControl,
@@ -15,6 +13,7 @@ import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../../shared/formato.ts'
+import { BloqueEjecucionCierre } from '../../../shared/cierre/BloqueEjecucionCierre.tsx'
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useFinalizarMantenimiento, type EstadoEquipo, type Mantenimiento } from '../api/mantenimientos.ts'
@@ -195,45 +194,41 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
 
         {/* Cierre de la ejecución: no hay fase posterior de verificación. */}
         <Divider label="Cierre de la ejecución" labelPosition="left" mt="xs" />
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-          <DateTimePicker
-            label="Fecha real de finalización"
-            description="Cuándo terminó efectivamente (no puede ser futura)"
-            placeholder="Elija fecha y hora"
-            valueFormat="DD MMM YYYY HH:mm"
-            minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
-            maxDate={ahoraLocal()}
-            withAsterisk
-            {...form.getInputProps('fechaFin')}
+        <BloqueEjecucionCierre
+          verificable={{
+            placeholder: 'Informe MT-2026-031',
+            description: 'Nombre del informe o acta que prueba la ejecución (no se almacenan archivos).',
+            ...form.getInputProps('evidencia'),
+          }}
+          repositorio={{
+            label: 'Repositorio del verificable',
+            placeholder: 'Carpeta Compartida TICs/Interno o https://…',
+            description: 'Carpeta compartida o URL http(s) donde está guardado.',
+            ...form.getInputProps('repositorioVerificable'),
+          }}
+          observacion={form.getInputProps('observaciones')}
+          volver={onClose}
+          cerrar={{ etiqueta: 'Marcar como completado', cargando: finalizar.isPending || finalizar.isSuccess, icono: false }}
+        >
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <DateTimePicker
+              label="Fecha real de finalización"
+              description="Cuándo terminó efectivamente (no puede ser futura)"
+              placeholder="Elija fecha y hora"
+              valueFormat="DD MMM YYYY HH:mm"
+              minDate={fechaInicio ? isoAFechaHoraLocal(fechaInicio) : undefined}
+              maxDate={ahoraLocal()}
+              withAsterisk
+              {...form.getInputProps('fechaFin')}
+            />
+          </SimpleGrid>
+          <CampoExcepcion
+            fuera={fuera}
+            value={form.values.motivoExcepcion}
+            onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
+            error={form.errors.motivoExcepcion as string | undefined}
           />
-          <TextInput
-            label="Verificable"
-            placeholder="Informe MT-2026-031"
-            description="Nombre del informe o acta que prueba la ejecución (no se almacenan archivos)."
-            {...form.getInputProps('evidencia')}
-          />
-        </SimpleGrid>
-        <CampoExcepcion
-          fuera={fuera}
-          value={form.values.motivoExcepcion}
-          onChange={(v) => form.setFieldValue('motivoExcepcion', v)}
-          error={form.errors.motivoExcepcion as string | undefined}
-        />
-        <TextInput
-          label="Repositorio del verificable"
-          placeholder="Carpeta Compartida TICs/Interno o https://…"
-          description="Carpeta compartida o URL http(s) donde está guardado."
-          {...form.getInputProps('repositorioVerificable')}
-        />
-        <Textarea label="Observación" autosize minRows={1} {...form.getInputProps('observaciones')} />
-        <Group justify="flex-end" mt="md">
-          <Button variant="default" onClick={onClose}>
-            Volver
-          </Button>
-          <Button type="submit" color="green" loading={finalizar.isPending || finalizar.isSuccess}>
-            Marcar como completado
-          </Button>
-        </Group>
+        </BloqueEjecucionCierre>
       </Stack>
     </form>
   )

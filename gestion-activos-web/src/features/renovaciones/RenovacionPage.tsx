@@ -2,8 +2,8 @@ import { Alert, Anchor, Breadcrumbs, Button, Card, Center, Group, Loader, Simple
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconCalendarEvent, IconChecklist, IconPencil } from '@tabler/icons-react'
-import type { ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
+import { Dato } from '../../shared/cierre/componentes.tsx'
 import { formatearFecha, formatearFechaHora } from '../../shared/formato.ts'
 import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
@@ -14,19 +14,6 @@ import { BadgeEstado, BadgeVigencia } from './componentes.tsx'
 import { Ejecucion } from './Ejecucion.tsx'
 import { PlanificacionModal } from './PlanificacionModal.tsx'
 import { INFO_ESTADO, INFO_TIPO } from './textos.ts'
-
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {children}
-      </Text>
-    </div>
-  )
-}
 
 /** Nombres de los campos, para las trazas (sin nombres internos). */
 const ETIQUETAS: Record<string, string> = {

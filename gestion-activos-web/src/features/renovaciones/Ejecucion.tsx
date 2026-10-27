@@ -1,85 +1,50 @@
-import { Alert, Anchor, Button, Card, Group, Modal, SimpleGrid, Stack, Switch, Text, Textarea, TextInput, Title } from '@mantine/core'
+import { Alert, Button, Card, Group, SimpleGrid, Stack, Switch, Text, Textarea, Title } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconCircleCheck, IconDeviceFloppy, IconEdit, IconPlayerPlay, IconRotateClockwise } from '@tabler/icons-react'
-import { useState, type ReactNode } from 'react'
+import { IconEdit, IconPlayerPlay, IconRotateClockwise } from '@tabler/icons-react'
+import { useState } from 'react'
+import { BloqueEjecucionCierre } from '../../shared/cierre/BloqueEjecucionCierre.tsx'
+import { avisoExito as aviso, avisoFallo as fallo } from '../../shared/cierre/avisos.ts'
+import { Dato, EnlaceRepositorio as Repositorio, ModalReabrir } from '../../shared/cierre/componentes.tsx'
 import { errorRepositorio } from '../../shared/evidencia.ts'
 import { formatearFecha, hoyLocal, isoADia } from '../../shared/formato.ts'
-import { CampoMotivoCambio } from '../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../shared/registro/registro.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import { useCerrar, useGuardarEjecucion, useIniciar, useReabrir, type Renovacion } from './api.ts'
 import { BadgeEstado, BadgeVigencia } from './componentes.tsx'
 import { accionesPermitidas, faltantesCierre } from './textos.ts'
 
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {children}
-      </Text>
-    </div>
-  )
-}
-
-/** Repositorio: si es una URL http(s), enlace; si es una carpeta, texto. */
-function Repositorio({ valor }: { valor: string | null }) {
-  if (!valor) return <>—</>
-  return /^https?:\/\//i.test(valor) ? (
-    <Anchor href={valor} target="_blank" rel="noopener noreferrer" size="sm">
-      {valor}
-    </Anchor>
-  ) : (
-    <>{valor}</>
-  )
-}
-
-const aviso = (titulo: string, mensaje: string) => notifications.show({ color: 'green', title: titulo, message: mensaje })
-const fallo = (titulo: string) => (e: Error) => notifications.show({ color: 'red', title: titulo, message: e.message })
-
 /** CERRADO → EN_PROGRESO con motivo (las fechas anteriores quedan en la auditoría). */
 function ReabrirModal({ r, opened, onClose }: { r: Renovacion; opened: boolean; onClose: () => void }) {
   const reabrir = useReabrir()
-  const form = useForm({ initialValues: { motivo: '' }, validate: { motivo: errorMotivo } })
   return (
-    <Modal opened={opened} onClose={onClose} title="Reabrir la renovación">
-      <form
-        onSubmit={form.onSubmit(({ motivo }) =>
-          reabrir.mutate(
-            { id: r.id, motivo: motivo.trim() },
-            {
-              onSuccess: () => {
-                aviso('Renovación reabierta', 'Vuelve a En progreso; la ejecución anterior queda en la auditoría.')
-                form.reset()
-                onClose()
-              },
-              onError: fallo('No se pudo reabrir'),
+    <ModalReabrir
+      abierto={opened}
+      onCerrar={onClose}
+      titulo="Reabrir la renovación"
+      explicacion={
+        <>
+          Vuelve a <b>En progreso</b>. Se vacían la fecha de renovación y la nueva caducidad vigentes; las anteriores, con
+          quién las registró, se conservan en la auditoría.
+        </>
+      }
+      validar={errorMotivo}
+      enviando={reabrir.isPending}
+      onConfirmar={(motivo) =>
+        reabrir.mutate(
+          { id: r.id, motivo },
+          {
+            onSuccess: () => {
+              aviso('Renovación reabierta', 'Vuelve a En progreso; la ejecución anterior queda en la auditoría.')
+              onClose()
             },
-          ),
-        )}
-      >
-        <Stack gap="sm">
-          <Text size="sm">
-            Vuelve a <b>En progreso</b>. Se vacían la fecha de renovación y la nueva caducidad vigentes; las anteriores, con
-            quién las registró, se conservan en la auditoría.
-          </Text>
-          <Textarea label="Motivo" withAsterisk autosize minRows={2} {...form.getInputProps('motivo')} />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
-              Volver
-            </Button>
-            <Button type="submit" color="orange" loading={reabrir.isPending}>
-              Reabrir
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
+            onError: fallo('No se pudo reabrir'),
+          },
+        )
+      }
+    />
   )
 }
 
@@ -169,7 +134,15 @@ function FormEjecucion({ r, correccion, onListo }: { r: Renovacion; correccion: 
 
   return (
     <form onSubmit={enviar} noValidate>
-      <Stack gap="sm">
+      <BloqueEjecucionCierre
+        verificable={{ description: 'Contrato, factura, certificado renovado o informe', placeholder: 'Informe de Satisfacción del Contrato de Renovación', ...form.getInputProps('evidencia') }}
+        repositorio={{ description: 'Carpeta compartida o URL http(s) (no se guardan archivos)', placeholder: 'Carpeta Compartida TICs/Interno', ...form.getInputProps('repositorioVerificable') }}
+        detalle={<Textarea label="Descripción" description="Detalle de la renovación realizada" autosize minRows={2} {...form.getInputProps('descripcion')} />}
+        observacion={form.getInputProps('observacion')}
+        motivoCambio={correccion ? form.getInputProps('motivoCambio') : undefined}
+        guardar={{ etiqueta: correccion ? 'Guardar corrección' : 'Guardar sin cerrar', cargando: guardar.isPending, deshabilitado: !form.isDirty(), principal: correccion }}
+        cerrar={correccion ? undefined : { etiqueta: 'Cerrar renovación', cargando: cerrar.isPending, onClick: cerrarRenovacion }}
+      >
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <DatePickerInput
             label="Fecha real de renovación"
@@ -200,24 +173,7 @@ function FormEjecucion({ r, correccion, onListo }: { r: Renovacion; correccion: 
             if (e.currentTarget.checked) form.setFieldValue('nuevaFechaCaducidad', null)
           }}
         />
-        <SimpleGrid cols={{ base: 1, sm: 2 }}>
-          <TextInput label="Verificable" description="Contrato, factura, certificado renovado o informe" placeholder="Informe de Satisfacción del Contrato de Renovación" {...form.getInputProps('evidencia')} />
-          <TextInput label="Repositorio verificable" description="Carpeta compartida o URL http(s) (no se guardan archivos)" placeholder="Carpeta Compartida TICs/Interno" {...form.getInputProps('repositorioVerificable')} />
-        </SimpleGrid>
-        <Textarea label="Descripción" description="Detalle de la renovación realizada" autosize minRows={2} {...form.getInputProps('descripcion')} />
-        <Textarea label="Observación" autosize minRows={1} {...form.getInputProps('observacion')} />
-        {correccion && <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />}
-        <Group justify="flex-end">
-          <Button type="submit" variant={correccion ? 'filled' : 'default'} leftSection={<IconDeviceFloppy size={16} />} loading={guardar.isPending} disabled={!form.isDirty()}>
-            {correccion ? 'Guardar corrección' : 'Guardar sin cerrar'}
-          </Button>
-          {!correccion && (
-            <Button color="green" leftSection={<IconCircleCheck size={16} />} loading={cerrar.isPending} onClick={cerrarRenovacion}>
-              Cerrar renovación
-            </Button>
-          )}
-        </Group>
-      </Stack>
+      </BloqueEjecucionCierre>
     </form>
   )
 }

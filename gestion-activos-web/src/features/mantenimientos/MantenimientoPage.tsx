@@ -17,8 +17,8 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconCheck, IconEdit, IconPencil, IconPlayerPlay, IconX } from '@tabler/icons-react'
-import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router'
+import { Dato, EnlaceRepositorio } from '../../shared/cierre/componentes.tsx'
 import { formatearDia, formatearFechaHora } from '../../shared/formato.ts'
 import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
@@ -79,19 +79,6 @@ function paso(estado: EstadoPaso, etiqueta: string, descripcion: string) {
     }
   }
   return { label: etiqueta, description: estado === 'completado' ? descripcion : undefined }
-}
-
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm">
-        {children}
-      </Text>
-    </div>
-  )
 }
 
 /** Botones de transición: solo los que permite la fase y solo para quien puede operar. */
@@ -351,13 +338,7 @@ export function MantenimientoPage() {
           )}
           {m.repositorioVerificable && (
             <Dato etiqueta="Repositorio del verificable">
-              {/^https?:\/\//i.test(m.repositorioVerificable) ? (
-                <Anchor href={m.repositorioVerificable} target="_blank" rel="noopener noreferrer">
-                  {m.repositorioVerificable}
-                </Anchor>
-              ) : (
-                m.repositorioVerificable
-              )}
+              <EnlaceRepositorio valor={m.repositorioVerificable} />
             </Dato>
           )}
           {m.diagnostico && <Dato etiqueta="Diagnóstico">{m.diagnostico}</Dato>}

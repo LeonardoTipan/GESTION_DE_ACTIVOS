@@ -3,8 +3,10 @@ import { DateTimePicker } from '@mantine/dates'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconArrowBackUp, IconCheck, IconHourglass, IconPencil } from '@tabler/icons-react'
-import { useState, type ReactNode } from 'react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
+import { BloqueEjecucionCierre } from '../../shared/cierre/BloqueEjecucionCierre.tsx'
+import { Dato, ModalReabrir } from '../../shared/cierre/componentes.tsx'
 import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../shared/formato.ts'
 import { instante } from '../../shared/zona.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
@@ -19,19 +21,6 @@ import {
 import { SolicitudFormModal } from './SolicitudFormModal.tsx'
 import { atencionesAnteriores, ESTADO, nombreCampo, solicitante, TIPO_ACCESO, TIPO_SOLICITUD, valorLegible } from './textos.ts'
 
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {children}
-      </Text>
-    </div>
-  )
-}
-
 const aviso = (titulo: string, cerrar?: () => void) => ({
   onSuccess: (s: Solicitud) => {
     notifications.show({ color: 'green', title: titulo, message: `${s.codigoUnico} · queda en el historial.` })
@@ -39,53 +28,6 @@ const aviso = (titulo: string, cerrar?: () => void) => ({
   },
   onError: (e: Error) => notifications.show({ color: 'red', title: 'No se pudo completar', message: e.message }),
 })
-
-/** Motivo obligatorio con mínimo (reabrir). */
-function MotivoModal({
-  abierto,
-  onCerrar,
-  titulo,
-  explicacion,
-  enviando,
-  onConfirmar,
-}: {
-  abierto: boolean
-  onCerrar: () => void
-  titulo: string
-  explicacion: string
-  enviando: boolean
-  onConfirmar: (motivo: string) => void
-}) {
-  const [texto, setTexto] = useState('')
-  const [tocado, setTocado] = useState(false)
-  const error = texto.trim().length < 20 ? 'Mínimo 20 caracteres.' : null
-  return (
-    <Modal opened={abierto} onClose={onCerrar} title={titulo} size="lg">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          setTocado(true)
-          if (!error) onConfirmar(texto.trim())
-        }}
-      >
-        <Stack gap="sm">
-          <Text size="sm" c="dimmed">
-            {explicacion}
-          </Text>
-          <Textarea label="Motivo de la reapertura" withAsterisk autosize minRows={3} value={texto} onChange={(e) => setTexto(e.currentTarget.value)} error={tocado ? error : null} />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onCerrar}>
-              Volver
-            </Button>
-            <Button type="submit" color="orange" loading={enviando}>
-              Reabrir
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
-  )
-}
 
 /**
  * Cerrar: la fecha y hora REALES de la atención las indica quien cierra (puede
@@ -115,7 +57,8 @@ function CerrarModal({ abierto, onCerrar, solicitud: s }: { abierto: boolean; on
           cerrar.mutate({ id: s.id, datos: { fechaAtendido: fechaHoraLocalAIso(fecha!), resolucion: resolucion.trim() } }, aviso('Solicitud cerrada', onCerrar))
         }}
       >
-        <Stack gap="sm">
+        {/* Sin verificable ni repositorio: el cierre de una solicitud es la fecha atendida y la resolución. */}
+        <BloqueEjecucionCierre volver={onCerrar} cerrar={{ etiqueta: 'Cerrar solicitud', cargando: cerrar.isPending || cerrar.isSuccess, icono: false }}>
           <Text size="sm" c="dimmed">
             {baja
               ? 'Desvinculación de acceso (BAJA): describa cómo se retiró el acceso. El activo no se modifica.'
@@ -133,15 +76,7 @@ function CerrarModal({ abierto, onCerrar, solicitud: s }: { abierto: boolean; on
             error={tocado ? errorFecha : null}
           />
           <Textarea label="Resolución" withAsterisk autosize minRows={3} value={resolucion} onChange={(e) => setResolucion(e.currentTarget.value)} error={tocado ? errorResolucion : null} />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onCerrar}>
-              Volver
-            </Button>
-            <Button type="submit" color="green" loading={cerrar.isPending || cerrar.isSuccess}>
-              Cerrar solicitud
-            </Button>
-          </Group>
-        </Stack>
+        </BloqueEjecucionCierre>
       </form>
     </Modal>
   )
@@ -368,11 +303,13 @@ export function ControlAccesoDetallePage() {
 
       <SolicitudFormModal abierto={editando} onCerrar={edicion.close} solicitud={s} />
       <CerrarModal abierto={cerrando} onCerrar={cierre.close} solicitud={s} />
-      <MotivoModal
+      <ModalReabrir
         abierto={reabriendo}
         onCerrar={reapertura.close}
         titulo={`Reabrir ${s.codigoUnico}`}
         explicacion="Vuelve a «Pendiente» y queda sin fecha atendida ni resolución. La atención anterior no se pierde: se conserva en el historial y se muestra en «Atenciones anteriores»."
+        etiqueta="Motivo de la reapertura"
+        validar={(m) => (m.trim().length < 20 ? 'Mínimo 20 caracteres.' : m.trim().length > 2000 ? 'Máximo 2000 caracteres.' : null)}
         enviando={reabrir.isPending}
         onConfirmar={(motivo) => reabrir.mutate({ id: s.id, motivo }, aviso('Solicitud reabierta', reapertura.close))}
       />

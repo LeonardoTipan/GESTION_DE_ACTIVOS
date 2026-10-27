@@ -17,8 +17,8 @@ import {
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconExternalLink, IconPencil, IconShieldCheck, IconShieldSearch } from '@tabler/icons-react'
-import type { ReactNode } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
+import { Dato } from '../../shared/cierre/componentes.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
@@ -29,19 +29,6 @@ import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { EditarVulnerabilidadModal } from './componentes/EditarVulnerabilidadModal.tsx'
 import { Remediacion } from './componentes/Remediacion.tsx'
 import { admiteEdicion, INFO_ESTADO } from './riesgo.ts'
-
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {children}
-      </Text>
-    </div>
-  )
-}
 
 /** Nombres de los campos, para las trazas. */
 const ETIQUETAS_VULNERABILIDAD: Record<string, string> = {

@@ -1,13 +1,15 @@
-import { Alert, Anchor, Button, Card, Group, Modal, SimpleGrid, Stack, Text, Textarea, TextInput, Title } from '@mantine/core'
+import { Alert, Button, Card, Group, Modal, SimpleGrid, Stack, Text, Title } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
-import { IconCircleCheck, IconDeviceFloppy, IconEdit, IconPlayerPlay, IconRotateClockwise } from '@tabler/icons-react'
-import { useState, type ReactNode } from 'react'
+import { IconEdit, IconPlayerPlay, IconRotateClockwise } from '@tabler/icons-react'
+import { useState } from 'react'
+import { BloqueEjecucionCierre } from '../../../shared/cierre/BloqueEjecucionCierre.tsx'
+import { avisoExito as aviso, avisoFallo as fallo } from '../../../shared/cierre/avisos.ts'
+import { Dato, EnlaceRepositorio as Repositorio, ModalReabrir } from '../../../shared/cierre/componentes.tsx'
 import { errorRepositorio } from '../../../shared/evidencia.ts'
 import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
-import { CampoMotivoCambio } from '../../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { instante } from '../../../shared/zona.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../../auth/use-puede.ts'
@@ -20,34 +22,6 @@ import {
 } from '../api/vulnerabilidades.ts'
 import { accionesPermitidas, faltantesParaRemediar } from '../riesgo.ts'
 import { BadgeEstado, BadgeSla } from './Badges.tsx'
-
-function Dato({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
-  return (
-    <div>
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {etiqueta}
-      </Text>
-      <Text component="div" size="sm" style={{ whiteSpace: 'pre-wrap' }}>
-        {children}
-      </Text>
-    </div>
-  )
-}
-
-/** Repositorio: si es una URL http(s), enlace; si es una carpeta, texto (no se expone nada más). */
-function Repositorio({ valor }: { valor: string | null }) {
-  if (!valor) return <>—</>
-  return /^https?:\/\//i.test(valor) ? (
-    <Anchor href={valor} target="_blank" rel="noopener noreferrer" size="sm">
-      {valor}
-    </Anchor>
-  ) : (
-    <>{valor}</>
-  )
-}
-
-const aviso = (titulo: string, mensaje: string) => notifications.show({ color: 'green', title: titulo, message: mensaje })
-const fallo = (titulo: string) => (e: Error) => notifications.show({ color: 'red', title: titulo, message: e.message })
 
 /** ABIERTO → EN_PROGRESO, con el inicio real opcional. */
 function IniciarModal({ v, opened, onClose }: { v: Vulnerabilidad; opened: boolean; onClose: () => void }) {
@@ -98,41 +72,33 @@ function IniciarModal({ v, opened, onClose }: { v: Vulnerabilidad; opened: boole
 /** REMEDIADO → EN_PROGRESO con motivo (la fecha anterior queda en la auditoría). */
 function ReabrirModal({ v, opened, onClose }: { v: Vulnerabilidad; opened: boolean; onClose: () => void }) {
   const reabrir = useReabrir()
-  const form = useForm({ initialValues: { motivo: '' }, validate: { motivo: errorMotivo } })
   return (
-    <Modal opened={opened} onClose={onClose} title="Reabrir la vulnerabilidad">
-      <form
-        onSubmit={form.onSubmit(({ motivo }) =>
-          reabrir.mutate(
-            { id: v.id, motivo: motivo.trim() },
-            {
-              onSuccess: () => {
-                aviso('Vulnerabilidad reabierta', 'Vuelve a En progreso; la remediación anterior queda en la auditoría.')
-                form.reset()
-                onClose()
-              },
-              onError: fallo('No se pudo reabrir'),
+    <ModalReabrir
+      abierto={opened}
+      onCerrar={onClose}
+      titulo="Reabrir la vulnerabilidad"
+      explicacion={
+        <>
+          Vuelve a <b>En progreso</b>. La fecha de remediación vigente se vacía; la anterior, con quién la registró, se
+          conserva en la auditoría.
+        </>
+      }
+      validar={errorMotivo}
+      placeholder="El escaneo vuelve a detectar la versión vulnerable."
+      enviando={reabrir.isPending}
+      onConfirmar={(motivo) =>
+        reabrir.mutate(
+          { id: v.id, motivo },
+          {
+            onSuccess: () => {
+              aviso('Vulnerabilidad reabierta', 'Vuelve a En progreso; la remediación anterior queda en la auditoría.')
+              onClose()
             },
-          ),
-        )}
-      >
-        <Stack gap="sm">
-          <Text size="sm">
-            Vuelve a <b>En progreso</b>. La fecha de remediación vigente se vacía; la anterior, con quién la registró, se
-            conserva en la auditoría.
-          </Text>
-          <Textarea label="Motivo" withAsterisk autosize minRows={2} placeholder="El escaneo vuelve a detectar la versión vulnerable." {...form.getInputProps('motivo')} />
-          <Group justify="flex-end">
-            <Button variant="default" onClick={onClose}>
-              Volver
-            </Button>
-            <Button type="submit" color="orange" loading={reabrir.isPending}>
-              Reabrir
-            </Button>
-          </Group>
-        </Stack>
-      </form>
-    </Modal>
+            onError: fallo('No se pudo reabrir'),
+          },
+        )
+      }
+    />
   )
 }
 
@@ -211,7 +177,18 @@ function FormRemediacion({ v, correccion, onListo }: { v: Vulnerabilidad; correc
 
   return (
     <form onSubmit={guardar} noValidate>
-      <Stack gap="sm">
+      <BloqueEjecucionCierre
+        verificable={{ description: 'Informe o documento que prueba la remediación', placeholder: 'Informe de Mitigación de Amenazas y Vulnerabilidades 01', ...form.getInputProps('evidencia') }}
+        repositorio={{
+          description: 'Carpeta compartida o URL http(s) donde está la evidencia (la aplicación no guarda archivos)',
+          placeholder: 'Carpeta Compartida TICs/Vulnerabilidades/2026',
+          ...form.getInputProps('repositorioVerificable'),
+        }}
+        observacion={{ description: 'Acciones realizadas, detalles técnicos, limitaciones', minRows: 2, ...form.getInputProps('observacion') }}
+        motivoCambio={correccion ? form.getInputProps('motivoCambio') : undefined}
+        guardar={{ etiqueta: correccion ? 'Guardar corrección' : 'Guardar sin cerrar', cargando: actualizar.isPending, deshabilitado: !form.isDirty(), principal: correccion }}
+        cerrar={correccion ? undefined : { etiqueta: 'Marcar como remediada', cargando: remediar.isPending, onClick: marcarRemediada }}
+      >
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <DateTimePicker
             label="Fecha de remediación"
@@ -223,38 +200,8 @@ function FormRemediacion({ v, correccion, onListo }: { v: Vulnerabilidad; correc
             minDate={deteccion}
             {...form.getInputProps('fechaRemediacion')}
           />
-          <TextInput
-            label="Verificable"
-            description="Informe o documento que prueba la remediación"
-            placeholder="Informe de Mitigación de Amenazas y Vulnerabilidades 01"
-            {...form.getInputProps('evidencia')}
-          />
         </SimpleGrid>
-        <TextInput
-          label="Repositorio verificable"
-          description="Carpeta compartida o URL http(s) donde está la evidencia (la aplicación no guarda archivos)"
-          placeholder="Carpeta Compartida TICs/Vulnerabilidades/2026"
-          {...form.getInputProps('repositorioVerificable')}
-        />
-        <Textarea
-          label="Observación"
-          description="Acciones realizadas, detalles técnicos, limitaciones"
-          autosize
-          minRows={2}
-          {...form.getInputProps('observacion')}
-        />
-        {correccion && <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />}
-        <Group justify="flex-end">
-          <Button type="submit" variant={correccion ? 'filled' : 'default'} leftSection={<IconDeviceFloppy size={16} />} loading={actualizar.isPending} disabled={!form.isDirty()}>
-            {correccion ? 'Guardar corrección' : 'Guardar sin cerrar'}
-          </Button>
-          {!correccion && (
-            <Button color="green" leftSection={<IconCircleCheck size={16} />} loading={remediar.isPending} onClick={marcarRemediada}>
-              Marcar como remediada
-            </Button>
-          )}
-        </Group>
-      </Stack>
+      </BloqueEjecucionCierre>
     </form>
   )
 }
