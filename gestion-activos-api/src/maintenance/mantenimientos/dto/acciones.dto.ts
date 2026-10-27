@@ -299,25 +299,13 @@ export class FinalizarMantenimientoDto {
   @IsString()
   @MaxLength(2000)
   motivoExcepcion?: string;
-
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: inicio previsto de la verificación (no anterior al fin).' })
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  verificacionPrevista?: Date;
-
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Capa 3: límite previsto de la verificación.' })
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  verificacionLimite?: Date;
 }
 
-/** Ampliación formal del plazo de la ejecución o de la verificación (solo admin). */
+/** Ampliación formal del plazo de la ejecución (solo admin). No hay fase de verificación. */
 export class AmpliarPlazoMantenimientoDto extends AmpliarPlazoDto {
-  @ApiProperty({ enum: ['EJECUCION', 'VERIFICACION'] })
-  @IsIn(['EJECUCION', 'VERIFICACION'])
-  campo: 'EJECUCION' | 'VERIFICACION';
+  @ApiProperty({ enum: ['EJECUCION'] })
+  @IsIn(['EJECUCION'])
+  campo: 'EJECUCION';
 }
 
 /** Cancelar: PROGRAMADO o EN_EJECUCION → CANCELADO. */

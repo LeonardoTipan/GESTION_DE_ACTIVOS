@@ -58,14 +58,6 @@ export class QueryMantenimientosDto extends PaginationQueryDto {
   @Min(1)
   planId?: number;
 
-  @ApiPropertyOptional({
-    enum: ['PENDIENTE_VERIFICACION', 'CERRADO'],
-    description: 'Finalizados sin verificar, o cerrados como operativos.',
-  })
-  @IsOptional()
-  @IsIn(['PENDIENTE_VERIFICACION', 'CERRADO'])
-  cierre?: 'PENDIENTE_VERIFICACION' | 'CERRADO';
-
   @ApiPropertyOptional({ enum: TipoMantenimiento })
   @IsOptional()
   @IsEnum(TipoMantenimiento)

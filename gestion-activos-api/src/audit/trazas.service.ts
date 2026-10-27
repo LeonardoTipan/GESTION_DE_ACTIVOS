@@ -17,9 +17,6 @@ export const ENTIDADES = {
   VULNERABILIDAD: { modelo: 'vulnerabilidad', nombre: 'La vulnerabilidad' },
   RENOVACION: { modelo: 'renovacion', nombre: 'La renovación' },
   PLAN_MANTENIMIENTO: { modelo: 'planMantenimiento', nombre: 'El plan de mantenimiento' },
-  VERIFICACION_MANTENIMIENTO: { modelo: 'verificacionMantenimiento', nombre: 'La verificación del mantenimiento' },
-  ACCION_REMEDIACION: { modelo: 'accionRemediacion', nombre: 'La acción de remediación' },
-  VERIFICACION_VULNERABILIDAD: { modelo: 'verificacionVulnerabilidad', nombre: 'La verificación de la vulnerabilidad' },
 } as const;
 export type Entidad = keyof typeof ENTIDADES;
 export const NOMBRES_ENTIDAD = Object.keys(ENTIDADES) as Entidad[];

@@ -30,23 +30,3 @@ export function siguienteFecha(fecha: Date, frecuencia: FrecuenciaMantenimiento)
     ),
   );
 }
-
-/** Estado de cierre de un mantenimiento según su última verificación vigente. */
-export type CierreMantenimiento =
-  | 'NO_APLICA'
-  | 'PENDIENTE_VERIFICACION'
-  | 'CERRADO'
-  | 'EN_SEGUIMIENTO'
-  | 'NO_SATISFACTORIO';
-
-export function cierreDe(
-  fase: string,
-  verificaciones: { resultado: string; anuladoEn: Date | null }[],
-): CierreMantenimiento {
-  if (fase !== 'FINALIZADO') return 'NO_APLICA';
-  const ultima = verificaciones.filter((v) => !v.anuladoEn).at(-1);
-  if (!ultima) return 'PENDIENTE_VERIFICACION';
-  if (ultima.resultado === 'OPERATIVO') return 'CERRADO';
-  if (ultima.resultado === 'REQUIERE_SEGUIMIENTO') return 'EN_SEGUIMIENTO';
-  return 'NO_SATISFACTORIO';
-}

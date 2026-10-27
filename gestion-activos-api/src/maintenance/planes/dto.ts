@@ -34,7 +34,6 @@ import {
 import {
   EstadoPlan,
   FrecuenciaMantenimiento,
-  ResultadoVerificacionMantenimiento,
   TipoMantenimiento,
 } from '../../generated/prisma/enums.js';
 
@@ -191,8 +190,6 @@ export class ProgramarDesdePlanDto {
   adicional?: boolean;
 }
 
-// ── Capa 3 · Verificación y cierre ──────────────────────────────────────────
-
 /** Resultado de programar desde el plan. */
 export class ProgramacionDesdePlanDto {
   @ApiProperty({ description: 'Mantenimiento creado (fase PROGRAMADO).' })
@@ -200,61 +197,6 @@ export class ProgramacionDesdePlanDto {
 
   @ApiProperty({ type: () => PlanMantenimientoDto, description: 'El plan, con la próxima fecha ya adelantada.' })
   plan: PlanMantenimientoDto;
-}
-
-export class RegistrarVerificacionMantenimientoDto {
-  @ApiProperty({ type: String, format: 'date-time' })
-  @Type(() => Date)
-  @IsDate()
-  fecha: Date;
-
-  @ApiProperty({
-    enum: ResultadoVerificacionMantenimiento,
-    description: 'OPERATIVO cierra el mantenimiento; REQUIERE_SEGUIMIENTO lo deja abierto; NO_SATISFACTORIO avisa.',
-  })
-  @IsEnum(ResultadoVerificacionMantenimiento)
-  resultado: ResultadoVerificacionMantenimiento;
-
-  @ApiProperty({ example: 'Equipo encendido 2 h sin incidencias; temperatura normal.' })
-  @Trim()
-  @IsString()
-  @MinLength(10)
-  @MaxLength(2000)
-  observaciones: string;
-
-  @ApiPropertyOptional({ example: 'Acta MT-2026-031', description: 'Obligatoria para cerrar como OPERATIVO.' })
-  @IsOptional()
-  @Trim()
-  @IsString()
-  @MaxLength(191)
-  evidencia?: string;
-
-  @ApiPropertyOptional({ description: 'Fuera de la ventana prevista de verificación: justificación (solo admin).' })
-  @IsOptional()
-  @IsString()
-  @MaxLength(2000)
-  motivoExcepcion?: string;
-
-  @ApiProperty({ example: 'Mesa de Servicios' })
-  @Trim()
-  @IsString()
-  @MinLength(1)
-  @MaxLength(191)
-  responsable: string;
-}
-
-export class VerificacionMantenimientoDto extends RegistroDto {
-  @ApiProperty() id: number;
-  @ApiProperty() mantenimientoId: number;
-  @ApiProperty({ type: String, format: 'date-time' }) fecha: Date;
-  @ApiProperty({ enum: ResultadoVerificacionMantenimiento }) resultado: ResultadoVerificacionMantenimiento;
-  @ApiProperty() observaciones: string;
-  @ApiProperty({ type: String, nullable: true }) evidencia: string | null;
-  @ApiProperty() responsable: string;
-  @ApiProperty() registradoPor: string;
-  @ApiProperty() fueraDePlazo: boolean;
-  @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
-  @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
 }
 
 // ── Tablero ─────────────────────────────────────────────────────────────────
@@ -279,7 +221,4 @@ export class TableroMantenimientosDto {
   ejemplosSinPlan: ActivoBreveDto[];
 
   @ApiProperty() planesVencidos: number;
-
-  @ApiProperty({ description: 'Finalizados que esperan su verificación.' })
-  pendientesVerificacion: number;
 }

@@ -113,27 +113,26 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       expect(trazas.body[0].motivo).toContain('Ampliación del plazo de ejecución');
     });
 
-    it('capa 3: verificación con su propia ventana (distinta de la ejecución), fuera de ella exige excepción', async () => {
+    it('solo dos fases: completar cierra; la API ya no ofrece la antigua verificación ni su plazo', async () => {
       const { id } = (await programar(ahora - 3 * DIA, ahora - 2 * DIA).expect(201)).body;
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: iso(ahora - 3 * DIA + HORA), tecnico: 'jperez' }).expect(200);
-      // Fin el día previsto; la verificación se programa para DESPUÉS del límite de la ejecución.
+      const fin = { fechaFin: iso(ahora - 3 * DIA + 3 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'OPERATIVO', diagnostico: 'Fuente quemada.', duracionMin: 120 };
+      // La ventana de verificación ya no es un campo de la API (whitelist estricta → 400).
       await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/finalizar`, {
-          fechaFin: iso(ahora - 3 * DIA + 3 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'OPERATIVO', diagnostico: 'Fuente quemada.', duracionMin: 120,
-          verificacionPrevista: iso(ahora - DIA), verificacionLimite: iso(ahora + DIA),
-        })
-        .expect(200);
-      // Una ventana ya programada y sin usar es plan: el analista no la mueve (403); el admin sí, con un intervalo válido.
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - DIA), limite: iso(ahora + 2 * DIA) }).expect(403);
-      await api(tokens.admin).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - DIA), limite: iso(ahora - 2 * DIA) }).expect(400);
-      // Fuera de su ventana (antes de la prevista) → 409.
-      await api(tokens.analista)
-        .post(`/api/mantenimientos/${id}/verificaciones`, { fecha: iso(ahora - 2 * DIA), resultado: 'OPERATIVO', observaciones: 'Equipo enciende bien.', evidencia: 'Acta 1', responsable: 'Supervisor' })
-        .expect(409);
-      const v = await api(tokens.analista)
-        .post(`/api/mantenimientos/${id}/verificaciones`, { fecha: iso(ahora - HORA), resultado: 'OPERATIVO', observaciones: 'Equipo enciende bien.', evidencia: 'Acta 1', responsable: 'Supervisor' })
-        .expect(201);
-      expect(v.body.fueraDePlazo).toBe(false);
+        .patch(`/api/mantenimientos/${id}/finalizar`, { ...fin, verificacionPrevista: iso(ahora - DIA), verificacionLimite: iso(ahora + DIA) })
+        .expect(400);
+      const res = await api(tokens.analista).patch(`/api/mantenimientos/${id}/finalizar`, fin).expect(200);
+      expect(res.body.fase).toBe('FINALIZADO');
+      expect(res.body).not.toHaveProperty('cierre');
+      // Rutas y opciones retiradas.
+      const cuerpo = { fecha: iso(ahora - HORA), resultado: 'OPERATIVO', observaciones: 'Equipo enciende bien.', evidencia: 'Acta 1', responsable: 'Supervisor' };
+      await api(tokens.analista).post(`/api/mantenimientos/${id}/verificaciones`, cuerpo).expect(404);
+      await api(tokens.auditor).get(`/api/mantenimientos/${id}/verificaciones`).expect(404);
+      await api(tokens.admin).post('/api/mantenimientos/verificaciones/1/anular', { motivo: MOTIVO }).expect(404);
+      await api(tokens.admin).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - HORA), limite: iso(ahora + DIA) }).expect(404);
+      await api(tokens.admin).patch(`/api/mantenimientos/${id}/plazo`, { campo: 'VERIFICACION', nuevoLimite: iso(ahora + DIA), motivo: MOTIVO }).expect(400);
+      await api(tokens.auditor).get('/api/mantenimientos?cierre=PENDIENTE_VERIFICACION').expect(400);
+      expect(await prisma.verificacionMantenimiento.count({ where: { mantenimientoId: id } })).toBe(0);
 
       // Agenda: previsto y real son eventos distintos, con las fechas guardadas.
       const capa2 = await agenda('mantenimientos', 2, ahora - 5 * DIA, ahora + DIA);
@@ -141,22 +140,6 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       expect(real).toMatchObject({ tipo: 'REAL', estado: 'COMPLETADO', inicio: iso(ahora - 3 * DIA + HORA), fin: iso(ahora - 3 * DIA + 3 * HORA) });
       // El mantenimiento tiene solo dos fases: la agenda no tiene capa de verificación.
       expect(await agenda('mantenimientos', 3, ahora - 5 * DIA, ahora + DIA)).toEqual([]);
-    }, LENTO);
-
-    it('tras una verificación que no lo cierra, el analista programa la siguiente (la ventana ya se usó)', async () => {
-      const { id } = (await programar(ahora - 3 * DIA, ahora - 2 * DIA).expect(201)).body;
-      await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: iso(ahora - 3 * DIA + HORA), tecnico: 'jperez' }).expect(200);
-      await api(tokens.analista)
-        .patch(`/api/mantenimientos/${id}/finalizar`, {
-          fechaFin: iso(ahora - 3 * DIA + 2 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'DEGRADADO', diagnostico: 'Fuente quemada.', duracionMin: 60,
-          verificacionPrevista: iso(ahora - 2 * DIA), verificacionLimite: iso(ahora - DIA),
-        })
-        .expect(200);
-      await api(tokens.analista)
-        .post(`/api/mantenimientos/${id}/verificaciones`, { fecha: iso(ahora - 2 * DIA + HORA), resultado: 'NO_SATISFACTORIO', observaciones: 'Sigue reiniciándose.', responsable: 'Supervisor' })
-        .expect(201);
-      const res = await api(tokens.analista).patch(`/api/mantenimientos/${id}/verificacion-prevista`, { prevista: iso(ahora - HORA), limite: iso(ahora + DIA) }).expect(200);
-      expect(res.body).toMatchObject({ verificacionPrevista: iso(ahora - HORA), verificacionLimite: iso(ahora + DIA), cierre: 'NO_SATISFACTORIO' });
     }, LENTO);
 
     it('agenda: lo no iniciado es PREVISTO (no completado), vencido al pasar el límite; filtra por categoría', async () => {

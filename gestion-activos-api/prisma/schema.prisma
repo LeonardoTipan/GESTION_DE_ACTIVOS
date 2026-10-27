@@ -212,7 +212,8 @@ model Mantenimiento {
   fueraDePlazo           Boolean           @default(false)
   motivoExcepcion        String?           @db.Text
   excepcionPor           String?
-  // Capa 3: ventana prevista para verificar el trabajo (la fecha real está en la verificación).
+  // HISTÓRICO de la antigua fase de verificación (retirada): ventana prevista. Se conserva por
+  // los datos registrados antes del cambio a dos fases; el código ya no la escribe.
   verificacionPrevista   DateTime?
   verificacionLimite     DateTime?
 
@@ -226,6 +227,7 @@ model Mantenimiento {
 
   activo         Activo                      @relation(fields: [activoId], references: [id])
   plan           PlanMantenimiento?          @relation(fields: [planId], references: [id])
+  // HISTÓRICO: verificaciones de la antigua fase 3 (solo lectura en la base; sin rutas).
   verificaciones VerificacionMantenimiento[]
 
   @@index([updatedAt])
@@ -273,7 +275,9 @@ enum FrecuenciaMantenimiento {
   ANUAL
 }
 
-// Capa 3 · Verificación y cierre de un mantenimiento finalizado.
+// HISTÓRICO · Verificaciones de la antigua fase 3 del mantenimiento (retirada: el mantenimiento
+// tiene solo dos fases y completar la ejecución lo cierra). La tabla se conserva porque guarda
+// verificaciones reales registradas antes del cambio; no hay código que la lea ni la escriba.
 model VerificacionMantenimiento {
   id              Int                                @id @default(autoincrement())
   mantenimientoId Int
@@ -340,19 +344,19 @@ enum EstadoEquipo {
 
 model Vulnerabilidad {
   // Dos fases sobre el MISMO registro: Detección y Remediación (no hay fase de verificación).
-  id                     Int                      @id @default(autoincrement())
+  id                     Int                  @id @default(autoincrement())
   // «Sistema»: el activo real de GLPI (clave foránea, sin copiar su nombre)
   activoId               Int
   // Identificador público opcional, p. ej. CVE-2026-12345
   cve                    String?
   // «Vulnerabilidad»: descripción del problema detectado
-  descripcion            String                   @db.Text
+  descripcion            String               @db.Text
   // «Criticidad»: CRITICO, ALTO, MEDIO o BAJO
   nivelRiesgo            NivelRiesgo
   // «Estado»: ABIERTO → EN_PROGRESO → REMEDIADO (reabrir: REMEDIADO → EN_PROGRESO)
-  estado                 EstadoVulnerabilidad     @default(ABIERTO)
+  estado                 EstadoVulnerabilidad @default(ABIERTO)
   // «Observación»: acciones, detalles técnicos, limitaciones (no sustituye la descripción)
-  observacion            String?                  @db.Text
+  observacion            String?              @db.Text
   // «Fecha Detección»: la indica el usuario (puede ser histórica); ≠ createdAt
   fecha                  DateTime
   // Plazo opcional para remediarla (SLA)
@@ -361,7 +365,7 @@ model Vulnerabilidad {
   // por defecto: nunca la pone el servidor. Vacía mientras no está remediada.
   fechaRemediacion       DateTime?
   // Origen del registro (MANUAL: la aplicación no tiene escáner conectado)
-  fuente                 FuenteVulnerabilidad     @default(MANUAL)
+  fuente                 FuenteVulnerabilidad @default(MANUAL)
   // «Verificable»: nombre del informe o documento que prueba la remediación
   evidencia              String?
   // «Repositorio Verificable»: carpeta compartida o URL http(s) donde está la evidencia
@@ -373,18 +377,6 @@ model Vulnerabilidad {
   // Inicio real del trabajo (opcional, lo indica el usuario al pasar a EN_PROGRESO)
   tratamientoIniciadoEn  DateTime?
 
-  // Conservados del diseño anterior en tres capas; sin uso en el flujo de dos fases.
-  confirmadaEn          DateTime?
-  confirmadaPor         String?
-  prioridad             PrioridadVulnerabilidad?
-  planRemediacion       String?                  @db.Text
-  evaluadaEn            DateTime?
-  evaluadaPor           String?
-  fechaLimiteOriginal   DateTime?
-  tratamientoPrevisto   DateTime?
-  verificacionPrevista  DateTime?
-  verificacionLimite    DateTime?
-
   // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
   version         Int       @default(1)
   // Eliminación LÓGICA: el registro se conserva, se excluye de los indicadores
@@ -395,10 +387,7 @@ model Vulnerabilidad {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  activo         Activo                       @relation(fields: [activoId], references: [id])
-  // Tablas del diseño anterior (acciones y verificaciones), conservadas sin uso.
-  acciones       AccionRemediacion[]
-  verificaciones VerificacionVulnerabilidad[]
+  activo Activo @relation(fields: [activoId], references: [id])
 
   @@index([updatedAt])
   @@index([activoId, estado])
@@ -412,73 +401,6 @@ enum FuenteVulnerabilidad {
   BOLETIN_PROVEEDOR
   PRUEBA_PENETRACION
   REPORTE_USUARIO
-}
-
-enum PrioridadVulnerabilidad {
-  P1
-  P2
-  P3
-  P4
-}
-
-// Capa 2 · Acciones correctivas del tratamiento.
-model AccionRemediacion {
-  id               Int      @id @default(autoincrement())
-  vulnerabilidadId Int
-  fecha            DateTime
-  descripcion      String   @db.Text
-  responsable      String
-  evidencia        String?
-  registradoPor    String
-  // Registrado fuera del intervalo previsto: solo un admin, con justificación.
-  fueraDePlazo     Boolean  @default(false)
-  motivoExcepcion  String?  @db.Text
-  excepcionPor     String?
-
-  version         Int       @default(1)
-  anuladoEn       DateTime?
-  anuladoPor      String?
-  motivoAnulacion String?   @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  vulnerabilidad Vulnerabilidad @relation(fields: [vulnerabilidadId], references: [id])
-
-  @@index([vulnerabilidadId])
-  @@map("accion_remediacion")
-}
-
-// Capa 3 · Comprobación posterior a la remediación.
-model VerificacionVulnerabilidad {
-  id               Int                                 @id @default(autoincrement())
-  vulnerabilidadId Int
-  fecha            DateTime
-  resultado        ResultadoVerificacionVulnerabilidad
-  observaciones    String                              @db.Text
-  evidencia        String
-  responsable      String
-  registradoPor    String
-  // Registrado fuera del intervalo previsto: solo un admin, con justificación.
-  fueraDePlazo     Boolean                             @default(false)
-  motivoExcepcion  String?                             @db.Text
-  excepcionPor     String?
-
-  version         Int       @default(1)
-  anuladoEn       DateTime?
-  anuladoPor      String?
-  motivoAnulacion String?   @db.Text
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
-
-  vulnerabilidad Vulnerabilidad @relation(fields: [vulnerabilidadId], references: [id])
-
-  @@index([vulnerabilidadId])
-  @@map("verificacion_vulnerabilidad")
-}
-
-enum ResultadoVerificacionVulnerabilidad {
-  CORREGIDA
-  PERSISTE
 }
 
 // Orden de menor a mayor: MySQL ordena los ENUM por posición, así que

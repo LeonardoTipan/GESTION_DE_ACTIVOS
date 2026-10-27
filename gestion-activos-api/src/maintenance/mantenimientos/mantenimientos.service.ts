@@ -17,8 +17,7 @@ import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import type { IndicadorDto } from '../../common/indicadores/indicador.js';
 import { ActivosService } from '../../inventory/activos/activos.service.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
-import type { ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
-import { exigirIntervalo, exigirReprogramacion, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
+import { exigirIntervalo, plazoOExcepcion, SIN_EXCEPCION } from '../../common/plazos/plazos.js';
 import type {
   AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
@@ -40,7 +39,6 @@ import { indicadoresMantenimiento } from './indicadores.js';
 import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import { BitacoraService } from '../../inventory/bitacora/bitacora.service.js';
 import { calcularCambios } from '../../inventory/bitacora/cambios.js';
-import { cierreDe } from '../planes/frecuencia.js';
 import { exigirFechasReales, exigirRepositorioValido, exigirTipoPermitido, semestreDe } from '../planificacion.js';
 
 const INCLUDE = {
@@ -51,7 +49,6 @@ const INCLUDE = {
       responsable: true, actividades: true, plazoDias: true, estado: true,
     },
   },
-  verificaciones: { select: { resultado: true, anuladoEn: true }, orderBy: { id: 'asc' } },
 } as const;
 
 /**
@@ -125,12 +122,6 @@ export class MantenimientosService {
           { activo: { nombre: { contains: query.q } } },
         ],
       });
-    }
-    if (query.cierre === 'PENDIENTE_VERIFICACION') {
-      filtros.push({ fase: 'FINALIZADO', verificaciones: { none: { anuladoEn: null } } });
-    }
-    if (query.cierre === 'CERRADO') {
-      filtros.push({ verificaciones: { some: { anuladoEn: null, resultado: 'OPERATIVO' } } });
     }
     const where: Prisma.MantenimientoWhereInput = { AND: [...filtros, CON_ACTIVO] };
 
@@ -260,18 +251,11 @@ export class MantenimientosService {
             usuario,
           })
         : SIN_EXCEPCION;
-    // Capa 3: ventana prevista de verificación, propia (no tiene que caber en el plazo de la ejecución).
-    if (dto.verificacionPrevista && dto.verificacionPrevista < fechaFin) {
-      throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
-    }
-    exigirIntervalo(dto.verificacionPrevista, dto.verificacionLimite, 'Verificación');
     const resultado = await this.aplicar(
       id,
       'finalizar',
       {
         ...(excepcion.fueraDePlazo ? excepcion : {}),
-        verificacionPrevista: dto.verificacionPrevista,
-        verificacionLimite: dto.verificacionLimite,
         resultado: dto.resultado,
         estadoEquipo: dto.estadoEquipo,
         fechaFin,
@@ -422,74 +406,26 @@ export class MantenimientosService {
   }
 
   /**
-   * Ampliación formal del plazo (solo admin, con motivo): de la ejecución, o de
-   * la verificación prevista. Se conserva el límite original y queda la traza.
+   * Ampliación formal del plazo de la ejecución (solo admin, con motivo). Se
+   * conserva el límite original y queda la traza.
    */
   async ampliarPlazo(id: number, dto: AmpliarPlazoMantenimientoDto, usuario: AuthUser): Promise<MantenimientoDto> {
     const actual = await this.findOne(id);
     if (actual.anuladoEn) throw new ConflictException(`El mantenimiento ${id} está anulado.`);
-    if (dto.campo === 'EJECUCION') {
-      if (actual.fase !== 'PROGRAMADO' && actual.fase !== 'EN_EJECUCION') {
-        throw new ConflictException(`El mantenimiento ${id} está ${actual.fase}: ya no tiene plazo de ejecución que ampliar.`);
-      }
-      if (!actual.fechaLimite) throw new ConflictException(`El mantenimiento ${id} no tiene fecha límite.`);
-      if (dto.nuevoLimite <= actual.fechaLimite) {
-        throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
-      }
-      await this.trazas.modificar(
-        'MANTENIMIENTO',
-        id,
-        { fechaLimite: dto.nuevoLimite, fechaLimiteOriginal: actual.fechaLimiteOriginal ?? actual.fechaLimite },
-        `Ampliación del plazo de ejecución: ${dto.motivo}`,
-        usuario.username,
-        { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] } },
-      );
-    } else {
-      if (actual.fase !== 'FINALIZADO' || actual.cierre === 'CERRADO') {
-        throw new ConflictException(`El mantenimiento ${id} no tiene una verificación pendiente.`);
-      }
-      if (!actual.verificacionLimite) throw new ConflictException(`El mantenimiento ${id} no tiene verificación programada.`);
-      if (dto.nuevoLimite <= actual.verificacionLimite) {
-        throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
-      }
-      await this.trazas.modificar(
-        'MANTENIMIENTO',
-        id,
-        { verificacionLimite: dto.nuevoLimite },
-        `Ampliación del plazo de verificación: ${dto.motivo}`,
-        usuario.username,
-        { fase: 'FINALIZADO' },
-      );
+    if (actual.fase !== 'PROGRAMADO' && actual.fase !== 'EN_EJECUCION') {
+      throw new ConflictException(`El mantenimiento ${id} está ${actual.fase}: ya no tiene plazo de ejecución que ampliar.`);
     }
-    return this.findOne(id);
-  }
-
-  /** Capa 3: programa (o reprograma) la ventana de verificación de un mantenimiento finalizado. */
-  async programarVerificacion(id: number, dto: ProgramarVerificacionDto, usuario: AuthUser): Promise<MantenimientoDto> {
-    const actual = await this.findOne(id);
-    if (actual.anuladoEn) throw new ConflictException(`El mantenimiento ${id} está anulado.`);
-    if (actual.fase !== 'FINALIZADO' || actual.cierre === 'CERRADO') {
-      throw new ConflictException('Solo se programa la verificación de un mantenimiento finalizado y aún sin cerrar.');
+    if (!actual.fechaLimite) throw new ConflictException(`El mantenimiento ${id} no tiene fecha límite.`);
+    if (dto.nuevoLimite <= actual.fechaLimite) {
+      throw new BadRequestException('Ampliar el plazo exige un límite posterior al actual.');
     }
-    if (actual.fechaFin && dto.prevista < actual.fechaFin) {
-      throw new BadRequestException('La verificación prevista no puede ser anterior al fin del mantenimiento.');
-    }
-    // Tras una verificación que no lo cerró (seguimiento, no satisfactorio) se programa la siguiente:
-    // esa ventana ya se usó. Solo cambiar una aún sin usar es mover el plan.
-    const sinUsar =
-      actual.verificacionPrevista !== null &&
-      (await this.prisma.verificacionMantenimiento.count({
-        where: { mantenimientoId: id, anuladoEn: null, fecha: { gte: actual.verificacionPrevista } },
-      })) === 0;
-    exigirReprogramacion(sinUsar, 'La verificación', usuario);
-    exigirIntervalo(dto.prevista, dto.limite, 'Verificación');
     await this.trazas.modificar(
       'MANTENIMIENTO',
       id,
-      { verificacionPrevista: dto.prevista, verificacionLimite: dto.limite },
-      'Verificación programada.',
+      { fechaLimite: dto.nuevoLimite, fechaLimiteOriginal: actual.fechaLimiteOriginal ?? actual.fechaLimite },
+      `Ampliación del plazo de ejecución: ${dto.motivo}`,
       usuario.username,
-      { fase: 'FINALIZADO' },
+      { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] } },
     );
     return this.findOne(id);
   }
@@ -521,13 +457,12 @@ function conVencido(
   mantenimiento: MantenimientoConActivo,
   ahora = new Date(),
 ): MantenimientoDto {
-  const { verificaciones, ...m } = mantenimiento;
+  const m = mantenimiento;
   return {
     ...m,
     activo: activoBreve(m.activo),
     costo: m.costo === null ? null : Number(m.costo),
     vencido: estaVencido(m, ahora),
-    cierre: cierreDe(m.fase, verificaciones),
     semestrePlanificado: m.plan ? semestreDe(m.plan.fechaInicio) : null,
     semestreReal: m.fechaInicio ? semestreDe(m.fechaInicio) : null,
   };

@@ -18,8 +18,6 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     prisma.ejecucionRespaldo.deleteMany(),
     prisma.planRespaldo.deleteMany(),
     prisma.verificacionMantenimiento.deleteMany(),
-    prisma.accionRemediacion.deleteMany(),
-    prisma.verificacionVulnerabilidad.deleteMany(),
     prisma.notificacion.deleteMany(),
     prisma.sincronizacion.deleteMany(),
     prisma.bitacoraHistorial.deleteMany(),

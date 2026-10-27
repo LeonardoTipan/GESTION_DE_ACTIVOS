@@ -20,7 +20,7 @@ const hace = (dias: number) => new Date(Date.now() - dias * DIA).toISOString();
 const en = (dias: number) => new Date(Date.now() + dias * DIA).toISOString();
 const MOTIVO = 'Corrección registrada tras la revisión del acta PR-11/2026.';
 
-describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
+describe('Planificación y ejecución de mantenimientos, vulnerabilidades en lote y respaldos (e2e)', () => {
   let app: INestApplication<App>;
   let prisma: PrismaService;
   let tokens: Awaited<ReturnType<typeof getTokensDePrueba>>;
@@ -180,7 +180,7 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
     });
   });
 
-  describe('mantenimientos · capas 2 y 3: ejecución, verificación y cierre', () => {
+  describe('mantenimientos · ejecución y cierre (dos fases)', () => {
     let id: number;
 
     beforeAll(async () => {
@@ -222,57 +222,18 @@ describe('Tres capas: planificación, ejecución y verificación (e2e)', () => {
       expect(activo.ultimaRevision.getTime()).toBe(m.fechaFin!.getTime());
       // La condición "Malo" no lo da de baja.
       expect(activo.inactivoDesde).toBeNull();
-
-      const pendientes = await api(tokens.auditor).get('/api/mantenimientos?cierre=PENDIENTE_VERIFICACION').expect(200);
-      expect(pendientes.body.data.map((x: { id: number }) => x.id)).toContain(id);
     });
 
-    it('no se cierra como OPERATIVO sin evidencia', async () => {
-      const res = await api(tokens.analista)
-        .post(`/api/mantenimientos/${id}/verificaciones`, {
-          fecha: new Date().toISOString(),
-          resultado: 'OPERATIVO',
-          observaciones: 'El equipo enciende y funciona.',
-          responsable: 'Supervisor',
-        })
-        .expect(400);
-      expect(res.body.message).toContain('evidencia');
+    it('completar es definitivo: no hay verificación posterior ni aviso de «no satisfactorio»', async () => {
+      const m = await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
+      expect(m.body.fase).toBe('FINALIZADO');
+      expect(m.body).not.toHaveProperty('cierre');
+      const cuerpo = { fecha: new Date().toISOString(), resultado: 'NO_SATISFACTORIO', observaciones: 'El equipo se reinicia solo.', responsable: 'Supervisor' };
+      await api(tokens.analista).post(`/api/mantenimientos/${id}/verificaciones`, cuerpo).expect(404);
       expect(await prisma.verificacionMantenimiento.count()).toBe(0);
-    });
-
-    it('NO_SATISFACTORIO genera un aviso y mantiene el caso abierto', async () => {
-      await api(tokens.analista)
-        .post(`/api/mantenimientos/${id}/verificaciones`, {
-          fecha: new Date().toISOString(),
-          resultado: 'NO_SATISFACTORIO',
-          observaciones: 'El equipo se reinicia solo tras una hora.',
-          responsable: 'Supervisor',
-        })
-        .expect(201);
-      const lista = await avisos('MANTENIMIENTO_NO_SATISFACTORIO');
-      expect(lista).toHaveLength(1);
-      expect(lista[0]).toMatchObject({ activoId: ids.pcMala });
-      const m = await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
-      expect(m.body.cierre).toBe('NO_SATISFACTORIO');
-    });
-
-    it('OPERATIVO con evidencia lo cierra; luego no admite más verificaciones', async () => {
-      const cuerpo = {
-        fecha: new Date().toISOString(),
-        resultado: 'OPERATIVO',
-        observaciones: 'Tras reemplazar el cable, funciona estable.',
-        evidencia: 'Acta de conformidad 34/2026',
-        responsable: 'Supervisor',
-      };
-      await api(tokens.auditor).post(`/api/mantenimientos/${id}/verificaciones`, cuerpo).expect(403);
-      await api(tokens.analista).post(`/api/mantenimientos/${id}/verificaciones`, cuerpo).expect(201);
-      await api(tokens.analista).post(`/api/mantenimientos/${id}/verificaciones`, cuerpo).expect(409);
-      const m = await api(tokens.auditor).get(`/api/mantenimientos/${id}`).expect(200);
-      expect(m.body.cierre).toBe('CERRADO');
-      const historial = await api(tokens.auditor).get(`/api/mantenimientos/${id}/verificaciones`).expect(200);
-      expect(historial.body.map((v: { resultado: string }) => v.resultado)).toEqual(['NO_SATISFACTORIO', 'OPERATIVO']);
-      const cerrados = await api(tokens.auditor).get('/api/mantenimientos?cierre=CERRADO').expect(200);
-      expect(cerrados.body.meta.total).toBe(1);
+      expect(await avisos('MANTENIMIENTO_NO_SATISFACTORIO')).toHaveLength(0);
+      const tablero = await api(tokens.auditor).get('/api/mantenimientos/tablero').expect(200);
+      expect(tablero.body).not.toHaveProperty('pendientesVerificacion');
     });
   });
 

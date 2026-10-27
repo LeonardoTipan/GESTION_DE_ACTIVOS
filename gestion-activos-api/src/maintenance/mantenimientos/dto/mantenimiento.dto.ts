@@ -1,7 +1,6 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { PaginatedResponseDto } from '../../../common/dto/paginated-response.dto.js';
 import { ActivoBreveDto } from '../../../common/dto/registro.dto.js';
-import type { CierreMantenimiento } from '../../planes/frecuencia.js';
 import {
   EstadoEquipo,
   EstadoPlan,
@@ -124,15 +123,11 @@ export class MantenimientoDto {
   fueraDePlazo: boolean;
   @ApiProperty({ type: String, nullable: true }) motivoExcepcion: string | null;
   @ApiProperty({ type: String, nullable: true }) excepcionPor: string | null;
-  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Capa 3: inicio previsto de la verificación.' })
+  // Histórico de la antigua fase de verificación (ya no existe): solo lectura, no se escribe.
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Histórico: ventana prevista de la antigua verificación (ya no se usa).' })
   verificacionPrevista: Date | null;
-  @ApiProperty({ type: String, format: 'date-time', nullable: true }) verificacionLimite: Date | null;
-
-  @ApiProperty({
-    enum: ['NO_APLICA', 'PENDIENTE_VERIFICACION', 'CERRADO', 'EN_SEGUIMIENTO', 'NO_SATISFACTORIO'],
-    description: 'Capa 3: según la última verificación vigente (solo en los FINALIZADOS).',
-  })
-  cierre: CierreMantenimiento;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Histórico: límite de la antigua verificación (ya no se usa).' })
+  verificacionLimite: Date | null;
 
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Anulado (eliminación lógica); null = vigente.' })
   anuladoEn: Date | null;

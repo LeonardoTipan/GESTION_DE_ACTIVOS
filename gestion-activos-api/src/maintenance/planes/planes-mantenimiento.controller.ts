@@ -34,28 +34,20 @@ import {
   ProgramacionDesdePlanDto,
   ProgramarDesdePlanDto,
   QueryPlanesMantenimientoDto,
-  RegistrarVerificacionMantenimientoDto,
   TableroMantenimientosDto,
-  VerificacionMantenimientoDto,
 } from './dto.js';
-import {
-  PlanesMantenimientoService,
-  VerificacionesMantenimientoService,
-} from './planes-mantenimiento.service.js';
+import { PlanesMantenimientoService } from './planes-mantenimiento.service.js';
 
 @ApiTags('mantenimientos')
 @ApiUnauthorizedResponse({ type: ApiErrorDto, description: 'Token ausente o inválido.' })
 @ApiForbiddenResponse({ type: ApiErrorDto, description: 'Rol insuficiente.' })
 @Controller('mantenimientos')
 export class PlanesMantenimientoController {
-  constructor(
-    private readonly planes: PlanesMantenimientoService,
-    private readonly verificaciones: VerificacionesMantenimientoService,
-  ) {}
+  constructor(private readonly planes: PlanesMantenimientoService) {}
 
   @ApiOperation({
-    summary: 'Agenda (calendario) de las tres capas',
-    description: 'Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado o verificado) en el rango, con filtros.',
+    summary: 'Agenda (calendario) de la planificación y la ejecución',
+    description: 'Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado) en el rango, con filtros.',
   })
   @ApiOkResponse({ type: [EventoAgendaDto] })
   @Get('agenda')
@@ -128,32 +120,5 @@ export class PlanesMantenimientoController {
   @Post('planes/:id/reversar')
   reversar(@Param('id', ParseIntPipe) id: number, @Body() dto: MotivoDto, @CurrentUser() u: AuthUser) {
     return this.planes.reversar(id, dto.motivo, u);
-  }
-
-  @ApiOperation({ summary: 'Capa 3 · Verificaciones de un mantenimiento' })
-  @ApiOkResponse({ type: [VerificacionMantenimientoDto] })
-  @Get(':id/verificaciones')
-  verificacionesDe(@Param('id', ParseIntPipe) id: number): Promise<VerificacionMantenimientoDto[]> {
-    return this.verificaciones.listar(id);
-  }
-
-  @ApiOperation({
-    summary: 'Registrar la verificación posterior (admin, analista)',
-    description: 'Solo sobre un mantenimiento FINALIZADO. OPERATIVO lo cierra y exige técnico, diagnóstico, duración, actividades y evidencia.',
-  })
-  @ApiCreatedResponse({ type: VerificacionMantenimientoDto })
-  @Roles('admin', 'analista')
-  @Post(':id/verificaciones')
-  verificar(@Param('id', ParseIntPipe) id: number, @Body() dto: RegistrarVerificacionMantenimientoDto, @CurrentUser() u: AuthUser) {
-    return this.verificaciones.registrar(id, dto, u);
-  }
-
-  @ApiOperation({ summary: 'Anular una verificación (admin)' })
-  @ApiOkResponse({ type: VerificacionMantenimientoDto })
-  @Roles('admin')
-  @HttpCode(HttpStatus.OK)
-  @Post('verificaciones/:id/anular')
-  anularVerificacion(@Param('id', ParseIntPipe) id: number, @Body() dto: MotivoDto, @CurrentUser() u: AuthUser) {
-    return this.verificaciones.anular(id, dto.motivo, u);
   }
 }

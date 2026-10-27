@@ -4,7 +4,6 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { AvisosService } from '../../audit/avisos.service.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import {
@@ -25,14 +24,11 @@ import type {
   ModificarPlanMantenimientoDto,
   PlanMantenimientoDto,
   QueryPlanesMantenimientoDto,
-  RegistrarVerificacionMantenimientoDto,
   TableroMantenimientosDto,
-  VerificacionMantenimientoDto,
 } from './dto.js';
 import { siguienteFecha } from './frecuencia.js';
 import { exigirTipoPermitido, rangoDe, semestreDe } from '../planificacion.js';
 import type { TipoMantenimiento } from '../../generated/prisma/enums.js';
-import { plazoOExcepcion } from '../../common/plazos/plazos.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
 import { agendaMantenimientos } from './agenda.js';
 
@@ -249,7 +245,7 @@ export class PlanesMantenimientoService {
     const sinPlan: Prisma.ActivoWhereInput = {
       AND: [operativo, { planesMantenimiento: { none: { ...VIGENTE, tipo: 'PREVENTIVO' } } }],
     };
-    const [planes, programados, activosSinPlan, ejemplos, planesVencidos, pendientesVerificacion] =
+    const [planes, programados, activosSinPlan, ejemplos, planesVencidos] =
       await Promise.all([
         this.prisma.planMantenimiento.findMany({
           where: { ...VIGENTE, proximaFecha: { not: null, lte: limite } },
@@ -266,9 +262,6 @@ export class PlanesMantenimientoService {
         this.prisma.activo.count({ where: sinPlan }),
         this.prisma.activo.findMany({ where: sinPlan, ...SELECT_ACTIVO, orderBy: { codigo: 'asc' }, take: 20 }),
         this.prisma.planMantenimiento.count({ where: { ...VIGENTE, proximaFecha: { lt: ahora } } }),
-        this.prisma.mantenimiento.count({
-          where: { fase: 'FINALIZADO', anuladoEn: null, verificaciones: { none: { anuladoEn: null } } },
-        }),
       ]);
     const proximas = [
       ...planes.map((p) => ({
@@ -293,7 +286,6 @@ export class PlanesMantenimientoService {
       activosSinPlan,
       ejemplosSinPlan: ejemplos.map(activoBreve),
       planesVencidos,
-      pendientesVerificacion,
     };
   }
 
@@ -321,98 +313,5 @@ export class PlanesMantenimientoService {
         `Ya tienen un plan ${tipo.toLowerCase()} vigente: ${con.map((p) => `${p.activo.codigo} (plan ${p.id})`).join(', ')}.`,
       );
     }
-  }
-}
-
-/**
- * Capa 3 · Verificación y cierre de un mantenimiento FINALIZADO. Un resultado
- * OPERATIVO lo cierra y exige los datos de la ejecución y una evidencia.
- */
-@Injectable()
-export class VerificacionesMantenimientoService {
-  constructor(
-    private readonly prisma: PrismaService,
-    private readonly trazas: TrazasService,
-    private readonly avisos: AvisosService,
-  ) {}
-
-  async listar(mantenimientoId: number): Promise<VerificacionMantenimientoDto[]> {
-    return this.prisma.verificacionMantenimiento.findMany({
-      where: { mantenimientoId },
-      orderBy: [{ fecha: 'asc' }, { id: 'asc' }],
-    });
-  }
-
-  async registrar(
-    mantenimientoId: number,
-    dto: RegistrarVerificacionMantenimientoDto,
-    u: AuthUser,
-  ): Promise<VerificacionMantenimientoDto> {
-    const m = await this.prisma.mantenimiento.findUnique({
-      where: { id: mantenimientoId },
-      include: { activo: SELECT_ACTIVO, verificaciones: { where: { anuladoEn: null }, orderBy: { id: 'asc' } } },
-    });
-    if (!m) throw new NotFoundException(`El mantenimiento ${mantenimientoId} no existe.`);
-    if (m.anuladoEn) throw new ConflictException(`El mantenimiento ${mantenimientoId} está anulado.`);
-    if (m.fase !== 'FINALIZADO') {
-      throw new ConflictException(
-        `Solo se verifica un mantenimiento FINALIZADO (este está ${m.fase}).`,
-      );
-    }
-    if (m.verificaciones.at(-1)?.resultado === 'OPERATIVO') {
-      throw new ConflictException(`El mantenimiento ${mantenimientoId} ya está cerrado como operativo.`);
-    }
-    if (m.fechaFin && dto.fecha < m.fechaFin) {
-      throw new BadRequestException('La verificación no puede ser anterior al fin del mantenimiento.');
-    }
-    // Su propia ventana prevista (si se programó): fuera de ella, excepción de admin justificada.
-    const excepcion = plazoOExcepcion({
-      real: dto.fecha,
-      inicio: m.verificacionPrevista,
-      limite: m.verificacionLimite,
-      que: 'La verificación',
-      motivoExcepcion: dto.motivoExcepcion,
-      usuario: u,
-    });
-    if (dto.fecha.getTime() > Date.now() + 5 * 60_000) {
-      throw new BadRequestException('La fecha de la verificación no puede ser futura.');
-    }
-    if (dto.resultado === 'OPERATIVO') {
-      const faltan = [
-        !m.tecnico && 'técnico',
-        !m.diagnostico && 'diagnóstico',
-        m.duracionMin === null && 'duración',
-        !m.resultado && 'actividades realizadas',
-        !dto.evidencia && 'evidencia de la verificación',
-      ].filter(Boolean);
-      if (faltan.length > 0) {
-        throw new BadRequestException(
-          `No se puede cerrar como operativo: falta ${faltan.join(', ')}.`,
-        );
-      }
-    }
-    return this.prisma.$transaction(async (tx) => {
-      const { motivoExcepcion: _, ...datos } = dto;
-      const v = await tx.verificacionMantenimiento.create({
-        data: { ...datos, ...excepcion, mantenimientoId, registradoPor: u.username },
-      });
-      if (dto.resultado === 'NO_SATISFACTORIO') {
-        await this.avisos.avisar(
-          {
-            tipo: 'MANTENIMIENTO_NO_SATISFACTORIO',
-            titulo: `Mantenimiento no satisfactorio: ${m.activo.codigo} · ${m.activo.nombre}`,
-            mensaje: `La verificación del mantenimiento ${m.id} concluyó que el trabajo no fue satisfactorio. ${dto.observaciones}`,
-            activoId: m.activoId,
-          },
-          tx,
-        );
-      }
-      return v;
-    });
-  }
-
-  async anular(id: number, motivo: string, u: AuthUser) {
-    await this.trazas.anular('VERIFICACION_MANTENIMIENTO', id, motivo, u.username);
-    return this.prisma.verificacionMantenimiento.findUniqueOrThrow({ where: { id } });
   }
 }

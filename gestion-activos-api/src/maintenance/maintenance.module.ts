@@ -6,15 +6,12 @@ import { BitacoraMantenimientoService } from './bitacora/bitacora-mantenimiento.
 import { MantenimientosController } from './mantenimientos/mantenimientos.controller.js';
 import { MantenimientosService } from './mantenimientos/mantenimientos.service.js';
 import { PlanesMantenimientoController } from './planes/planes-mantenimiento.controller.js';
-import {
-  PlanesMantenimientoService,
-  VerificacionesMantenimientoService,
-} from './planes/planes-mantenimiento.service.js';
+import { PlanesMantenimientoService } from './planes/planes-mantenimiento.service.js';
 
 /**
- * Mantenimiento en tres capas: planificación (planes con período) →
- * ejecución (PROGRAMADO → EN_EJECUCION → FINALIZADO o CANCELADO) →
- * verificación y cierre. Más las Bitácoras General y Específica (solo lectura).
+ * Mantenimiento en dos fases: planificación (planes con período) → ejecución
+ * (PROGRAMADO → EN_EJECUCION → FINALIZADO o CANCELADO; completar cierra, sin fase de
+ * verificación). Más las Bitácoras General y Específica (solo lectura).
  * Módulo independiente: del inventario solo usa ActivosService (exportado)
  * para validar que el activo existe y está vigente.
  */
@@ -25,7 +22,6 @@ import {
   providers: [
     MantenimientosService,
     PlanesMantenimientoService,
-    VerificacionesMantenimientoService,
     BitacoraMantenimientoService,
   ],
   // El tablero (DashboardModule) solo usa su conteo de pendientes.

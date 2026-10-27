@@ -29,7 +29,6 @@ import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { IndicadorDto, periodoOTrimestre } from '../../common/indicadores/indicador.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
-import { ProgramarVerificacionDto } from '../../common/dto/agenda.dto.js';
 import {
   AmpliarPlazoMantenimientoDto,
   CancelarMantenimientoDto,
@@ -124,7 +123,7 @@ export class MantenimientosController {
 
   @ApiOperation({
     summary: 'Ampliar el plazo (solo admin)',
-    description: 'Amplía formalmente el límite de la ejecución o de la verificación, con motivo. Se conserva el límite original y queda la traza.',
+    description: 'Amplía formalmente el límite de la ejecución, con motivo. Se conserva el límite original y queda la traza.',
   })
   @ApiOkResponse({ type: MantenimientoDto })
   @Roles('admin')
@@ -135,21 +134,6 @@ export class MantenimientosController {
     @CurrentUser() usuario: AuthUser,
   ): Promise<MantenimientoDto> {
     return this.mantenimientos.ampliarPlazo(id, dto, usuario);
-  }
-
-  @ApiOperation({
-    summary: 'Programar la verificación (admin, analista)',
-    description: 'Capa 3: ventana prevista [prevista, límite] para verificar un mantenimiento finalizado. Tiene su propio plazo.',
-  })
-  @ApiOkResponse({ type: MantenimientoDto })
-  @Roles('admin', 'analista')
-  @Patch(':id/verificacion-prevista')
-  programarVerificacion(
-    @Param('id', ParseIntPipe) id: number,
-    @Body() dto: ProgramarVerificacionDto,
-    @CurrentUser() usuario: AuthUser,
-  ): Promise<MantenimientoDto> {
-    return this.mantenimientos.programarVerificacion(id, dto, usuario);
   }
 
   @ApiOperation({
