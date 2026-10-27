@@ -604,8 +604,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Agenda (calendario) de las tres capas
-         * @description Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado o verificado) en el rango, con filtros.
+         * Agenda (calendario) de la planificación y la ejecución
+         * @description Eventos PREVISTOS (intervalos planificados) y REALES (lo ejecutado) en el rango, con filtros.
          */
         get: operations["PlanesMantenimientoController_agenda"];
         put?: never;
@@ -720,44 +720,6 @@ export interface paths {
         put?: never;
         /** Revertir la anulación de un plan (admin) */
         post: operations["PlanesMantenimientoController_reversar"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mantenimientos/{id}/verificaciones": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Capa 3 · Verificaciones de un mantenimiento */
-        get: operations["PlanesMantenimientoController_verificacionesDe"];
-        put?: never;
-        /**
-         * Registrar la verificación posterior (admin, analista)
-         * @description Solo sobre un mantenimiento FINALIZADO. OPERATIVO lo cierra y exige técnico, diagnóstico, duración, actividades y evidencia.
-         */
-        post: operations["PlanesMantenimientoController_verificar"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/mantenimientos/verificaciones/{id}/anular": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Anular una verificación (admin) */
-        post: operations["PlanesMantenimientoController_anularVerificacion"];
         delete?: never;
         options?: never;
         head?: never;
@@ -904,29 +866,9 @@ export interface paths {
         head?: never;
         /**
          * Ampliar el plazo (solo admin)
-         * @description Amplía formalmente el límite de la ejecución o de la verificación, con motivo. Se conserva el límite original y queda la traza.
+         * @description Amplía formalmente el límite de la ejecución, con motivo. Se conserva el límite original y queda la traza.
          */
         patch: operations["MantenimientosController_ampliarPlazo"];
-        trace?: never;
-    };
-    "/api/mantenimientos/{id}/verificacion-prevista": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        /**
-         * Programar la verificación (admin, analista)
-         * @description Capa 3: ventana prevista [prevista, límite] para verificar un mantenimiento finalizado. Tiene su propio plazo.
-         */
-        patch: operations["MantenimientosController_programarVerificacion"];
         trace?: never;
     };
     "/api/mantenimientos/{id}/finalizar": {
@@ -2822,7 +2764,7 @@ export interface components {
         TrazaDto: {
             id: number;
             /** @enum {string} */
-            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
+            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO";
             registroId: number;
             /** @description Versión del registro ANTES del cambio. */
             version: number;
@@ -2854,8 +2796,6 @@ export interface components {
             /** @description Hasta 20 de ellos. */
             ejemplosSinPlan: components["schemas"]["ActivoBreveDto"][];
             planesVencidos: number;
-            /** @description Finalizados que esperan su verificación. */
-            pendientesVerificacion: number;
         };
         SemestreDto: {
             /** @example 2026 */
@@ -3026,57 +2966,6 @@ export interface components {
             mantenimientoId: number;
             /** @description El plan, con la próxima fecha ya adelantada. */
             plan: components["schemas"]["PlanMantenimientoDto"];
-        };
-        VerificacionMantenimientoDto: {
-            /**
-             * @description Sube con cada modificación.
-             * @example 1
-             */
-            version: number;
-            /**
-             * Format: date-time
-             * @description null = vigente.
-             */
-            anuladoEn: string | null;
-            anuladoPor: string | null;
-            motivoAnulacion: string | null;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-            id: number;
-            mantenimientoId: number;
-            /** Format: date-time */
-            fecha: string;
-            /** @enum {string} */
-            resultado: "OPERATIVO" | "REQUIERE_SEGUIMIENTO" | "NO_SATISFACTORIO";
-            observaciones: string;
-            evidencia: string | null;
-            responsable: string;
-            registradoPor: string;
-            fueraDePlazo: boolean;
-            motivoExcepcion: string | null;
-            excepcionPor: string | null;
-        };
-        RegistrarVerificacionMantenimientoDto: {
-            /** Format: date-time */
-            fecha: string;
-            /**
-             * @description OPERATIVO cierra el mantenimiento; REQUIERE_SEGUIMIENTO lo deja abierto; NO_SATISFACTORIO avisa.
-             * @enum {string}
-             */
-            resultado: "OPERATIVO" | "REQUIERE_SEGUIMIENTO" | "NO_SATISFACTORIO";
-            /** @example Equipo encendido 2 h sin incidencias; temperatura normal. */
-            observaciones: string;
-            /**
-             * @description Obligatoria para cerrar como OPERATIVO.
-             * @example Acta MT-2026-031
-             */
-            evidencia?: string;
-            /** @description Fuera de la ventana prevista de verificación: justificación (solo admin). */
-            motivoExcepcion?: string;
-            /** @example Mesa de Servicios */
-            responsable: string;
         };
         PeriodoBitacoraDto: {
             anio: number;
@@ -3296,16 +3185,14 @@ export interface components {
             excepcionPor: string | null;
             /**
              * Format: date-time
-             * @description Capa 3: inicio previsto de la verificación.
+             * @description Histórico: ventana prevista de la antigua verificación (ya no se usa).
              */
             verificacionPrevista: string | null;
-            /** Format: date-time */
-            verificacionLimite: string | null;
             /**
-             * @description Capa 3: según la última verificación vigente (solo en los FINALIZADOS).
-             * @enum {string}
+             * Format: date-time
+             * @description Histórico: límite de la antigua verificación (ya no se usa).
              */
-            cierre: "NO_APLICA" | "PENDIENTE_VERIFICACION" | "CERRADO" | "EN_SEGUIMIENTO" | "NO_SATISFACTORIO";
+            verificacionLimite: string | null;
             /**
              * Format: date-time
              * @description Anulado (eliminación lógica); null = vigente.
@@ -3359,7 +3246,7 @@ export interface components {
             nuevoLimite: string;
             motivo: string;
             /** @enum {string} */
-            campo: "EJECUCION" | "VERIFICACION";
+            campo: "EJECUCION";
         };
         FinalizarMantenimientoDto: {
             /**
@@ -3410,16 +3297,6 @@ export interface components {
             repositorioVerificable?: string;
             /** @description Si la fecha real cae fuera del intervalo previsto: justificación de la excepción (solo admin, mínimo 20 caracteres). */
             motivoExcepcion?: string;
-            /**
-             * Format: date-time
-             * @description Capa 3: inicio previsto de la verificación (no anterior al fin).
-             */
-            verificacionPrevista?: string;
-            /**
-             * Format: date-time
-             * @description Capa 3: límite previsto de la verificación.
-             */
-            verificacionLimite?: string;
         };
         CancelarMantenimientoDto: {
             /**
@@ -6332,7 +6209,7 @@ export interface operations {
     TrazasController_listar: {
         parameters: {
             query: {
-                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO" | "VERIFICACION_MANTENIMIENTO" | "ACCION_REMEDIACION" | "VERIFICACION_VULNERABILIDAD";
+                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PLAN_MANTENIMIENTO";
                 registroId: number;
             };
             header?: never;
@@ -6769,131 +6646,6 @@ export interface operations {
             };
         };
     };
-    PlanesMantenimientoController_verificacionesDe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionMantenimientoDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    PlanesMantenimientoController_verificar: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["RegistrarVerificacionMantenimientoDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionMantenimientoDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    PlanesMantenimientoController_anularVerificacion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["MotivoDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["VerificacionMantenimientoDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
     BitacoraMantenimientoController_general: {
         parameters: {
             query: {
@@ -7014,8 +6766,6 @@ export interface operations {
                 /** @description Técnico (contiene el texto). */
                 tecnico?: string;
                 planId?: number;
-                /** @description Finalizados sin verificar, o cerrados como operativos. */
-                cierre?: "PENDIENTE_VERIFICACION" | "CERRADO";
                 tipo?: "PREVENTIVO" | "CORRECTIVO" | "PREDICTIVO" | "PERFECTIVO" | "ADAPTATIVO" | "EVOLUTIVO";
                 fase?: "PROGRAMADO" | "EN_EJECUCION" | "FINALIZADO" | "CANCELADO";
                 estadoEquipo?: "OPERATIVO" | "DEGRADADO" | "FUERA_DE_SERVICIO";
@@ -7353,49 +7103,6 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AmpliarPlazoMantenimientoDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["MantenimientoDto"];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    MantenimientosController_programarVerificacion: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ProgramarVerificacionDto"];
             };
         };
         responses: {

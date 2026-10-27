@@ -43,12 +43,12 @@ Además de los 10 campos:
 
 ### Lo que se retiró del diseño anterior en tres capas
 
-Tablas y columnas se **conservan** en la base, sin uso; no se borró nada.
+En la versión de dos fases se conservaron sin uso. La migración `20261027180000_retirar_verificacion_vulnerabilidades` **las elimina**: estaban vacías y nada las usa. Detalle en [verificacion-antigua.md](verificacion-antigua.md).
 
 - Confirmación (`confirmadaEn`, `confirmadaPor`).
 - Evaluación (`prioridad`, `planRemediacion`, `evaluadaEn`, `evaluadaPor`).
 - Tratamiento previsto, ampliación de plazo y ventana de verificación (`tratamientoPrevisto`, `fechaLimiteOriginal`, `verificacionPrevista`, `verificacionLimite`).
-- La fuente del hallazgo (`fuente`, queda en `MANUAL`).
+- La fuente del hallazgo (`fuente`, queda en `MANUAL`). Esta columna **se conserva**.
 - Las tablas `accion_remediacion` y `verificacion_vulnerabilidad`.
 - El estado `ACEPTADA` (aceptar el riesgo), que se quitó por decisión del usuario.
 
@@ -71,7 +71,7 @@ model Vulnerabilidad {
   responsable            String?                         // «Responsable»
   cerradaPor             String?
   tratamientoIniciadoEn  DateTime?
-  // … columnas conservadas sin uso, version, anulación, createdAt, updatedAt
+  // … fuente, version, anulación, createdAt, updatedAt
   activo Activo @relation(fields: [activoId], references: [id])
   @@index([activoId, estado])
   @@map("vulnerabilidad")
@@ -199,5 +199,5 @@ npm test && npm run build && npm run lint
 
 - **Responsable en texto libre.** No hay un catálogo de usuarios en la aplicación (Keycloak es la fuente de identidades). Relacionarlo con usuarios exigiría consultar la API de administración de Keycloak.
 - **La evidencia es una referencia** (nombre del documento y carpeta o URL), no un archivo almacenado: la aplicación no tiene sistema de archivos. El acceso a la carpeta o URL depende de los permisos de ese repositorio.
-- **Columnas y tablas antiguas.** Las del diseño en tres capas se conservan sin uso. Retirarlas es una decisión pendiente, igual que en Mantenimiento.
+- **Columnas y tablas antiguas.** Las del diseño en tres capas se retiran con la migración `20261027180000` (estaban vacías). Ver [verificacion-antigua.md](verificacion-antigua.md).
 - **Sin escáner conectado:** todo hallazgo se registra a mano.

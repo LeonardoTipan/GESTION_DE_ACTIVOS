@@ -22,7 +22,8 @@ Activo (GLPI) 1 ── N Planificación (plan_mantenimiento) 1 ── N Ejecuci�
   - Guarda las fechas reales, la persona encargada, la descripción de lo ejecutado, la condición del equipo, el verificable y su repositorio.
   - Una planificación tiene **N** ejecuciones: la del período, ejecuciones adicionales, reprogramaciones o intervenciones parciales.
 - **Solo dos fases.** No hay fase de verificación: completar una ejecución, en una sola petición con su fecha real de finalización, verificable, repositorio y observación, la deja cerrada. La interfaz no muestra la antigua capa 3 y la agenda de mantenimientos no devuelve eventos de verificación.
-  - La tabla `verificacion_mantenimiento` y sus endpoints (`/mantenimientos/:id/verificaciones`, `/verificacion-prevista`) se conservan en la API sin uso en la interfaz, para no perder el registro histórico que ya existía. Retirarlos es una decisión pendiente.
+  - Los endpoints de la antigua verificación (`/mantenimientos/:id/verificaciones`, `/verificaciones/:id/anular`, `/verificacion-prevista`, el filtro `cierre`, el campo `cierre` y el plazo `VERIFICACION`) se **retiraron** de la API.
+  - La tabla `verificacion_mantenimiento` y las columnas `verificacionPrevista` y `verificacionLimite` se **conservan** en la base, sin código que las use, porque guardan verificaciones reales registradas antes del cambio (4 en desarrollo). Qué hacer con esos datos está pendiente de decisión. Detalle en [verificacion-antigua.md](verificacion-antigua.md).
 
 Se evolucionó el módulo existente en lugar de crear tablas paralelas. `plan_mantenimiento → mantenimiento` ya era 1→N, con clave foránea real.
 
