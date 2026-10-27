@@ -26,6 +26,9 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     prisma.respaldo.deleteMany(),
     prisma.mantenimiento.deleteMany(),
     prisma.planMantenimiento.deleteMany(),
+    // La cadena de renovaciones apunta a sí misma: se sueltan los enlaces antes de borrar.
+    prisma.renovacion.updateMany({ data: { renovacionAnteriorId: null } }),
+    prisma.renovacion.deleteMany(),
     prisma.vulnerabilidad.deleteMany(),
     prisma.historialControlAcceso.deleteMany(),
     prisma.controlAcceso.deleteMany(),

@@ -15,6 +15,7 @@ export const ENTIDADES = {
   RESTAURACION: { modelo: 'restauracion', nombre: 'La restauración' },
   MANTENIMIENTO: { modelo: 'mantenimiento', nombre: 'El mantenimiento' },
   VULNERABILIDAD: { modelo: 'vulnerabilidad', nombre: 'La vulnerabilidad' },
+  RENOVACION: { modelo: 'renovacion', nombre: 'La renovación' },
   PLAN_MANTENIMIENTO: { modelo: 'planMantenimiento', nombre: 'El plan de mantenimiento' },
   VERIFICACION_MANTENIMIENTO: { modelo: 'verificacionMantenimiento', nombre: 'La verificación del mantenimiento' },
   ACCION_REMEDIACION: { modelo: 'accionRemediacion', nombre: 'La acción de remediación' },

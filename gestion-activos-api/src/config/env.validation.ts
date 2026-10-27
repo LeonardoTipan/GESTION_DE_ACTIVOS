@@ -1,9 +1,12 @@
-import { plainToInstance } from 'class-transformer';
+import { plainToInstance, Type } from 'class-transformer';
 import {
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
   IsUrl,
+  Max,
+  Min,
   validateSync,
 } from 'class-validator';
 
@@ -41,6 +44,14 @@ class EnvironmentVariables {
   @IsString()
   @IsNotEmpty()
   CORS_ORIGINS: string;
+
+  /** Renovaciones: días antes de la caducidad en que un elemento pasa a «próximo a caducar» (30 por defecto). */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(365)
+  RENOVACIONES_DIAS_AVISO?: number;
 
   /** URL pública de la API vista desde el navegador (Swagger). Por defecto http://localhost:PORT. */
   @IsOptional()

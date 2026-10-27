@@ -109,6 +109,7 @@ model Activo {
   vulnerabilidades    Vulnerabilidad[] // "presenta ciclo de"
   notificaciones      Notificacion[]
   controlesAcceso     ControlAcceso[]
+  renovaciones        Renovacion[] // licencias, garantías, certificados y contratos del activo
 
   @@index([updatedAt])
   // Filtro "activos / no activos" del inventario
@@ -889,4 +890,79 @@ enum EstadoControlAcceso {
   ABIERTO
   PENDIENTE
   CERRADO
+}
+
+// ── Renovaciones ─────────────────────────────────────────────────────────────
+// Dos fases sobre el MISMO registro: Planificación y Ejecución y cierre (no hay
+// fase de verificación: la evidencia se exige al cerrar). Las fechas son DÍAS.
+
+enum TipoRenovacion {
+  LICENCIA
+  GARANTIA
+  CERTIFICADO
+  // Nube, hosting, soporte o suscripción con un proveedor
+  CONTRATO_SERVICIO
+  OTRO
+}
+
+// Estado del PROCESO (distinto de la vigencia del elemento, que se calcula)
+enum EstadoRenovacion {
+  ABIERTO
+  EN_PROGRESO
+  CERRADO
+}
+
+model Renovacion {
+  id                     Int              @id @default(autoincrement())
+  // «Sistema»: el activo real de GLPI (clave foránea; la renovación no lo modifica)
+  activoId               Int
+  tipo                   TipoRenovacion
+  // «Responsable»: persona encargada (texto: las identidades viven en Keycloak)
+  responsable            String
+  // «Fecha Planificada»: día previsto para renovar
+  fechaPlanificada       DateTime         @db.Date
+  // Vigencia ANTES de renovar. Se conserva como referencia histórica: nunca se
+  // sobrescribe con la nueva. Vacía solo si sinCaducidadActual (con justificación).
+  fechaCaducidadActual   DateTime?        @db.Date
+  sinCaducidadActual     Boolean          @default(false)
+  estado                 EstadoRenovacion @default(ABIERTO)
+  // «Fecha Ejecutada Renovación»: fecha REAL, la indica el usuario (nunca el servidor)
+  fechaRenovacion        DateTime?        @db.Date
+  // Vigencia DESPUÉS de renovar. Vacía solo si nuevaSinCaducidad (con justificación).
+  nuevaFechaCaducidad    DateTime?        @db.Date
+  nuevaSinCaducidad      Boolean          @default(false)
+  // «Verificable»: contrato, factura, certificado renovado, informe…
+  evidencia              String?
+  // «Repositorio Verificable»: carpeta compartida o URL http(s)
+  repositorioVerificable String?
+  // «Descripción»: detalle de la renovación realizada
+  descripcion            String?          @db.Text
+  // «Observación»: información adicional; justifica la ausencia de caducidad
+  observacion            String?          @db.Text
+  // Quién registró el cierre (usuario de la sesión)
+  cerradaPor             String?
+  // Renovación anterior del MISMO elemento (activo y tipo): la cadena conserva
+  // la historia; la anterior queda «sustituida» por esta.
+  renovacionAnteriorId   Int?
+
+  // Versión del registro: sube con cada modificación (el detalle, en registro_cambio)
+  version         Int       @default(1)
+  // Eliminación LÓGICA: el registro se conserva
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  // Fecha de registro (automática)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  activo     Activo       @relation(fields: [activoId], references: [id])
+  anterior   Renovacion?  @relation("CadenaRenovaciones", fields: [renovacionAnteriorId], references: [id])
+  siguientes Renovacion[] @relation("CadenaRenovaciones")
+
+  @@index([activoId, tipo])
+  @@index([estado])
+  @@index([fechaCaducidadActual])
+  @@index([nuevaFechaCaducidad])
+  @@index([updatedAt])
+  @@map("renovacion")
 }

@@ -10,6 +10,7 @@ import { GlpiSyncModule } from './glpi-sync/api/glpi-sync.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { RenewalsModule } from './renewals/renewals.module.js';
 import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.js';
 
 @Module({
@@ -23,6 +24,7 @@ import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.
     VulnerabilitiesModule,
     GlpiSyncModule,
     AccessControlModule,
+    RenewalsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
