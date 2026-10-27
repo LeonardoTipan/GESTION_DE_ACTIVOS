@@ -3,10 +3,16 @@ import { Link } from 'react-router'
 import { menuPara } from '../../app/navegacion.ts'
 import { ETIQUETA_ROL } from '../auth/roles.ts'
 import { useUsuarioActual } from '../auth/use-usuario-actual.ts'
+import { usePendientes } from './api.ts'
+import { pendientesDe, textoPendientes } from './pendientes.ts'
 
-/** Fase 1: bienvenida y accesos a los módulos. Los indicadores llegan en la Fase 4. */
+/**
+ * Bienvenida y accesos a los módulos; las tarjetas de los módulos con trámites muestran
+ * cuántos hay pendientes. Los indicadores completos llegan en la Fase 4.
+ */
 export function DashboardPage() {
   const { data: usuario } = useUsuarioActual()
+  const { data: pendientes } = usePendientes()
   if (!usuario) return null
 
   const modulos = menuPara(usuario.roles).filter((item) => item.ruta !== '/')
@@ -28,26 +34,34 @@ export function DashboardPage() {
       </div>
 
       <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }}>
-        {modulos.map((modulo) => (
-          <Card
-            key={modulo.ruta}
-            component={Link}
-            to={modulo.ruta}
-            withBorder
-            padding="lg"
-            radius="md"
-          >
-            <Group gap="sm" mb="xs">
-              <ThemeIcon variant="light" size="lg" radius="md">
-                <modulo.icono size={20} />
-              </ThemeIcon>
-              <Text fw={600}>{modulo.etiqueta}</Text>
-            </Group>
-            <Text size="sm" c="dimmed">
-              {modulo.descripcion}
-            </Text>
-          </Card>
-        ))}
+        {modulos.map((modulo) => {
+          const n = pendientesDe(modulo.ruta, pendientes)
+          return (
+            <Card
+              key={modulo.ruta}
+              component={Link}
+              to={modulo.ruta}
+              withBorder
+              padding="lg"
+              radius="md"
+            >
+              <Group gap="sm" mb="xs">
+                <ThemeIcon variant="light" size="lg" radius="md">
+                  <modulo.icono size={20} />
+                </ThemeIcon>
+                <Text fw={600}>{modulo.etiqueta}</Text>
+                {n !== null && (
+                  <Badge ml="auto" variant="light" color={n > 0 ? 'orange' : 'gray'}>
+                    {textoPendientes(n)}
+                  </Badge>
+                )}
+              </Group>
+              <Text size="sm" c="dimmed">
+                {modulo.descripcion}
+              </Text>
+            </Card>
+          )
+        })}
       </SimpleGrid>
     </Stack>
   )

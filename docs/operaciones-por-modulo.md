@@ -76,6 +76,10 @@ El estado de una vulnerabilidad **no modifica el activo**. Cada paso queda en la
 
 Licencias, garantías, certificados y contratos de servicio: **Planificación** (sistema, tipo, responsable, fecha planificada y caducidad actual) y **Ejecución y cierre** (fecha real de renovación, nueva caducidad, verificable, repositorio y descripción), sobre el mismo registro y sin fase de verificación. La **vigencia** del elemento (vigente, próximo a caducar, caducado, sin caducidad) se calcula y es distinta del estado del proceso; el umbral es `RENOVACIONES_DIAS_AVISO` (30 días). Detalle en [renovaciones.md](renovaciones.md).
 
+## Cierre compartido y pendientes del inicio
+
+La ejecución y el cierre de Control de acceso, Mantenimientos, Vulnerabilidades y Renovaciones comparten la presentación (`BloqueEjecucionCierre`); cada módulo conserva sus campos, reglas y llamadas. El inicio muestra en cada uno de esos cuatro módulos cuántos trámites tiene pendientes (`GET /api/dashboard/pendientes`). Detalle en [cierre-y-pendientes.md](cierre-y-pendientes.md).
+
 ## Plazos: lo previsto, lo real y lo verificado
 
 Cada etapa de los tres módulos guarda por separado **lo previsto** (un intervalo [inicio, límite]) y **lo que ocurrió** (la fecha y hora reales). La fecha real nunca se copia de la prevista, y el plan nunca se corrige para que cuadre.

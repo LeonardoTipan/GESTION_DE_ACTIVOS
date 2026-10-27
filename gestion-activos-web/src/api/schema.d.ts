@@ -1692,6 +1692,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/pendientes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trámites pendientes por módulo
+         * @description Conteo en la base de los registros abiertos o en curso de Control de acceso, Mantenimientos, Vulnerabilidades y Renovaciones, y su total. Si un conteo falla responde 500; nunca devuelve 0 en su lugar.
+         */
+        get: operations["DashboardController_pendientes"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4269,6 +4289,33 @@ export interface components {
         ReabrirRenovacionDto: {
             /** @example El proveedor anuló la factura: la renovación no se completó. */
             motivo: string;
+        };
+        PendientesTableroDto: {
+            /**
+             * @description Control de acceso: ABIERTO + PENDIENTE (en gestión)
+             * @example 3
+             */
+            accesos: number;
+            /**
+             * @description Mantenimientos: PROGRAMADO + EN_EJECUCION, no anulados
+             * @example 1
+             */
+            mantenimientos: number;
+            /**
+             * @description Vulnerabilidades: ABIERTO + EN_PROGRESO, no anuladas
+             * @example 0
+             */
+            vulnerabilidades: number;
+            /**
+             * @description Renovaciones: ABIERTO + EN_PROGRESO, no anuladas
+             * @example 2
+             */
+            renovaciones: number;
+            /**
+             * @description Suma de los cuatro módulos
+             * @example 6
+             */
+            total: number;
         };
     };
     responses: never;
@@ -9697,6 +9744,43 @@ export interface operations {
             };
             /** @description Rol insuficiente. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    DashboardController_pendientes: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendientesTableroDto"];
+                };
+            };
+            /** @description Falta el token o no es válido */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Algún conteo falló */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };
