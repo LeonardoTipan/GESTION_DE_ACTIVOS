@@ -57,6 +57,14 @@ export class ControlAccesoService {
 
   // ── Consultas ─────────────────────────────────────────────────────────────
 
+  /**
+   * Pendientes para el tablero: ABIERTO y PENDIENTE (en gestión). Las solicitudes no
+   * se anulan; las cerradas no cuentan. Un COUNT en la base, sin cargar filas.
+   */
+  contarPendientes(): Promise<number> {
+    return this.prisma.controlAcceso.count({ where: { estado: { in: ['ABIERTO', 'PENDIENTE'] } } });
+  }
+
   async findAll(q: QueryControlAccesoDto): Promise<Paginated<ControlAccesoDto>> {
     const condiciones: Prisma.ControlAccesoWhereInput[] = [];
     if (q.tipoAcceso) condiciones.push({ tipoAcceso: q.tipoAcceso });

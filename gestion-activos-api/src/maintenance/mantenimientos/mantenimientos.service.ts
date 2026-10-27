@@ -75,6 +75,17 @@ export class MantenimientosService {
     private readonly bitacora: BitacoraService,
   ) {}
 
+  /**
+   * Pendientes para el tablero: ejecuciones PROGRAMADO o EN_EJECUCION, no anuladas y con
+   * activo (lo mismo que muestra el listado). FINALIZADO y CANCELADO no cuentan; los
+   * planes tampoco: se cuenta cada mantenimiento una vez.
+   */
+  contarPendientes(): Promise<number> {
+    return this.prisma.mantenimiento.count({
+      where: { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] }, anuladoEn: null, ...CON_ACTIVO },
+    });
+  }
+
   async findAll(
     query: QueryMantenimientosDto,
   ): Promise<Paginated<MantenimientoDto>> {

@@ -72,6 +72,13 @@ export class VulnerabilidadesService {
     private readonly avisos: AvisosService,
   ) {}
 
+  /** Pendientes para el tablero: ABIERTO y EN_PROGRESO, no anuladas y con activo. */
+  contarPendientes(): Promise<number> {
+    return this.prisma.vulnerabilidad.count({
+      where: { estado: { in: ESTADOS_ABIERTOS }, anuladoEn: null, ...CON_ACTIVO },
+    });
+  }
+
   async findAll(query: QueryVulnerabilidadesDto): Promise<Paginated<VulnerabilidadDto>> {
     const ahora = new Date();
     const vencidas: Prisma.VulnerabilidadWhereInput = {

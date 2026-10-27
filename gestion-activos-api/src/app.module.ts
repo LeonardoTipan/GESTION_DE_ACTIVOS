@@ -6,6 +6,7 @@ import { AppService } from './app.service.js';
 import { AuthModule } from './auth/auth.module.js';
 import { BackupsModule } from './backups/backups.module.js';
 import { validateEnv } from './config/env.validation.js';
+import { DashboardModule } from './dashboard/dashboard.module.js';
 import { GlpiSyncModule } from './glpi-sync/api/glpi-sync.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
@@ -25,6 +26,7 @@ import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.
     GlpiSyncModule,
     AccessControlModule,
     RenewalsModule,
+    DashboardModule,
   ],
   controllers: [AppController],
   providers: [AppService],

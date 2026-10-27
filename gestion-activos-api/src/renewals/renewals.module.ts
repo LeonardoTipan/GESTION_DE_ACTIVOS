@@ -14,5 +14,7 @@ import { RenovacionesService } from './renovaciones.service.js';
   imports: [InventoryModule, AuditModule],
   controllers: [RenovacionesController],
   providers: [RenovacionesService],
+  // El tablero (DashboardModule) solo usa su conteo de pendientes.
+  exports: [RenovacionesService],
 })
 export class RenewalsModule {}

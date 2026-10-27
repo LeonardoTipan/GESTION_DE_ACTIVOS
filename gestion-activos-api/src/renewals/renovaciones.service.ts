@@ -65,6 +65,11 @@ export class RenovacionesService {
 
   // ── Consultas ─────────────────────────────────────────────────────────────
 
+  /** Pendientes para el tablero: ABIERTO y EN_PROGRESO, no anuladas. */
+  contarPendientes(): Promise<number> {
+    return this.prisma.renovacion.count({ where: { estado: { in: PENDIENTES }, anuladoEn: null } });
+  }
+
   async findAll(q: QueryRenovacionesDto): Promise<Paginated<RenovacionDto>> {
     const filtros: Prisma.RenovacionWhereInput[] = [
       {

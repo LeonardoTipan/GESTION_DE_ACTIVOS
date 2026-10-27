@@ -13,5 +13,7 @@ import { VulnerabilidadesService } from './vulnerabilidades/vulnerabilidades.ser
   imports: [InventoryModule, AuditModule],
   controllers: [VulnerabilidadesController],
   providers: [VulnerabilidadesService],
+  // El tablero (DashboardModule) solo usa su conteo de pendientes.
+  exports: [VulnerabilidadesService],
 })
 export class VulnerabilitiesModule {}

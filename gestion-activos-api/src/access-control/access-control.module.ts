@@ -12,5 +12,7 @@ import { ControlAccesoService } from './control-acceso.service.js';
   imports: [InventoryModule],
   controllers: [ControlAccesoController],
   providers: [ControlAccesoService],
+  // El tablero (DashboardModule) solo usa su conteo de pendientes.
+  exports: [ControlAccesoService],
 })
 export class AccessControlModule {}

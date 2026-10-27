@@ -28,5 +28,7 @@ import {
     VerificacionesMantenimientoService,
     BitacoraMantenimientoService,
   ],
+  // El tablero (DashboardModule) solo usa su conteo de pendientes.
+  exports: [MantenimientosService],
 })
 export class MaintenanceModule {}
