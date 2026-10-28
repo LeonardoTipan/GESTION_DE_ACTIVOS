@@ -45,7 +45,11 @@ export function useMantenimiento(id: number) {
   })
 }
 
-/** Tras cualquier transición se refrescan listados y detalle. */
+/**
+ * Tras cualquier operación se refrescan listados y detalle; se usa en onSettled: también tras
+ * un error (p. ej. 409 porque el registro cambió en otra pestaña), para que la ficha y la
+ * tabla muestren lo que confirma el servidor y no un estado antiguo.
+ */
 function useInvalidarMantenimientos() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: claves.todo })
@@ -57,7 +61,7 @@ export function useProgramarMantenimiento() {
   return useMutation({
     mutationFn: (datos: DatosProgramar) =>
       ejecutar(api.POST('/api/mantenimientos', { body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -69,7 +73,7 @@ export function useIniciarMantenimiento() {
       ejecutar(
         api.PATCH('/api/mantenimientos/{id}/iniciar', { params: { path: { id } }, body: datos }),
       ),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -84,7 +88,7 @@ export function useFinalizarMantenimiento() {
           body: datos,
         }),
       ),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -99,7 +103,7 @@ export function useCancelarMantenimiento() {
           body: datos,
         }),
       ),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -112,7 +116,7 @@ export function useCorregirEjecucion() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['CorregirEjecucionDto'] }) =>
       ejecutar(api.PATCH('/api/mantenimientos/{id}/ejecucion', { params: { path: { id } }, body: datos })),
-    onSuccess: () => {
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: claves.todo })
       void queryClient.invalidateQueries({ queryKey: ['trazas'] })
     },
@@ -125,7 +129,7 @@ export function useEditarMantenimiento() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EditarMantenimientoDto'] }) =>
       ejecutar(api.PATCH('/api/mantenimientos/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: claves.todo }),
   })
 }
 
@@ -142,7 +146,7 @@ export function useAnulacionMantenimiento() {
         ? ejecutar(api.POST('/api/mantenimientos/{id}/anular', opciones))
         : ejecutar(api.POST('/api/mantenimientos/{id}/reversar', opciones))
     },
-    onSuccess: () => {
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: claves.todo })
       void queryClient.invalidateQueries({ queryKey: ['trazas'] })
     },
@@ -190,7 +194,7 @@ export function useCrearPlanesMantenimiento() {
   return useMutation({
     mutationFn: (datos: components['schemas']['CrearPlanesMantenimientoDto']) =>
       ejecutar(api.POST('/api/mantenimientos/planes', { body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -199,7 +203,7 @@ export function useModificarPlanMantenimiento() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['ModificarPlanMantenimientoDto'] }) =>
       ejecutar(api.PATCH('/api/mantenimientos/planes/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -212,7 +216,7 @@ export function useProgramarDesdePlan() {
   return useMutation({
     mutationFn: ({ id, datos = {} }: { id: number; datos?: components['schemas']['ProgramarDesdePlanDto'] }) =>
       ejecutar(api.POST('/api/mantenimientos/planes/{id}/programar', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -225,7 +229,7 @@ export function useAnulacionPlanMantenimiento() {
         ? ejecutar(api.POST('/api/mantenimientos/planes/{id}/anular', opciones))
         : ejecutar(api.POST('/api/mantenimientos/planes/{id}/reversar', opciones))
     },
-    onSuccess: () => {
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: claves.todo })
       void queryClient.invalidateQueries({ queryKey: ['trazas'] })
     },
@@ -239,7 +243,7 @@ export function useAmpliarPlazoMantenimiento() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['AmpliarPlazoMantenimientoDto'] }) =>
       ejecutar(api.PATCH('/api/mantenimientos/{id}/plazo', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 

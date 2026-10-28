@@ -25,47 +25,54 @@ import { BadgeEstado, BadgeSla } from './Badges.tsx'
 
 /** ABIERTO → EN_PROGRESO, con el inicio real opcional. */
 function IniciarModal({ v, opened, onClose }: { v: Vulnerabilidad; opened: boolean; onClose: () => void }) {
+  // El formulario vive dentro del modal: cada apertura empieza vacía (sin la fecha de la anterior).
+  return (
+    <Modal opened={opened} onClose={onClose} title="Iniciar la remediación">
+      <FormIniciar v={v} onClose={onClose} />
+    </Modal>
+  )
+}
+
+function FormIniciar({ v, onClose }: { v: Vulnerabilidad; onClose: () => void }) {
   const iniciar = useIniciarRemediacion()
   const [inicio, setInicio] = useState<string | null>(null)
   return (
-    <Modal opened={opened} onClose={onClose} title="Iniciar la remediación">
-      <Stack gap="sm">
-        <Text size="sm">La vulnerabilidad pasará a <b>En progreso</b>.</Text>
-        <DateTimePicker
-          label="Inicio real del trabajo"
-          description="Opcional. No puede ser futuro ni anterior a la detección."
-          valueFormat="DD MMM YYYY HH:mm"
-          clearable
-          maxDate={ahoraLocal()}
-          minDate={isoAFechaHoraLocal(v.fecha)}
-          value={inicio}
-          onChange={setInicio}
-        />
-        <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
-            Volver
-          </Button>
-          <Button
-            color="yellow"
-            loading={iniciar.isPending}
-            onClick={() =>
-              iniciar.mutate(
-                { id: v.id, datos: inicio ? { fechaInicio: fechaHoraLocalAIso(inicio) } : {} },
-                {
-                  onSuccess: () => {
-                    aviso('Remediación en progreso', 'Registre la fecha real, el verificable y su repositorio para remediarla.')
-                    onClose()
-                  },
-                  onError: fallo('No se pudo iniciar'),
+    <Stack gap="sm">
+      <Text size="sm">La vulnerabilidad pasará a <b>En progreso</b>.</Text>
+      <DateTimePicker
+        label="Inicio real del trabajo"
+        description="Opcional. No puede ser futuro ni anterior a la detección."
+        valueFormat="DD MMM YYYY HH:mm"
+        clearable
+        maxDate={ahoraLocal()}
+        minDate={isoAFechaHoraLocal(v.fecha)}
+        value={inicio}
+        onChange={setInicio}
+      />
+      <Group justify="flex-end">
+        <Button variant="default" onClick={onClose}>
+          Volver
+        </Button>
+        <Button
+          color="yellow"
+          loading={iniciar.isPending}
+          onClick={() =>
+            iniciar.mutate(
+              { id: v.id, datos: inicio ? { fechaInicio: fechaHoraLocalAIso(inicio) } : {} },
+              {
+                onSuccess: () => {
+                  aviso('Remediación en progreso', 'Registre la fecha real, el verificable y su repositorio para remediarla.')
+                  onClose()
                 },
-              )
-            }
-          >
-            Iniciar
-          </Button>
-        </Group>
-      </Stack>
-    </Modal>
+                onError: fallo('No se pudo iniciar'),
+              },
+            )
+          }
+        >
+          Iniciar
+        </Button>
+      </Group>
+    </Stack>
   )
 }
 

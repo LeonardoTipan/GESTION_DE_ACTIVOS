@@ -1,14 +1,19 @@
 import { Alert, Stack, Title } from '@mantine/core'
 import { IconBarrierBlock } from '@tabler/icons-react'
 
-/** Marcador para los módulos que se construyen en fases posteriores. */
-export function EnConstruccion({ modulo, fase }: { modulo: string; fase: number }) {
+/** Texto exacto de los módulos que aún no tienen funcionalidad. */
+export const MENSAJE_EN_DESARROLLO = 'Módulo en desarrollo - Próximamente disponible'
+
+/**
+ * Vista provisional de un módulo del menú que todavía no está construido: no consulta
+ * la API ni muestra datos.
+ */
+export function EnConstruccion({ modulo }: { modulo: string }) {
   return (
     <Stack gap="md">
       <Title order={2}>{modulo}</Title>
-      <Alert icon={<IconBarrierBlock />} title="Módulo en construcción" maw={560}>
-        Esta sección se construirá en la Fase {fase} del frontend. La API ya está
-        disponible y documentada en Swagger.
+      <Alert icon={<IconBarrierBlock />} maw={560}>
+        {MENSAJE_EN_DESARROLLO}
       </Alert>
     </Stack>
   )

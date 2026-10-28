@@ -47,7 +47,11 @@ export function useCaducidades() {
   })
 }
 
-/** Tras cualquier cambio se refrescan listados, resumen, detalle y trazas. */
+/**
+ * Tras cualquier operación se refrescan listados, resumen, detalle y trazas; se usa en
+ * onSettled: también tras un error (p. ej. 409 porque el registro cambió en otra pestaña),
+ * para que la ficha y la tabla muestren lo que confirma el servidor y no un estado antiguo.
+ */
 function useInvalidar() {
   const queryClient = useQueryClient()
   return () => {
@@ -62,7 +66,7 @@ export function usePlanificar() {
   const invalidar = useInvalidar()
   return useMutation({
     mutationFn: (datos: components['schemas']['CrearRenovacionDto']) => ejecutar(api.POST('/api/renovaciones', { body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -71,7 +75,7 @@ export function useEditarPlanificacion() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EditarPlanificacionDto'] }) =>
       ejecutar(api.PATCH('/api/renovaciones/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -81,7 +85,7 @@ export function useIniciar() {
   const invalidar = useInvalidar()
   return useMutation({
     mutationFn: (id: number) => ejecutar(api.PATCH('/api/renovaciones/{id}/iniciar', { params: { path: { id } } })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -90,7 +94,7 @@ export function useGuardarEjecucion() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['ActualizarEjecucionDto'] }) =>
       ejecutar(api.PATCH('/api/renovaciones/{id}/ejecucion', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -99,7 +103,7 @@ export function useCerrar() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['DatosEjecucionDto'] }) =>
       ejecutar(api.PATCH('/api/renovaciones/{id}/cerrar', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -108,7 +112,7 @@ export function useReabrir() {
   return useMutation({
     mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
       ejecutar(api.PATCH('/api/renovaciones/{id}/reabrir', { params: { path: { id } }, body: { motivo } })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -122,6 +126,6 @@ export function useAnulacionRenovacion() {
         ? ejecutar(api.POST('/api/renovaciones/{id}/anular', opciones))
         : ejecutar(api.POST('/api/renovaciones/{id}/reversar', opciones))
     },
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }

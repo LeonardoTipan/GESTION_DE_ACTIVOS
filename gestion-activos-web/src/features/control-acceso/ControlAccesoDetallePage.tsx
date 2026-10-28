@@ -33,7 +33,18 @@ const aviso = (titulo: string, cerrar?: () => void) => ({
  * Cerrar: la fecha y hora REALES de la atención las indica quien cierra (puede
  * ser una fecha histórica); no se rellena con la hora actual.
  */
-function CerrarModal({ abierto, onCerrar, solicitud: s }: { abierto: boolean; onCerrar: () => void; solicitud: Solicitud }) {
+function CerrarModal({ abierto, onCerrar, solicitud }: { abierto: boolean; onCerrar: () => void; solicitud: Solicitud }) {
+  // El formulario y su mutación viven DENTRO del modal: se montan de nuevo en cada apertura.
+  // Fuera, sobrevivían al cierre: tras reabrir la solicitud aparecían la fecha y la resolución
+  // de la atención anterior y el botón seguía «cargando» (isSuccess), sin poder volver a cerrar.
+  return (
+    <Modal opened={abierto} onClose={onCerrar} title={`Cerrar ${solicitud.codigoUnico}`} size="lg">
+      <FormCerrar onCerrar={onCerrar} solicitud={solicitud} />
+    </Modal>
+  )
+}
+
+function FormCerrar({ onCerrar, solicitud: s }: { onCerrar: () => void; solicitud: Solicitud }) {
   const cerrar = useCerrarSolicitud()
   const [fecha, setFecha] = useState<string | null>(null)
   const [resolucion, setResolucion] = useState('')
@@ -48,37 +59,35 @@ function CerrarModal({ abierto, onCerrar, solicitud: s }: { abierto: boolean; on
         : null
   const errorResolucion = resolucion.trim().length < 10 ? 'Mínimo 10 caracteres.' : null
   return (
-    <Modal opened={abierto} onClose={onCerrar} title={`Cerrar ${s.codigoUnico}`} size="lg">
-      <form
-        onSubmit={(e) => {
-          e.preventDefault()
-          setTocado(true)
-          if (errorFecha || errorResolucion) return
-          cerrar.mutate({ id: s.id, datos: { fechaAtendido: fechaHoraLocalAIso(fecha!), resolucion: resolucion.trim() } }, aviso('Solicitud cerrada', onCerrar))
-        }}
-      >
-        {/* Sin verificable ni repositorio: el cierre de una solicitud es la fecha atendida y la resolución. */}
-        <BloqueEjecucionCierre volver={onCerrar} cerrar={{ etiqueta: 'Cerrar solicitud', cargando: cerrar.isPending || cerrar.isSuccess, icono: false }}>
-          <Text size="sm" c="dimmed">
-            {baja
-              ? 'Desvinculación de acceso (BAJA): describa cómo se retiró el acceso. El activo no se modifica.'
-              : 'Otorgamiento de acceso (ALTA): describa cómo se otorgó el acceso.'}
-          </Text>
-          <DateTimePicker
-            label="Fecha atendida"
-            description={`Fecha y hora reales de la atención; puede ser anterior al registro. Solicitada el ${formatearFechaHora(s.fechaSolicitud)}.`}
-            valueFormat="DD MMM YYYY HH:mm"
-            withAsterisk
-            minDate={isoAFechaHoraLocal(s.fechaSolicitud)}
-            maxDate={ahoraLocal()}
-            value={fecha}
-            onChange={setFecha}
-            error={tocado ? errorFecha : null}
-          />
-          <Textarea label="Resolución" withAsterisk autosize minRows={3} value={resolucion} onChange={(e) => setResolucion(e.currentTarget.value)} error={tocado ? errorResolucion : null} />
-        </BloqueEjecucionCierre>
-      </form>
-    </Modal>
+    <form
+      onSubmit={(e) => {
+        e.preventDefault()
+        setTocado(true)
+        if (errorFecha || errorResolucion) return
+        cerrar.mutate({ id: s.id, datos: { fechaAtendido: fechaHoraLocalAIso(fecha!), resolucion: resolucion.trim() } }, aviso('Solicitud cerrada', onCerrar))
+      }}
+    >
+      {/* Sin verificable ni repositorio: el cierre de una solicitud es la fecha atendida y la resolución. */}
+      <BloqueEjecucionCierre volver={onCerrar} cerrar={{ etiqueta: 'Cerrar solicitud', cargando: cerrar.isPending || cerrar.isSuccess, icono: false }}>
+        <Text size="sm" c="dimmed">
+          {baja
+            ? 'Desvinculación de acceso (BAJA): describa cómo se retiró el acceso. El activo no se modifica.'
+            : 'Otorgamiento de acceso (ALTA): describa cómo se otorgó el acceso.'}
+        </Text>
+        <DateTimePicker
+          label="Fecha atendida"
+          description={`Fecha y hora reales de la atención; puede ser anterior al registro. Solicitada el ${formatearFechaHora(s.fechaSolicitud)}.`}
+          valueFormat="DD MMM YYYY HH:mm"
+          withAsterisk
+          minDate={isoAFechaHoraLocal(s.fechaSolicitud)}
+          maxDate={ahoraLocal()}
+          value={fecha}
+          onChange={setFecha}
+          error={tocado ? errorFecha : null}
+        />
+        <Textarea label="Resolución" withAsterisk autosize minRows={3} value={resolucion} onChange={(e) => setResolucion(e.currentTarget.value)} error={tocado ? errorResolucion : null} />
+      </BloqueEjecucionCierre>
+    </form>
   )
 }
 

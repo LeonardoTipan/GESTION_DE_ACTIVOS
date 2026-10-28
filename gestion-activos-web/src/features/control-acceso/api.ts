@@ -62,6 +62,11 @@ export function useCategoriasElegibles(tipoAcceso: TipoAcceso) {
   })
 }
 
+/**
+ * Tras cualquier operación se refrescan listado, detalle e historial; se usa en onSettled:
+ * también tras un error (p. ej. 409 porque el registro cambió en otra pestaña), para que la
+ * ficha y la tabla muestren lo que confirma el servidor y no un estado antiguo.
+ */
 function useInvalidar() {
   const queryClient = useQueryClient()
   return () => queryClient.invalidateQueries({ queryKey: claves.todo })
@@ -71,7 +76,7 @@ export function useCrearSolicitud() {
   const invalidar = useInvalidar()
   return useMutation({
     mutationFn: (datos: DatosCrear) => ejecutar(api.POST('/api/control-acceso', { body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -80,7 +85,7 @@ export function useEditarSolicitud() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: DatosEditar }) =>
       ejecutar(api.PATCH('/api/control-acceso/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -88,7 +93,7 @@ export function usePasarAPendiente() {
   const invalidar = useInvalidar()
   return useMutation({
     mutationFn: (id: number) => ejecutar(api.PATCH('/api/control-acceso/{id}/pendiente', { params: { path: { id } } })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -97,7 +102,7 @@ export function useCerrarSolicitud() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: S['CerrarControlAccesoDto'] }) =>
       ejecutar(api.PATCH('/api/control-acceso/{id}/cerrar', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -106,6 +111,6 @@ export function useReabrirSolicitud() {
   return useMutation({
     mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
       ejecutar(api.PATCH('/api/control-acceso/{id}/reabrir', { params: { path: { id } }, body: { motivo } })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }

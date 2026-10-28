@@ -1,7 +1,9 @@
 import {
   IconCalendarMonth,
   IconCategory,
+  IconClipboardCheck,
   IconDatabaseExport,
+  IconDeviceLaptop,
   IconKey,
   IconLayoutDashboard,
   IconRefresh,
@@ -70,6 +72,20 @@ export const MENU: readonly ItemMenu[] = [
     ruta: '/renovaciones',
     icono: IconRefresh,
     descripcion: 'Licencias, garantías, certificados y contratos: planificación, ejecución y caducidad.',
+    roles: [],
+  },
+  {
+    etiqueta: 'Protección de Endpoints',
+    ruta: '/proteccion-endpoints',
+    icono: IconDeviceLaptop,
+    descripcion: 'Módulo en desarrollo - Próximamente disponible',
+    roles: [],
+  },
+  {
+    etiqueta: 'Evaluación de Sistemas Productivos',
+    ruta: '/evaluacion-sistemas-productivos',
+    icono: IconClipboardCheck,
+    descripcion: 'Módulo en desarrollo - Próximamente disponible',
     roles: [],
   },
   {

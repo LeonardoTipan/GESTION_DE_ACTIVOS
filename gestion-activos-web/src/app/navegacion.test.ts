@@ -7,7 +7,15 @@ const rutas = (roles: Parameters<typeof menuPara>[0]) =>
 describe('menuPara', () => {
   it('admin ve todo, incluidos los catálogos', () => {
     expect(rutas(['admin'])).toContain('/catalogos')
-    expect(rutas(['admin'])).toHaveLength(9)
+    expect(rutas(['admin'])).toHaveLength(11)
+  })
+
+  it('las dos opciones provisionales están para cualquier usuario autenticado, tras Renovaciones', () => {
+    for (const rol of ['admin', 'analista', 'auditor'] as const) {
+      const r = rutas([rol])
+      expect(r.indexOf('/proteccion-endpoints')).toBe(r.indexOf('/renovaciones') + 1)
+      expect(r.indexOf('/evaluacion-sistemas-productivos')).toBe(r.indexOf('/renovaciones') + 2)
+    }
   })
 
   it('analista y auditor no ven los catálogos', () => {
@@ -21,6 +29,8 @@ describe('menuPara', () => {
         '/vulnerabilidades',
         '/control-acceso',
         '/renovaciones',
+        '/proteccion-endpoints',
+        '/evaluacion-sistemas-productivos',
         '/calendario',
       ])
     }

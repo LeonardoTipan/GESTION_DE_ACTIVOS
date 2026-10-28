@@ -15,6 +15,7 @@ import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPag
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
 import { VulnerabilidadPage } from '../features/vulnerabilidades/VulnerabilidadPage.tsx'
 import { VulnerabilidadesPage } from '../features/vulnerabilidades/VulnerabilidadesPage.tsx'
+import { EnConstruccion } from '../shared/components/EnConstruccion.tsx'
 import { PaginaNoEncontrada } from '../shared/components/PaginaNoEncontrada.tsx'
 import { AppLayout } from './layout/AppLayout.tsx'
 
@@ -40,6 +41,9 @@ export const router = createBrowserRouter([
       { path: 'control-acceso/:id', element: <ControlAccesoDetallePage /> },
       { path: 'renovaciones', element: <RenovacionesPage /> },
       { path: 'renovaciones/:id', element: <RenovacionPage /> },
+      // Módulos aún sin construir: solo la vista provisional (sin API ni datos).
+      { path: 'proteccion-endpoints', element: <EnConstruccion modulo="Protección de Endpoints" /> },
+      { path: 'evaluacion-sistemas-productivos', element: <EnConstruccion modulo="Evaluación de Sistemas Productivos" /> },
       { path: 'calendario', element: <CalendarioPage /> },
       {
         path: 'catalogos',
