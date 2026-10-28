@@ -1,6 +1,45 @@
 # Continuación: rama `feature/estandarizacion-y-renovaciones`
 
-Estado al cierre del 27/10/2026, para retomar el trabajo sin repetir tareas.
+Estado al cierre del 28/10/2026, para retomar el trabajo sin repetir tareas.
+
+## 0. Avance del 28/10/2026 y siguiente paso
+
+**Commits nuevos** (subidos; la rama queda 18 commits por delante de `main`, sin fusionar):
+
+| Commit | Contenido |
+|---|---|
+| `2d4f607` | refactor(ui): estandarización visual de tableros. Detección de Vulnerabilidades y Planificación de Renovaciones siguen la estructura de Planificación de Mantenimientos: cifras → 2 paneles → sección con su botón → filtros → tabla. Componentes compartidos `shared/components/Tablero.tsx` (`Cifra`, `PanelTablero`) y `EncabezadoSeccion.tsx`. Mantenimientos no cambió (comparación de capturas: 0 píxeles distintos) |
+| `fb26722` | fix(web): reactividad de las fichas tras guardar, cerrar o fallar (invalidación en `onSettled`; formularios de cierre dentro del modal) y las dos opciones provisionales del menú |
+
+**Verificado** con pruebas y en el navegador, contra la base de pruebas:
+
+- **Web:** 122 pruebas superadas, compilación de producción correcta y solo los 2 avisos de lint de siempre.
+- **Sondas sin fallos:**
+  - reactividad (`p20`);
+  - errores (`p20b`);
+  - menú (`p21`);
+  - los cuatro módulos (`p18`);
+  - tableros (`p28`): las cifras coinciden con la API.
+- **Backend:** sin ningún cambio.
+
+**Reglas del usuario aprendidas:**
+
+- «Unificar la interfaz» significa solo apariencia: la **estructura visual completa** de la pantalla de referencia, con los datos reales de cada módulo.
+- Nunca se añaden fases, formularios ni campos que no se pidieron.
+- Si un panel no tiene datos reales equivalentes, se explica; no se inventa.
+
+**Siguiente tarea (29/10): Protección de Endpoints y Evaluación de Sistemas Productivos.** Hoy las dos son vistas provisionales: rutas `/proteccion-endpoints` y `/evaluacion-sistemas-productivos`, el componente `EnConstruccion` y el mensaje «Módulo en desarrollo - Próximamente disponible».
+
+En el repositorio **no hay ninguna definición funcional** de estos módulos. Solo consta que el software ESET aparece en el inventario de GLPI.
+
+Antes de crear modelos, migraciones o una API hay que **acordar con el usuario**:
+
+1. **Los requisitos y campos** de cada módulo. Si se propone una fase de planificación, debe seguir el patrón visual de Mantenimientos.
+2. **Si habrá fase de ejecución** con fecha real, verificable y repositorio, como en los demás módulos.
+3. **A qué activos se aplica:** equipos de usuario, servidores o sistemas en producción.
+4. **La arquitectura:** cada uno será un módulo NestJS independiente.
+
+Los cambios de base de datos requieren autorización y el procedimiento habitual: respaldo verificado, prueba en `gestion_activos_test` y después desarrollo.
 
 Lo marcado como **[VERIFICADO]** se comprobó en esta sesión con pruebas o consultas reales. Lo marcado como **[PENDIENTE]** todavía no se ha comprobado.
 
@@ -26,7 +65,7 @@ Esta rama estandariza los módulos en **dos fases**, sin fase de verificación a
 | Dato | Valor |
 |---|---|
 | Rama | `feature/estandarizacion-y-renovaciones`, subida y sincronizada con `origin` **[VERIFICADO]** |
-| Respecto a `main` (`e0bacb8`) | 15 commits por delante y 0 por detrás **[VERIFICADO]**, más el commit de este documento |
+| Respecto a `main` (`e0bacb8`) | 0 commits por detrás. Delante: 15 hasta `9309458`; después vienen `bf37aa6` (este documento), `fb26722`, `2d4f607` y el commit de esta actualización **[VERIFICADO]** |
 | Cambios locales que **no** son de esta rama | `GLPI-PRACTICA/DOCKER COMPOSE.yml`: en el índice como archivo vacío y con 33 líneas en el árbol de trabajo. Lo preparó el usuario. `gestion-activos-api/package-lock.json`: solo cambian los finales de línea. Ningún commit de la rama los incluye **[VERIFICADO]**. No commitearlos ni descartarlos. |
 
 **Commits de la rama**, del más reciente al más antiguo:
