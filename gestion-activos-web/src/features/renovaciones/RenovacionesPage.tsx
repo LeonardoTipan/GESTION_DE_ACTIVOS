@@ -4,6 +4,7 @@ import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
 import { IconCalendarEvent, IconChecklist, IconPlus, IconSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFecha } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
@@ -15,6 +16,7 @@ import { SelectorActivo } from '../inventario/componentes/SelectorActivo.tsx'
 import { useCaducidades, useRenovaciones, useResumenVigencias, type EstadoRenovacion, type Renovacion, type TipoRenovacion, type Vigencia } from './api.ts'
 import { BadgeEstado, BadgeVigencia } from './componentes.tsx'
 import { aConsultaApi, escribirFiltros, leerFiltros, type Fase } from './filtros-url.ts'
+import { PanelesPlanificacion } from './PanelesPlanificacion.tsx'
 import { PlanificacionModal } from './PlanificacionModal.tsx'
 import { ESTADOS, INFO_ESTADO, INFO_TIPO, INFO_VIGENCIA, textoDias, TIPOS, VIGENCIAS } from './textos.ts'
 
@@ -184,15 +186,21 @@ export function RenovacionesPage() {
             La vigencia del elemento (vigente, próximo a caducar, caducado) es distinta del estado del proceso.
           </Text>
         </div>
-        {puedeOperar && (
+        {/* En Ejecución y cierre el alta sigue en la cabecera, como antes; en Planificación va en su sección. */}
+        {puedeOperar && fase === 'ejecucion' && (
           <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
             Planificar renovación
           </Button>
         )}
       </Group>
 
-      <ResumenVigencias activa={filtros.vigencia} onElegir={(vigencia) => actualizar({ vigencia, page: 1 })} />
-      <ProximasCaducidades />
+      {/* Ejecución y cierre: como antes (cifras y próximas caducidades sobre las pestañas). */}
+      {fase === 'ejecucion' && (
+        <>
+          <ResumenVigencias activa={filtros.vigencia} onElegir={(vigencia) => actualizar({ vigencia, page: 1 })} />
+          <ProximasCaducidades />
+        </>
+      )}
 
       <Tabs value={fase} onChange={(v) => actualizar({ fase: v === 'ejecucion' ? 'ejecucion' : undefined, estado: undefined, page: 1 })}>
         <Tabs.List>
@@ -204,11 +212,31 @@ export function RenovacionesPage() {
           </Tabs.Tab>
         </Tabs.List>
       </Tabs>
-      <Text size="sm" c="dimmed">
-        {fase === 'planificacion'
-          ? 'Todas las renovaciones planificadas, en cualquier estado. Abra una para corregir su planificación o pasar a la ejecución.'
-          : 'Lo pendiente de renovar (abierto o en progreso). Abra una para registrar la fecha real, la nueva caducidad y la evidencia, y cerrarla.'}
-      </Text>
+      {/* Planificación: tablero con la organización de Planificación de Mantenimientos (cifras y dos paneles). */}
+      {fase === 'planificacion' && (
+        <Stack gap="sm">
+          <ResumenVigencias activa={filtros.vigencia} onElegir={(vigencia) => actualizar({ vigencia, page: 1 })} />
+          <PanelesPlanificacion />
+        </Stack>
+      )}
+      {fase === 'planificacion' ? (
+        // Misma presentación que «Planificaciones de mantenimiento»: título de la sección y su acción.
+        <EncabezadoSeccion
+          titulo="Planificaciones de renovación"
+          descripcion="Todas las renovaciones planificadas, en cualquier estado. Abra una para corregir su planificación o pasar a la ejecución."
+          accion={
+            puedeOperar && (
+              <Button leftSection={<IconPlus size={16} />} onClick={modal.open}>
+                Planificar renovación
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <Text size="sm" c="dimmed">
+          Lo pendiente de renovar (abierto o en progreso). Abra una para registrar la fecha real, la nueva caducidad y la evidencia, y cerrarla.
+        </Text>
+      )}
 
       <Group gap="sm" align="flex-end" wrap="wrap">
         <CampoTexto label="Buscar" placeholder="Sistema, descripción o verificable" valor={filtros.q} onCambio={(q) => actualizar({ q, page: 1 })} w={{ base: '100%', sm: 220 }} />

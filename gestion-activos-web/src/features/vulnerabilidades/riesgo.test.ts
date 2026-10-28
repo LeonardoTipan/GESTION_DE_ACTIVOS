@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { accionesPermitidas, faltantesParaRemediar, FORMATO_CVE, semaforoSla } from './riesgo.ts'
+import type { Vulnerabilidad } from './api/vulnerabilidades.ts'
+import { accionesPermitidas, clasificarPendientes, faltantesParaRemediar, FORMATO_CVE, semaforoSla } from './riesgo.ts'
 
 describe('acciones por estado (dos fases)', () => {
   it('ABIERTO: iniciar o remediar · EN_PROGRESO: remediar · REMEDIADO: reabrir', () => {
@@ -40,5 +41,26 @@ describe('formato CVE', () => {
   it('acepta el formato oficial y rechaza el resto', () => {
     expect(FORMATO_CVE.test('CVE-2026-12345')).toBe(true)
     expect(FORMATO_CVE.test('CVE-26-1')).toBe(false)
+  })
+})
+
+describe('tablero de Detección', () => {
+  const ahora = Date.parse('2026-10-28T12:00:00Z')
+  const dia = 86_400_000
+  const v = (id: number, fechaLimite: string | null) => ({ id, fechaLimite }) as Vulnerabilidad
+
+  it('plazos de los próximos 60 días (vencidos incluidos y marcados), ordenados por fecha límite', () => {
+    const { proximos } = clasificarPendientes(
+      [v(1, new Date(ahora + 10 * dia).toISOString()), v(2, new Date(ahora - dia).toISOString()), v(3, new Date(ahora + 61 * dia).toISOString()), v(4, null)],
+      ahora,
+    )
+    expect(proximos.map((p) => [p.v.id, p.vencido])).toEqual([
+      [2, true],
+      [1, false],
+    ])
+  })
+
+  it('pendientes sin plazo: solo las que no tienen fecha límite', () => {
+    expect(clasificarPendientes([v(1, null), v(2, new Date(ahora).toISOString()), v(3, null)], ahora).sinPlazo.map((x) => x.id)).toEqual([1, 3])
   })
 })

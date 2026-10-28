@@ -102,3 +102,21 @@ export function semaforoSla(
   }
   return { tipo: 'en-plazo', color: 'green', etiqueta: `En plazo · ${dias} d` }
 }
+
+/** Días que abarca el tablero de Detección (como el de Planificación de Mantenimientos). */
+export const DIAS_TABLERO = 60
+
+/**
+ * Tablero de Detección a partir de las pendientes de remediar: las que tienen plazo hasta
+ * dentro de DIAS_TABLERO días (las vencidas incluidas y marcadas), por fecha límite, y las
+ * que no tienen plazo. `ahora` lo fija quien consulta (no se calcula al dibujar).
+ */
+export function clasificarPendientes(pendientes: Vulnerabilidad[], ahora: number) {
+  const limite = ahora + DIAS_TABLERO * MS_DIA
+  const proximos = pendientes
+    .filter((v) => v.fechaLimite && Date.parse(v.fechaLimite) <= limite)
+    .sort((a, b) => Date.parse(a.fechaLimite!) - Date.parse(b.fechaLimite!))
+    .map((v) => ({ v, vencido: Date.parse(v.fechaLimite!) < ahora }))
+  const sinPlazo = pendientes.filter((v) => !v.fechaLimite)
+  return { proximos, sinPlazo }
+}

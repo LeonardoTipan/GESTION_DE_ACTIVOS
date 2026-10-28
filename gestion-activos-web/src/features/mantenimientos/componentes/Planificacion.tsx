@@ -28,6 +28,7 @@ import { notifications } from '@mantine/notifications'
 import { IconCalendarPlus, IconPlus, IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
+import { Cifra, PanelTablero } from '../../../shared/components/Tablero.tsx'
 import { fechaHoraLocalAIso, formatearDia, formatearFechaHora, isoAFechaHoraLocal } from '../../../shared/formato.ts'
 import {
   AccionesRegistro,
@@ -73,22 +74,6 @@ const AÑOS = Array.from({ length: 6 }, (_, i) => String(AÑO_ACTUAL + 1 - i))
 
 const folio = (id: number) => `PLM-${String(id).padStart(4, '0')}`
 
-function Cifra({ titulo, valor, color, pista }: { titulo: string; valor: number | undefined; color?: string; pista: string }) {
-  return (
-    <Card withBorder padding="sm">
-      <Text size="xs" c="dimmed" tt="uppercase" fw={600}>
-        {titulo}
-      </Text>
-      <Text fz={28} fw={700} c={valor ? color : undefined}>
-        {valor ?? '—'}
-      </Text>
-      <Text size="xs" c="dimmed">
-        {pista}
-      </Text>
-    </Card>
-  )
-}
-
 /** Tablero de la capa 1: cifras y calendario de los próximos 60 días. */
 function Tablero() {
   const { data, isPending, error } = useTableroMantenimientos()
@@ -101,10 +86,7 @@ function Tablero() {
         <Cifra titulo="Planes vencidos" valor={data?.planesVencidos} color="red" pista="Próxima fecha ya pasada" />
       </SimpleGrid>
       <SimpleGrid cols={{ base: 1, lg: 2 }}>
-        <Card withBorder padding="sm">
-          <Title order={5} mb="xs">
-            Calendario · próximos 60 días
-          </Title>
+        <PanelTablero titulo="Calendario · próximos 60 días">
           {isPending ? (
             <Center py="md">
               <Loader size="sm" />
@@ -148,11 +130,8 @@ function Tablero() {
               </Table>
             </ScrollArea.Autosize>
           )}
-        </Card>
-        <Card withBorder padding="sm">
-          <Title order={5} mb="xs">
-            Activos operativos sin plan preventivo
-          </Title>
+        </PanelTablero>
+        <PanelTablero titulo="Activos operativos sin plan preventivo">
           {data && data.ejemplosSinPlan.length === 0 ? (
             <Text size="sm" c="dimmed">
               Todos los activos operativos tienen un plan preventivo vigente.
@@ -177,7 +156,7 @@ function Tablero() {
               )}
             </Stack>
           )}
-        </Card>
+        </PanelTablero>
       </SimpleGrid>
     </Stack>
   )

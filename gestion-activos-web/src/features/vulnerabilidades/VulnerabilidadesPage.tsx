@@ -17,6 +17,7 @@ import { IconPlus, IconSearch, IconShieldCheck, IconShieldSearch } from '@tabler
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Calendario } from '../../shared/calendario/Calendario.tsx'
+import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearDia } from '../../shared/formato.ts'
 import { useFiltrosUrl } from '../../shared/hooks/use-filtros-url.ts'
@@ -35,6 +36,7 @@ import {
 } from './api/vulnerabilidades.ts'
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { RegistrarModal } from './componentes/RegistrarModal.tsx'
+import { TableroDeteccion } from './componentes/TableroDeteccion.tsx'
 import { aConsultaApi, escribirFiltros, leerFiltros, type Fase } from './filtros-url.ts'
 import { ESTADOS, INFO_ESTADO, INFO_NIVEL, NIVELES } from './riesgo.ts'
 
@@ -211,7 +213,8 @@ export function VulnerabilidadesPage() {
             ISO/IEC 27001:2022 · A.8.8 Gestión de las vulnerabilidades técnicas
           </Text>
         </div>
-        {puedeOperar && (
+        {/* En Remediación el alta sigue en la cabecera, como antes; en Detección va en su sección. */}
+        {puedeOperar && fase === 'remediacion' && (
           <Button leftSection={<IconPlus size={18} />} onClick={modal.open}>
             Registrar vulnerabilidad
           </Button>
@@ -228,11 +231,26 @@ export function VulnerabilidadesPage() {
           </Tabs.Tab>
         </Tabs.List>
       </Tabs>
-      <Text size="sm" c="dimmed">
-        {fase === 'deteccion'
-          ? 'Registro de las vulnerabilidades detectadas, en cualquier estado. Abra una para corregir su detección o pasar a la remediación.'
-          : 'Lo pendiente de remediar (abierto o en progreso). Abra una para iniciar la remediación, registrar la fecha real, el verificable y su repositorio, y marcarla como remediada.'}
-      </Text>
+      {/* Tablero de la fase (patrón de Planificación de Mantenimientos), solo en Detección. */}
+      {fase === 'deteccion' && <TableroDeteccion />}
+      {fase === 'deteccion' ? (
+        // Misma presentación que «Planificaciones de mantenimiento»: título de la sección y su acción.
+        <EncabezadoSeccion
+          titulo="Vulnerabilidades detectadas"
+          descripcion="Registro de las vulnerabilidades detectadas, en cualquier estado. Abra una para corregir su detección o pasar a la remediación."
+          accion={
+            puedeOperar && (
+              <Button leftSection={<IconPlus size={16} />} onClick={modal.open}>
+                Registrar vulnerabilidad
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <Text size="sm" c="dimmed">
+          Lo pendiente de remediar (abierto o en progreso). Abra una para iniciar la remediación, registrar la fecha real, el verificable y su repositorio, y marcarla como remediada.
+        </Text>
+      )}
 
       <Group gap="sm" align="flex-end" wrap="wrap">
         <CampoTexto label="Buscar" placeholder="CVE, descripción o sistema" valor={filtros.q} onCambio={(q) => actualizar({ q, page: 1 })} w={{ base: '100%', sm: 220 }} />

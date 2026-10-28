@@ -7,6 +7,7 @@ import {
 import { api } from '../../../api/client.ts'
 import type { components, paths } from '../../../api/schema'
 import { ejecutar } from '../../../shared/api/errores.ts'
+import { clasificarPendientes } from '../riesgo.ts'
 
 export type Vulnerabilidad = components['schemas']['VulnerabilidadDto']
 export type NivelRiesgo = Vulnerabilidad['nivelRiesgo']
@@ -30,6 +31,33 @@ export function useVulnerabilidades(filtros: FiltrosApiVulnerabilidades) {
   })
 }
 
+/** Páginas de 100 (el máximo de la API) que se leen como mucho para el tablero. */
+const PAGINAS_TABLERO = 10
+
+/**
+ * Todas las pendientes de remediar (abiertas o en progreso, sin anuladas), para el tablero
+ * de Detección. Recorre las páginas del listado existente; si hubiera más de
+ * PAGINAS_TABLERO × 100, lo indica con `truncado` (las cifras serían parciales).
+ */
+export function usePendientesDeRemediar() {
+  return useQuery({
+    queryKey: [...claves.todo, 'tablero', 'pendientes'],
+    queryFn: async () => {
+      const filas: Vulnerabilidad[] = []
+      let total = 0
+      for (let page = 1; page <= PAGINAS_TABLERO; page++) {
+        const r = await ejecutar(
+          api.GET('/api/vulnerabilidades', { params: { query: { abiertas: true, incluirAnulados: false, page, limit: 100 } } }),
+        )
+        filas.push(...r.data)
+        total = r.meta.total
+        if (page >= r.meta.totalPages) break
+      }
+      return { ...clasificarPendientes(filas, Date.now()), leidas: filas.length, total, truncado: filas.length < total }
+    },
+  })
+}
+
 export function useVulnerabilidad(id: number) {
   return useQuery({
     queryKey: claves.detalle(id),
@@ -38,7 +66,11 @@ export function useVulnerabilidad(id: number) {
   })
 }
 
-/** Tras cualquier cambio se refrescan listados, detalle y trazas. */
+/**
+ * Tras cualquier operación se refrescan listados, detalle y trazas; se usa en onSettled:
+ * también tras un error (p. ej. 409 porque el registro cambió en otra pestaña), para que la
+ * ficha y la tabla muestren lo que confirma el servidor y no un estado antiguo.
+ */
 function useInvalidarVulnerabilidades() {
   const queryClient = useQueryClient()
   return () => {
@@ -55,7 +87,7 @@ export function useRegistrarLote() {
   return useMutation({
     mutationFn: (datos: components['schemas']['RegistrarLoteDto']) =>
       ejecutar(api.POST('/api/vulnerabilidades/lote', { body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -65,7 +97,7 @@ export function useEditarVulnerabilidad() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['EditarVulnerabilidadDto'] }) =>
       ejecutar(api.PATCH('/api/vulnerabilidades/{id}', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -77,7 +109,7 @@ export function useIniciarRemediacion() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['IniciarRemediacionDto'] }) =>
       ejecutar(api.PATCH('/api/vulnerabilidades/{id}/iniciar', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -87,7 +119,7 @@ export function useActualizarRemediacion() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['ActualizarRemediacionDto'] }) =>
       ejecutar(api.PATCH('/api/vulnerabilidades/{id}/remediacion', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -97,7 +129,7 @@ export function useRemediar() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: components['schemas']['RemediarDto'] }) =>
       ejecutar(api.PATCH('/api/vulnerabilidades/{id}/remediar', { params: { path: { id } }, body: datos })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -107,7 +139,7 @@ export function useReabrir() {
   return useMutation({
     mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
       ejecutar(api.PATCH('/api/vulnerabilidades/{id}/reabrir', { params: { path: { id } }, body: { motivo } })),
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 
@@ -126,7 +158,7 @@ export function useAnulacionVulnerabilidad() {
         ? ejecutar(api.POST('/api/vulnerabilidades/{id}/anular', opciones))
         : ejecutar(api.POST('/api/vulnerabilidades/{id}/reversar', opciones))
     },
-    onSuccess: invalidar,
+    onSettled: invalidar,
   })
 }
 

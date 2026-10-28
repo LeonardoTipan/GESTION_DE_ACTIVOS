@@ -23,7 +23,7 @@ interface Props {
 /** Fase 1 · Planificación: crear o corregir (con motivo). */
 export function PlanificacionModal({ opened, onClose, renovacion, onGuardada }: Props) {
   return (
-    <Modal opened={opened} onClose={onClose} size="lg" title={renovacion ? `Corregir la planificación · #${renovacion.id}` : 'Planificación · nueva renovación'}>
+    <Modal opened={opened} onClose={onClose} size="xl" title={renovacion ? `Corregir la planificación · #${renovacion.id}` : 'Planificación · nueva renovación'}>
       <Formulario onClose={onClose} renovacion={renovacion} onGuardada={onGuardada} />
     </Modal>
   )
@@ -194,7 +194,7 @@ function Formulario({ onClose, renovacion: r, onGuardada }: Omit<Props, 'opened'
         {r && <CampoMotivoCambio {...form.getInputProps('motivoCambio')} />}
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
-            Volver
+            Cancelar
           </Button>
           <Button type="submit" loading={planificar.isPending || editar.isPending} disabled={!!r && !form.isDirty()}>
             {r ? 'Guardar cambios' : 'Planificar (estado Abierto)'}

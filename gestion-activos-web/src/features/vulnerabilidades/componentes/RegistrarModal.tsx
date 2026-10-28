@@ -38,7 +38,7 @@ interface Props {
  */
 export function RegistrarModal({ opened, onClose, ...resto }: Props) {
   return (
-    <Modal opened={opened} onClose={onClose} title="Detección · registrar vulnerabilidad" size="lg">
+    <Modal opened={opened} onClose={onClose} title="Detección · registrar vulnerabilidad" size="xl">
       {/* El formulario vive dentro del Modal: se monta (y se reinicia) en cada apertura. */}
       <FormRegistrar onClose={onClose} {...resto} />
     </Modal>
@@ -164,7 +164,7 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
         </SimpleGrid>
         <Group justify="flex-end" mt="md">
           <Button variant="default" onClick={onClose}>
-            Volver
+            Cancelar
           </Button>
           <Button type="submit" loading={lote.isPending || lote.isSuccess}>
             Registrar (estado Abierto)
