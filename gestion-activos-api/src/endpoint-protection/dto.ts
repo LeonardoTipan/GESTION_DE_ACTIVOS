@@ -7,7 +7,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
 import { RegistroDto, aBooleano } from '../common/dto/registro.dto.js';
 import { EstadoPeriodoEndpoint } from '../generated/prisma/enums.js';
 
-/** Fase 1 · apertura del período mensual (los datos de la fase 2 llegarán con su propia API). */
+/** Fase 1 · apertura del período mensual. Los datos de la fase 2 van en DatosRegistroPeriodoDto. */
 export class AbrirPeriodoDto {
   @ApiProperty({ example: 2026, minimum: 2000, maximum: 2100 })
   @Type(() => Number)
@@ -38,6 +38,59 @@ export class AbrirPeriodoDto {
   observacion?: string;
 }
 
+/**
+ * Fase 2 · registro y cierre del mes. Todo opcional al guardar avance; al cerrar se exigen los
+ * dos totales, el verificable y el repositorio. Los totales los digita el técnico según el
+ * inventario real: el número de equipos que ve la aplicación es solo una referencia.
+ */
+export class DatosRegistroPeriodoDto {
+  @ApiPropertyOptional({ example: 26, minimum: 1, description: 'Total de equipos sujetos al control según el inventario del mes.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(1_000_000)
+  totalActivos?: number;
+
+  @ApiPropertyOptional({ example: 25, minimum: 0, description: 'Equipos con antivirus/EDR activo; no puede superar el total.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  equiposConAntivirus?: number;
+
+  @ApiPropertyOptional({ example: 'Inventario de equipos octubre 2026.xlsx', description: '«Verificable»: inventario de equipos del mes.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  evidencia?: string;
+
+  @ApiPropertyOptional({ example: 'Carpeta Compartida TICs/Antivirus', description: '«Repositorio Verificable»: carpeta o URL http(s).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  repositorioVerificable?: string;
+
+  @ApiPropertyOptional({ example: 'Un equipo en reparación sin antivirus.', description: 'Observación del período (la de la apertura, ampliada).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  observacion?: string;
+}
+
+export class ReabrirPeriodoDto {
+  @ApiProperty({ example: 'El inventario del mes tenía equipos duplicados: hay que corregir el total.' })
+  @Trim()
+  @IsString()
+  @MinLength(20, { message: 'El motivo debe tener al menos 20 caracteres.' })
+  @MaxLength(2000)
+  motivo: string;
+}
+
 export class QueryPeriodosDto extends PaginationQueryDto {
   @ApiPropertyOptional({ example: 2026 })
   @IsOptional()
@@ -66,6 +119,15 @@ export class PeriodoEndpointDto extends RegistroDto {
   @ApiProperty() responsable: string;
   @ApiProperty({ type: String, nullable: true }) observacion: string | null;
   @ApiProperty({ enum: EstadoPeriodoEndpoint }) estado: EstadoPeriodoEndpoint;
+  // Fase 2
+  @ApiProperty({ type: Number, nullable: true }) totalActivos: number | null;
+  @ApiProperty({ type: Number, nullable: true }) equiposConAntivirus: number | null;
+  @ApiProperty({ type: String, nullable: true, description: '«Verificable».' }) evidencia: string | null;
+  @ApiProperty({ type: String, nullable: true, description: '«Repositorio Verificable».' }) repositorioVerificable: string | null;
+  @ApiProperty({ type: String, nullable: true }) cerradoPor: string | null;
+  @ApiProperty({ type: Number, nullable: true, description: 'Calculada (no se guarda): equipos con antivirus ÷ total × 100, con 1 decimal.' })
+  cobertura: number | null;
+  @ApiProperty({ type: Number, nullable: true, description: 'Calculado: total − con antivirus.' }) equiposSinAntivirus: number | null;
 }
 
 export class PaginatedPeriodoEndpointDto extends PaginatedResponseDto(PeriodoEndpointDto) {}

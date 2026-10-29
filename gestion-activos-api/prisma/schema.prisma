@@ -920,8 +920,20 @@ model PeriodoEndpoint {
   mes         Int
   // Persona encargada del período (texto: las identidades viven en Keycloak)
   responsable String
+  // Observación de la apertura; en la fase 2, también la del registro y el cierre
   observacion String?               @db.Text
   estado      EstadoPeriodoEndpoint @default(ABIERTO)
+
+  // ── Fase 2 · Registro y cierre (obligatorios al cerrar; vacíos hasta entonces) ──
+  // Total de equipos sujetos al control según el inventario del mes (≥ 1)
+  totalActivos           Int?
+  // Equipos con antivirus/EDR activo (≤ totalActivos). La cobertura se calcula, no se guarda
+  equiposConAntivirus    Int?
+  // «Verificable»: inventario de equipos del mes
+  evidencia              String?
+  // «Repositorio Verificable»: carpeta o URL http(s)
+  repositorioVerificable String?
+  cerradoPor             String?
 
   version         Int       @default(1)
   anuladoEn       DateTime?
@@ -960,6 +972,17 @@ model EvaluacionSistema {
   descripcion               String                  @db.Text
   estado                    EstadoEvaluacionSistema @default(ABIERTO)
 
+  // ── Fase 2 · Ejecución y cierre (obligatorios al cerrar; vacíos hasta entonces) ──
+  // Fecha REAL de las pruebas de seguridad: la indica el usuario (no futura)
+  fechaPruebas           DateTime?
+  // «Verificable»: informe de las pruebas (el veredicto vive en el informe y la observación)
+  evidencia              String?
+  // «Repositorio Verificable»: carpeta o URL http(s)
+  repositorioVerificable String?
+  // Obligatoria al cerrar si las pruebas fueron posteriores a la fecha programada
+  observacion            String?   @db.Text
+  cerradoPor             String?
+
   version         Int       @default(1)
   anuladoEn       DateTime?
   anuladoPor      String?
@@ -971,5 +994,6 @@ model EvaluacionSistema {
 
   @@index([activoId, estado])
   @@index([fechaProgramadaProduccion])
+  @@index([fechaPruebas])
   @@map("evaluacion_sistema")
 }
