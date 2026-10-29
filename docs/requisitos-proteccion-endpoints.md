@@ -141,3 +141,32 @@ La recomendada es **(a)**, que ya está en la especificación: «los errores se 
 - e2e de cada ruta: 400 y 409 de las reglas, 403 del auditor, conflicto de versión, trazas con valor anterior y nuevo;
 - unitarias de la coherencia de los totales;
 - sonda de navegador del flujo completo.
+
+## Fase 2 · backend implementado (primera iteración, 29/10/2026, sin commitear)
+
+**Decisiones del usuario (29/10/2026):**
+
+- **Sin fecha de corte del inventario.** El período ya es el mes y la fecha de cierre queda en la auditoría.
+- **Contraste con la aplicación solo como referencia visual.** La web mostrará «El sistema detecta N equipos». Nunca bloquea: prima el levantamiento real.
+- **Alcance:** guardar avance y reabrir (solo admin). La corrección de lo cerrado y la anulación quedan para después.
+
+**Migración** `20261029170000_proteccion_endpoints_fase2`:
+
+- solo `ADD COLUMN` que admiten nulos: `totalActivos`, `equiposConAntivirus`, `evidencia` (verificable), `repositorioVerificable` y `cerradoPor`;
+- aplicada en `gestion_activos_test`; **pendiente en desarrollo**.
+
+**API** (`src/endpoint-protection`). Cada cambio pasa por `TrazasService.modificar`: versión, valor anterior y nuevo, en una transacción.
+
+| Ruta | Quién | Regla |
+|---|---|---|
+| `GET /periodos/:id` | todos | La ficha del período |
+| `PATCH /periodos/:id/registro` | admin, analista | Guardar avance → `EN_PROGRESO`. Total ≥ 1, con antivirus ≤ total (también combinando lo ya guardado), repositorio válido. Cerrado: 409 (hay que reabrirlo) |
+| `PATCH /periodos/:id/cerrar` | admin, analista | ABIERTO o EN_PROGRESO → `CERRADO`. Exige los dos totales, el verificable y el repositorio; el mensaje dice qué falta. Guarda `cerradoPor` |
+| `PATCH /periodos/:id/reabrir` | **solo admin** | CERRADO → `EN_PROGRESO`, con motivo (≥ 20). Conserva los datos para corregirlos |
+
+- **Cobertura calculada en cada respuesta**, no guardada: `cobertura` (con antivirus ÷ total × 100, 1 decimal) y `equiposSinAntivirus`.
+- La observación es la de la apertura, que se puede ampliar en la fase 2.
+- **Anulados:** cualquier modificación da 409 con el texto «revierta la anulación» (decisión (a)).
+- **Pruebas:**
+  - `src/endpoint-protection/reglas.spec.ts`;
+  - `test/endpoints-evaluacion-fase2.e2e-spec.ts`: registro, coherencia, cierre, reapertura, permisos, 404, anulado, pendientes y traza.

@@ -139,3 +139,33 @@ Ni la fase 2 ni la corrección y la anulación están desarrolladas. Esto es lo 
 - e2e de cada ruta y de las reglas de fechas;
 - permisos, versión y trazas;
 - sonda de navegador del flujo completo.
+
+## Fase 2 · backend implementado (primera iteración, 29/10/2026, sin commitear)
+
+**Decisiones del usuario (29/10/2026):**
+
+- **Pruebas posteriores a la fecha programada:** se permiten, pero el cierre exige justificarlo en la observación (≥ 20 caracteres).
+- **Sin campo «resultado»:** el veredicto vive en el informe (verificable) y en la observación.
+- **Alcance:** guardar avance y reabrir (solo admin). La corrección de lo cerrado y la anulación quedan para después.
+
+**Migración** `20261029171000_evaluacion_sistemas_fase2`:
+
+- solo `ADD COLUMN` que admiten nulos (`fechaPruebas`, `evidencia`, `repositorioVerificable`, `observacion`, `cerradoPor`) y un índice por `fechaPruebas`;
+- aplicada en `gestion_activos_test`; **pendiente en desarrollo**.
+
+**API** (`src/production-evaluation`), con auditoría común en una transacción:
+
+| Ruta | Quién | Regla |
+|---|---|---|
+| `GET /evaluaciones-sistemas/:id` | todos | La ficha |
+| `PATCH /:id/ejecucion` | admin, analista | Guardar avance → `EN_PROGRESO`. Fecha real de las pruebas no futura (margen de 5 min), repositorio válido. Cerrada: 409 |
+| `PATCH /:id/cerrar` | admin, analista | → `CERRADO`. Exige fecha real, informe y repositorio, y la observación si las pruebas fueron tardías. Al cerrarse, el sistema admite una nueva planificación |
+| `PATCH /:id/reabrir` | **solo admin** | CERRADO → `EN_PROGRESO`, con motivo (≥ 20). Conserva los datos |
+| `GET /bitacora/general?anio&semestre` | todos | Por semestre, con el criterio de Mantenimientos. Cuenta las planificadas (semestre de la fecha programada), las cumplidas (a tiempo y tarde), las pendientes y las vencidas, y el % de cumplimiento. Aparte cuenta las cerradas por semestre **real** (fecha de las pruebas) |
+| `GET /bitacora/especifica?anio&semestre&activoId&responsable&situacion` | todos | Una fila por evaluación, paginada. Situación: `PENDIENTE`, `VENCIDA`, `CUMPLIDA` o `CUMPLIDA_TARDE`; la tardía se filtra en la base comparando columnas |
+
+- **Cada respuesta incluye además:** `tardia`, `situacion`, `semestrePlanificado` y `semestreReal`.
+- **Semestres:** S1 enero–junio y S2 julio–diciembre, en la hora de la institución.
+- **Pruebas:**
+  - `src/production-evaluation/reglas.spec.ts`: reglas, semestres y cálculo de la bitácora;
+  - `test/endpoints-evaluacion-fase2.e2e-spec.ts`.

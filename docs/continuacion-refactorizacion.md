@@ -1,6 +1,41 @@
 # Continuación: rama `feature/estandarizacion-y-renovaciones`
 
-Estado al cierre del 28/10/2026, para retomar el trabajo sin repetir tareas.
+Estado al cierre del 29/10/2026, para retomar el trabajo sin repetir tareas.
+
+## 00. Avance del 29/10/2026 y siguiente paso
+
+**Subido** (sin fusionar; la rama sigue por delante de `main`):
+
+| Commit | Contenido |
+|---|---|
+| `e538eea` | API: banderas de aplicación por categoría (los selectores de cada módulo filtran; el inventario sigue general); fase 1 de Protección de Endpoints y de Evaluación de Sistemas Productivos; panel de pendientes con seis módulos |
+| `44d2575` | Web: pantallas de planificación de los dos módulos (patrón de Mantenimientos), filtros por categoría, Catálogos con 5 interruptores, insignias del inicio |
+| `f0814bf` | Docs: matriz de categorías, requisitos, procedimiento de migración y su resultado |
+| (último commit del día) | API: **backend de la fase 2** de los dos módulos (guardar avance, cerrar, reabrir solo admin; cobertura calculada; bitácora General y Específica de Evaluación) y sus dos migraciones |
+
+**Base de desarrollo (`gestion_activos_db`):**
+
+- **Aplicadas** el 29/10, con respaldo verificado: las 4 migraciones de la fase 1. Ver [aplicar-migraciones-desarrollo.md](aplicar-migraciones-desarrollo.md).
+- **Matriz decidida y aplicada** por Catálogos:
+  - Programas: sin Renovaciones;
+  - servidores físicos y virtuales: sin Endpoints;
+  - Servidores virtuales: con Evaluación, de forma **provisional** (VM-CONTABILIDAD).
+- **PENDIENTES de autorización:** `20261029170000_proteccion_endpoints_fase2` y `20261029171000_evaluacion_sistemas_fase2`. Solo añaden columnas que admiten nulos.
+  - Están aplicadas solo en pruebas.
+  - **Hasta aplicarlas, en desarrollo `/api/proteccion-endpoints/periodos` y `/api/evaluaciones-sistemas` responden 500.** Faltan columnas; el resto funciona.
+
+**Siguiente paso (30/10):**
+
+1. Pedir autorización y aplicar las 2 migraciones de la fase 2 en desarrollo, con el mismo procedimiento.
+2. El usuario revisa el backend de la fase 2. Reglas en los `requisitos-*.md`, sección «Fase 2 · backend implementado».
+3. Web de la fase 2:
+   - pestaña «2 · Ejecución y cierre» con `shared/cierre/BloqueEjecucionCierre` y `ModalReabrir` (reabrir solo para admin);
+   - Endpoints: los dos totales, la cobertura y la referencia «El sistema detecta N equipos», que no bloquea;
+   - Evaluación: fecha real de las pruebas, informe, repositorio y observación (obligatoria si es tardía), más su bitácora General y Específica;
+   - reactividad en `onSettled`, sondas de escritorio y móvil.
+4. Más adelante: corrección de lo cerrado y anulación. El 409 de un mes anulado remite a revertir la anulación.
+
+**Pruebas del 29/10:** API 256 unitarias y 329 e2e; web 125 pruebas, lint y compilación. Sondas `p21`, `p29`, `p30` y `p31` sin fallos.
 
 ## 0. Avance del 28/10/2026 y siguiente paso
 
