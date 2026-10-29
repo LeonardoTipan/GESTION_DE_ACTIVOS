@@ -10,7 +10,7 @@ import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupSwagger } from './../src/swagger.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 describe('Mantenimientos (e2e)', () => {
@@ -47,7 +47,7 @@ describe('Mantenimientos (e2e)', () => {
     tokens = await getTokensDePrueba();
 
     const categoria = await prisma.categoria.create({
-      data: { nombre: 'Hardware', descripcion: '', claseMantenimiento: 'HARDWARE' },
+      data: { ...APLICA_EN_TODOS, nombre: 'Hardware', descripcion: '', claseMantenimiento: 'HARDWARE' },
     });
     const criticidad = await prisma.criticidad.create({
       data: { nivel: 'Alta' },

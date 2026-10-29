@@ -173,7 +173,7 @@ export class VulnerabilidadesService {
   /** Reglas del registro, sin escribir nada. */
   private async validarRegistro(dto: RegistrarVulnerabilidadDto): Promise<void> {
     // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos.
-    await this.activos.exigirOperativo(dto.activoId);
+    await this.activos.exigirOperativo(dto.activoId, 'VULNERABILIDAD');
     if (dto.fechaLimite && dto.fechaLimite < dto.fecha) {
       throw new BadRequestException('La fecha límite no puede ser anterior a la fecha de detección.');
     }

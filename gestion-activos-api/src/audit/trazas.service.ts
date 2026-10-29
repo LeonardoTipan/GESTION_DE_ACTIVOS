@@ -16,6 +16,8 @@ export const ENTIDADES = {
   MANTENIMIENTO: { modelo: 'mantenimiento', nombre: 'El mantenimiento' },
   VULNERABILIDAD: { modelo: 'vulnerabilidad', nombre: 'La vulnerabilidad' },
   RENOVACION: { modelo: 'renovacion', nombre: 'La renovación' },
+  PERIODO_ENDPOINT: { modelo: 'periodoEndpoint', nombre: 'El período de protección de endpoints' },
+  EVALUACION_SISTEMA: { modelo: 'evaluacionSistema', nombre: 'La evaluación del sistema' },
   PLAN_MANTENIMIENTO: { modelo: 'planMantenimiento', nombre: 'El plan de mantenimiento' },
 } as const;
 export type Entidad = keyof typeof ENTIDADES;

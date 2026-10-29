@@ -10,7 +10,7 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 30_000;
@@ -34,8 +34,8 @@ describe('Mantenimiento: planificación, ejecución y bitácoras (e2e)', () => {
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
 
-    const hw = await prisma.categoria.create({ data: { nombre: 'Computadoras', descripcion: '', claseMantenimiento: 'HARDWARE' } });
-    const sw = await prisma.categoria.create({ data: { nombre: 'Aplicativos', descripcion: '', claseMantenimiento: 'SOFTWARE' } });
+    const hw = await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Computadoras', descripcion: '', claseMantenimiento: 'HARDWARE' } });
+    const sw = await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Aplicativos', descripcion: '', claseMantenimiento: 'SOFTWARE' } });
     const criticidadId = (await prisma.criticidad.create({ data: { nivel: 'Alta' } })).id;
     const base = { sistemas: '', custodio: 'TIC', ubicacion: 'Matriz', cifrado: false, ultimaRevision: new Date('2025-01-01'), criticidadId };
     pc = (await prisma.activo.create({ data: { ...base, codigo: 'PC-0001', nombre: 'PC Contabilidad', categoriaId: hw.id } })).id;

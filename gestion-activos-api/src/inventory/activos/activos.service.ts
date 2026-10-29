@@ -14,6 +14,7 @@ import {
 import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { BitacoraService } from '../bitacora/bitacora.service.js';
+import { CAMPO_APLICA, filtroAplica, NOMBRE_APLICACION, type Aplicacion } from './aplicacion.js';
 import { calcularCambios, cambiosDeCreacion } from '../bitacora/cambios.js';
 import type { BitacoraDto } from '../bitacora/dto/bitacora.dto.js';
 import type { ActivoDto, CategoriaActivoDto, EstadoActivoDto } from './dto/activo.dto.js';
@@ -113,11 +114,17 @@ export class ActivosService {
     return estados;
   }
 
-  /** Categorías con activos (opcionalmente solo operativos), por nombre. */
-  async categorias(soloOperativos: boolean): Promise<CategoriaActivoDto[]> {
+  /**
+   * Categorías con activos (opcionalmente solo operativos y solo las habilitadas para un
+   * módulo), por nombre.
+   */
+  async categorias(soloOperativos: boolean, aplica?: Aplicacion): Promise<CategoriaActivoDto[]> {
+    const condiciones: Prisma.ActivoWhereInput[] = [];
+    if (soloOperativos) condiciones.push(this.filtroOperativo());
+    if (aplica) condiciones.push(filtroAplica(aplica));
     const grupos = await this.prisma.activo.groupBy({
       by: ['categoriaId'],
-      where: soloOperativos ? this.filtroOperativo() : {},
+      where: { AND: condiciones },
       _count: { _all: true },
     });
     const nombres = await this.prisma.categoria.findMany({
@@ -148,6 +155,7 @@ export class ActivosService {
       condiciones.push({ ...VIGENTE, estado: query.estado });
     }
     if (query.operativos) condiciones.push(this.filtroOperativo());
+    if (query.aplica) condiciones.push(filtroAplica(query.aplica));
     if (condiciones.length > 0) where.AND = condiciones;
     if (query.q) {
       // La collation de MySQL (utf8mb4_unicode_ci) ya ignora mayúsculas y tildes.
@@ -197,10 +205,11 @@ export class ActivosService {
   /**
    * Para registrar una operación NUEVA (respaldo, mantenimiento, vulnerabilidad):
    * el equipo debe existir y estar OPERATIVO: ni dado de baja ni en un estado
-   * de ESTADOS_NO_OPERATIVOS. Los registros anteriores se conservan y se
-   * siguen consultando.
+   * de ESTADOS_NO_OPERATIVOS. Con `aplica`, además, su categoría debe estar habilitada
+   * para ese módulo (Catálogos > Categorías). Los registros anteriores se conservan y se
+   * siguen consultando: no se cambia la categoría ni el estado del activo.
    */
-  async exigirOperativo(id: number): Promise<void> {
+  async exigirOperativo(id: number, aplica?: Aplicacion): Promise<void> {
     const activo = await this.prisma.activo.findUnique({
       where: { id },
       select: {
@@ -209,6 +218,9 @@ export class ActivosService {
         deletedAt: true,
         inactivoDesde: true,
         motivoInactivo: true,
+        categoria: {
+          select: { nombre: true, aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: true },
+        },
       },
     });
     if (!activo) {
@@ -226,6 +238,11 @@ export class ActivosService {
     if (motivo) {
       throw new BadRequestException(
         `El activo ${activo.codigo} no está operativo (${motivo}): no admite operaciones nuevas. Sus registros anteriores se conservan.`,
+      );
+    }
+    if (aplica && !activo.categoria[CAMPO_APLICA[aplica]]) {
+      throw new BadRequestException(
+        `El activo ${activo.codigo} es de la categoría «${activo.categoria.nombre}», que no está habilitada para ${NOMBRE_APLICACION[aplica]} (Catálogos > Categorías).`,
       );
     }
   }

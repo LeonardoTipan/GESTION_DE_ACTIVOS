@@ -1,6 +1,8 @@
 import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ControlAccesoService } from '../access-control/control-acceso.service.js';
+import { PeriodosEndpointService } from '../endpoint-protection/periodos.service.js';
 import { MantenimientosService } from '../maintenance/mantenimientos/mantenimientos.service.js';
+import { EvaluacionesService } from '../production-evaluation/evaluaciones.service.js';
 import { RenovacionesService } from '../renewals/renovaciones.service.js';
 import { VulnerabilidadesService } from '../vulnerabilities/vulnerabilidades/vulnerabilidades.service.js';
 import type { PendientesTableroDto } from './dto.js';
@@ -20,6 +22,8 @@ export class DashboardService {
     private readonly mantenimientos: MantenimientosService,
     private readonly vulnerabilidades: VulnerabilidadesService,
     private readonly renovaciones: RenovacionesService,
+    private readonly endpoints: PeriodosEndpointService,
+    private readonly evaluaciones: EvaluacionesService,
   ) {}
 
   async pendientes(): Promise<PendientesTableroDto> {
@@ -28,6 +32,8 @@ export class DashboardService {
       mantenimientos: () => this.mantenimientos.contarPendientes(),
       vulnerabilidades: () => this.vulnerabilidades.contarPendientes(),
       renovaciones: () => this.renovaciones.contarPendientes(),
+      endpoints: () => this.endpoints.contarPendientes(),
+      evaluaciones: () => this.evaluaciones.contarPendientes(),
     };
     const modulos = Object.keys(conteos) as Modulo[];
     const resultados = await Promise.allSettled(modulos.map((m) => conteos[m]()));

@@ -106,7 +106,7 @@ export class PlanesMantenimientoService {
 
   async crear(dto: CrearPlanesMantenimientoDto): Promise<PlanMantenimientoDto[]> {
     const { activoIds, ...parametros } = dto;
-    for (const id of activoIds) await this.activos.exigirOperativo(id);
+    for (const id of activoIds) await this.activos.exigirOperativo(id, 'MANTENIMIENTO');
     await this.exigirTipoParaActivos(activoIds, dto.tipo);
     await this.exigirSinPlanVigente(activoIds, dto.tipo);
     const creados = await this.prisma.$transaction((tx) =>
@@ -130,7 +130,7 @@ export class PlanesMantenimientoService {
     if (datos.tipo) await this.exigirTipoParaActivos([actual.activoId], datos.tipo);
     const pasaAVigente = (datos.estado ?? actual.estado) === 'VIGENTE';
     if (pasaAVigente && (datos.estado === 'VIGENTE' || datos.tipo)) {
-      await this.activos.exigirOperativo(actual.activoId);
+      await this.activos.exigirOperativo(actual.activoId, 'MANTENIMIENTO');
       await this.exigirSinPlanVigente([actual.activoId], tipo, id);
     }
     await this.trazas.modificar('PLAN_MANTENIMIENTO', id, datos, motivoCambio, u.username);
@@ -172,7 +172,7 @@ export class PlanesMantenimientoService {
         `La planificación ${id} no tiene más intervenciones previstas: registre una ejecución adicional si hace falta.`,
       );
     }
-    await this.activos.exigirOperativo(plan.activoId);
+    await this.activos.exigirOperativo(plan.activoId, 'MANTENIMIENTO');
     const prevista = adicional ? fecha! : new Date(plan.proximaFecha);
     const mantenimientoId = await this.prisma.$transaction(async (tx) => {
       if (!adicional) {

@@ -16,18 +16,29 @@ datasource db {
 // ---------------------------------------------------------------------------
 
 model Categoria {
-  id                 Int                 @id @default(autoincrement())
-  nombre             String              @unique
-  descripcion        String
+  id                   Int                 @id @default(autoincrement())
+  nombre               String              @unique
+  descripcion          String
   // Control de acceso: si los activos de la categoría admiten solicitudes de
   // acceso lógico (contienen o dan acceso a información) o físico. Lo decide el
   // admin en Catálogos; la sincronización con GLPI no lo toca.
-  admiteAccesoLogico Boolean             @default(false)
-  admiteAccesoFisico Boolean             @default(false)
+  admiteAccesoLogico   Boolean             @default(false)
+  admiteAccesoFisico   Boolean             @default(false)
   // Mantenimiento: si sus activos son HARDWARE (preventivo, correctivo, predictivo) o
   // SOFTWARE (preventivo, correctivo, perfectivo, adaptativo, evolutivo). null = sin
   // clasificar (solo preventivo y correctivo). La decide el admin en Catálogos.
-  claseMantenimiento ClaseMantenimiento?
+  claseMantenimiento   ClaseMantenimiento?
+  // Elegibilidad de sus activos en cada módulo (la decide el admin en Catálogos; la
+  // sincronización con GLPI no la toca). No sustituye el estado operativo del activo:
+  // un activo debe estar operativo Y su categoría habilitada. Solo se exige al crear
+  // registros nuevos; los existentes se conservan aunque la categoría deje de aplicar.
+  aplicaMantenimiento  Boolean             @default(false)
+  aplicaVulnerabilidad Boolean             @default(false)
+  aplicaRenovacion     Boolean             @default(false)
+  // Preparadas para módulos futuros (Evaluación de Sistemas Productivos y Protección de
+  // Endpoints): aún no habilitan selectores ni operaciones.
+  aplicaEvaluacion     Boolean             @default(false)
+  aplicaEndpoint       Boolean             @default(false)
 
   activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
 
@@ -110,6 +121,7 @@ model Activo {
   notificaciones      Notificacion[]
   controlesAcceso     ControlAcceso[]
   renovaciones        Renovacion[] // licencias, garantías, certificados y contratos del activo
+  evaluaciones        EvaluacionSistema[] // pasos a producción evaluados (Evaluación de Sistemas Productivos)
 
   @@index([updatedAt])
   // Filtro "activos / no activos" del inventario
@@ -887,4 +899,77 @@ model Renovacion {
   @@index([nuevaFechaCaducidad])
   @@index([updatedAt])
   @@map("renovacion")
+}
+
+// ── Protección de Endpoints ──────────────────────────────────────────────────
+// Métrica MENSUAL de cobertura de antivirus/EDR (docs/requisitos-proteccion-endpoints.md).
+// Fase 1 (implementada): apertura del período. Fase 2 (pendiente): total de activos,
+// equipos con antivirus y el Excel del inventario como evidencia; sus campos se añadirán
+// con su propia migración. Un solo período por año y mes.
+
+enum EstadoPeriodoEndpoint {
+  ABIERTO
+  EN_PROGRESO
+  CERRADO
+}
+
+model PeriodoEndpoint {
+  id          Int                   @id @default(autoincrement())
+  anio        Int
+  // 1 = enero … 12 = diciembre
+  mes         Int
+  // Persona encargada del período (texto: las identidades viven en Keycloak)
+  responsable String
+  observacion String?               @db.Text
+  estado      EstadoPeriodoEndpoint @default(ABIERTO)
+
+  version         Int       @default(1)
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  // Fecha de apertura (automática); no es una fecha de negocio
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([anio, mes])
+  @@index([estado])
+  @@map("periodo_endpoint")
+}
+
+// ── Evaluación de Sistemas Productivos ────────────────────────────────────────
+// Evaluación de seguridad de un sistema antes de su paso a producción
+// (docs/requisitos-evaluacion-sistemas.md). Fase 1 (implementada): planificación con la
+// fecha PROGRAMADA de paso a producción, que no es la fecha de solicitud. Fase 2
+// (pendiente): fecha real de las pruebas de seguridad e informe verificable.
+
+enum EstadoEvaluacionSistema {
+  ABIERTO
+  EN_PROGRESO
+  CERRADO
+}
+
+model EvaluacionSistema {
+  id                        Int                     @id @default(autoincrement())
+  // Sistema evaluado: activo operativo de una categoría con aplicaEvaluacion
+  activoId                  Int
+  // Fecha y hora previstas para el paso a producción (puede ser futura)
+  fechaProgramadaProduccion DateTime
+  // «Asignado»: quién realiza la evaluación
+  responsable               String
+  // «Descripción planificada»: qué cambio o versión pasa a producción y qué se evaluará
+  descripcion               String                  @db.Text
+  estado                    EstadoEvaluacionSistema @default(ABIERTO)
+
+  version         Int       @default(1)
+  anuladoEn       DateTime?
+  anuladoPor      String?
+  motivoAnulacion String?   @db.Text
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  activo Activo @relation(fields: [activoId], references: [id], onDelete: Restrict)
+
+  @@index([activoId, estado])
+  @@index([fechaProgramadaProduccion])
+  @@map("evaluacion_sistema")
 }

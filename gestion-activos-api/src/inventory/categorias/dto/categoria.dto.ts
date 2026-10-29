@@ -42,6 +42,31 @@ export class CreateCategoriaDto {
   @IsOptional()
   @IsEnum(ClaseMantenimiento)
   claseMantenimiento?: ClaseMantenimiento | null;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) se pueden planificar y ejecutar en Mantenimientos. Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaMantenimiento?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) admiten vulnerabilidades, sean hardware o software. Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaVulnerabilidad?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) admiten renovaciones (licencias, garantías, certificados, contratos). Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaRenovacion?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) son sistemas elegibles en Evaluación de Sistemas Productivos. Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaEvaluacion?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) son equipos sujetos a Protección de Endpoints. Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaEndpoint?: boolean;
 }
 
 /** En PATCH todos los campos son opcionales. */
@@ -67,4 +92,19 @@ export class CategoriaDto {
 
   @ApiProperty({ enum: ClaseMantenimiento, nullable: true, description: 'Clase para los tipos de mantenimiento; null = sin clasificar.' })
   claseMantenimiento: ClaseMantenimiento | null;
+
+  @ApiProperty({ description: 'Elegible en Mantenimientos.' })
+  aplicaMantenimiento: boolean;
+
+  @ApiProperty({ description: 'Elegible en Vulnerabilidades.' })
+  aplicaVulnerabilidad: boolean;
+
+  @ApiProperty({ description: 'Elegible en Renovaciones.' })
+  aplicaRenovacion: boolean;
+
+  @ApiProperty({ description: 'Elegible en Evaluación de Sistemas Productivos.' })
+  aplicaEvaluacion: boolean;
+
+  @ApiProperty({ description: 'Elegible en Protección de Endpoints.' })
+  aplicaEndpoint: boolean;
 }

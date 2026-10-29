@@ -11,7 +11,7 @@ import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupSwagger } from './../src/swagger.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 120_000;
@@ -52,7 +52,7 @@ describe('Editar con motivo y anular (e2e)', () => {
     tokens = await getTokensDePrueba();
 
     const categoria = await prisma.categoria.create({
-      data: { nombre: 'Hardware', descripcion: '' },
+      data: { ...APLICA_EN_TODOS, nombre: 'Hardware', descripcion: '' },
     });
     const criticidad = await prisma.criticidad.create({ data: { nivel: 'Alta' } });
     datosActivo = {

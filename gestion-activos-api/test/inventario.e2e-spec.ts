@@ -68,6 +68,12 @@ describe('Inventario (e2e)', () => {
         admiteAccesoFisico: false,
         // Mantenimiento: sin clasificar hasta que el admin elija hardware o software.
         claseMantenimiento: null,
+        // Elegibilidad por módulo: ninguna hasta que el admin la habilite en Catálogos.
+        aplicaMantenimiento: false,
+        aplicaVulnerabilidad: false,
+        aplicaRenovacion: false,
+        aplicaEvaluacion: false,
+        aplicaEndpoint: false,
       });
       categoriaId = res.body.id;
     });

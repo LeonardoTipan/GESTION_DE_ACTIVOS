@@ -26,7 +26,7 @@ import { CONFIG_PRUEBA } from './../src/glpi-sync/testing/inventario-en-memoria.
 import { BitacoraService } from './../src/inventory/bitacora/bitacora.service.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupSwagger } from './../src/swagger.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 120_000;
@@ -87,8 +87,8 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
     tokens = await getTokensDePrueba();
     await prisma.categoria.createMany({
       data: [
-        { nombre: 'Hardware', descripcion: '' },
-        { nombre: 'Red', descripcion: '' },
+        { ...APLICA_EN_TODOS, nombre: 'Hardware', descripcion: '' },
+        { ...APLICA_EN_TODOS, nombre: 'Red', descripcion: '' },
       ],
     });
     await prisma.criticidad.create({ data: { nivel: 'Media' } });
@@ -595,6 +595,22 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
       const estado = (await api(tokens.auditor).get('/api/glpi/sincronizacion')).body;
       expect(estado.ultima).toMatchObject({ origen: 'AUTOMATICA', estado: 'EXITOSA', solicitadaPor: null });
       expect(Date.parse(estado.ultimaExitosa)).toBeGreaterThan(Date.parse(antes));
+    }, LENTO);
+  });
+
+  describe('configuración local de las categorías', () => {
+    it('una sincronización COMPLETA conserva las banderas de aplicación por módulo (GLPI no las conoce)', async () => {
+      const banderas = { aplicaMantenimiento: true, aplicaVulnerabilidad: false, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: false };
+      const hardware = await prisma.categoria.findUniqueOrThrow({ where: { nombre: 'Hardware' } });
+      await api(tokens.admin).patch(`/api/categorias/${hardware.id}`, banderas).expect(200);
+      const antes = await prisma.categoria.findMany({ orderBy: { id: 'asc' } });
+
+      const completa = await sincronizar({ completa: true });
+      expect(completa.errores ?? []).toEqual([]);
+
+      // Mismas categorías (ni nuevas ni borradas) y con exactamente la misma configuración.
+      expect(await prisma.categoria.findMany({ orderBy: { id: 'asc' } })).toEqual(antes);
+      expect(await prisma.categoria.findUniqueOrThrow({ where: { id: hardware.id } })).toMatchObject(banderas);
     }, LENTO);
   });
 

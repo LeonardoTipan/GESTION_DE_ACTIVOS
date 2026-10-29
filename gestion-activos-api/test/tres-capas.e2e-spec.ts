@@ -11,7 +11,7 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 120_000;
@@ -35,8 +35,8 @@ describe('Planificación y ejecución de mantenimientos, vulnerabilidades en lot
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
 
-    ids.computadoras = (await prisma.categoria.create({ data: { nombre: 'Computadoras', descripcion: 'Tipo de activo de GLPI: Computer' } })).id;
-    ids.monitores = (await prisma.categoria.create({ data: { nombre: 'Monitores', descripcion: 'Tipo de activo de GLPI: Monitor' } })).id;
+    ids.computadoras = (await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Computadoras', descripcion: 'Tipo de activo de GLPI: Computer' } })).id;
+    ids.monitores = (await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Monitores', descripcion: 'Tipo de activo de GLPI: Monitor' } })).id;
     const criticidad = (await prisma.criticidad.create({ data: { nivel: 'Media' } })).id;
     const activo = async (codigo: string, categoriaId: number, extra: object = {}) =>
       (
@@ -91,7 +91,7 @@ describe('Planificación y ejecución de mantenimientos, vulnerabilidades en lot
     });
 
     it('categorías con activos y su recuento: solo las que tienen alguno; con operativos=true, sin bajas', async () => {
-      await prisma.categoria.create({ data: { nombre: 'Racks', descripcion: 'Tipo de activo de GLPI: Rack' } });
+      await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Racks', descripcion: 'Tipo de activo de GLPI: Rack' } });
       await api('').get('/api/activos/categorias').expect(401);
       const operativas = await api(tokens.auditor).get('/api/activos/categorias?operativos=true').expect(200);
       expect(operativas.body).toEqual([

@@ -14,6 +14,12 @@ export class PendientesTableroDto {
   @ApiProperty({ example: 2, description: 'Renovaciones: ABIERTO + EN_PROGRESO, no anuladas' })
   renovaciones!: number;
 
-  @ApiProperty({ example: 6, description: 'Suma de los cuatro módulos' })
+  @ApiProperty({ example: 1, description: 'Protección de Endpoints: períodos mensuales ABIERTO + EN_PROGRESO, no anulados' })
+  endpoints!: number;
+
+  @ApiProperty({ example: 0, description: 'Evaluación de Sistemas Productivos: ABIERTO + EN_PROGRESO, no anuladas (las vencidas incluidas, sin contarlas dos veces)' })
+  evaluaciones!: number;
+
+  @ApiProperty({ example: 7, description: 'Suma de los seis módulos' })
   total!: number;
 }

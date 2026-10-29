@@ -169,7 +169,7 @@ export class MantenimientosService {
       throw new BadRequestException(`El activo ${dto.activoId} no es el de la planificación ${dto.planId}.`);
     }
     // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos.
-    await this.activos.exigirOperativo(plan.activoId);
+    await this.activos.exigirOperativo(plan.activoId, 'MANTENIMIENTO');
     const fechaLimite = dto.fechaLimite ?? new Date(dto.fecha.getTime() + plan.plazoDias * 86_400_000);
     exigirIntervalo(dto.fecha, fechaLimite, 'Mantenimiento');
     const mantenimiento = await this.prisma.mantenimiento.create({

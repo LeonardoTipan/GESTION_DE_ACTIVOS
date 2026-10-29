@@ -10,7 +10,7 @@ import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { setupSwagger } from './../src/swagger.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 30_000;
@@ -46,8 +46,8 @@ describe('Renovaciones: Planificación y Ejecución y cierre (e2e)', () => {
     prisma = app.get(PrismaService);
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
-    const hw = await prisma.categoria.create({ data: { nombre: 'Servidores físicos', descripcion: '', claseMantenimiento: 'HARDWARE' } });
-    const sw = await prisma.categoria.create({ data: { nombre: 'Aplicativos', descripcion: '', claseMantenimiento: 'SOFTWARE' } });
+    const hw = await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Servidores físicos', descripcion: '', claseMantenimiento: 'HARDWARE' } });
+    const sw = await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Aplicativos', descripcion: '', claseMantenimiento: 'SOFTWARE' } });
     const criticidadId = (await prisma.criticidad.create({ data: { nivel: 'Alta' } })).id;
     const base = { sistemas: '', custodio: 'TIC', ubicacion: 'Data center', cifrado: true, ultimaRevision: new Date('2026-01-01'), criticidadId, estado: 'Bueno' };
     servidor = (await prisma.activo.create({ data: { ...base, codigo: 'SRV-V6', nombre: 'SERVIDOR PARA VIRTUALIZACIÓN V6', categoriaId: hw.id } })).id;

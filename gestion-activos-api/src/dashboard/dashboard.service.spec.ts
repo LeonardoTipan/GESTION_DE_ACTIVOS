@@ -1,7 +1,9 @@
 import { vi } from 'vitest';
 import { InternalServerErrorException, Logger } from '@nestjs/common';
 import { ControlAccesoService } from '../access-control/control-acceso.service.js';
+import { PeriodosEndpointService } from '../endpoint-protection/periodos.service.js';
 import { MantenimientosService } from '../maintenance/mantenimientos/mantenimientos.service.js';
+import { EvaluacionesService } from '../production-evaluation/evaluaciones.service.js';
 import type { PrismaService } from '../prisma/prisma.service.js';
 import { RenovacionesService } from '../renewals/renovaciones.service.js';
 import { VulnerabilidadesService } from '../vulnerabilities/vulnerabilidades/vulnerabilidades.service.js';
@@ -11,23 +13,34 @@ const servicio = (n: number | Error) => ({
   contarPendientes: vi.fn(() => (n instanceof Error ? Promise.reject(n) : Promise.resolve(n))),
 });
 
-const tablero = (a: number | Error, m: number | Error, v: number | Error, r: number | Error) =>
+const tablero = (a: number | Error, m: number | Error, v: number | Error, r: number | Error, e: number | Error = 0, s: number | Error = 0) =>
   new DashboardService(
     servicio(a) as unknown as ControlAccesoService,
     servicio(m) as unknown as MantenimientosService,
     servicio(v) as unknown as VulnerabilidadesService,
     servicio(r) as unknown as RenovacionesService,
+    servicio(e) as unknown as PeriodosEndpointService,
+    servicio(s) as unknown as EvaluacionesService,
   );
 
 describe('DashboardService.pendientes', () => {
-  it('consolida los cuatro conteos y el total es su suma', async () => {
-    await expect(tablero(3, 1, 0, 2).pendientes()).resolves.toEqual({
+  it('consolida los seis conteos y el total es su suma', async () => {
+    await expect(tablero(3, 1, 0, 2, 1, 4).pendientes()).resolves.toEqual({
       accesos: 3,
       mantenimientos: 1,
       vulnerabilidades: 0,
       renovaciones: 2,
-      total: 6,
+      endpoints: 1,
+      evaluaciones: 4,
+      total: 11,
     });
+  });
+
+  it('también falla (500) si falla el conteo de un módulo nuevo', async () => {
+    const log = vi.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+    await expect(tablero(0, 0, 0, 0, 0, new Error('timeout')).pendientes()).rejects.toBeInstanceOf(InternalServerErrorException);
+    expect(log).toHaveBeenCalledWith(expect.stringContaining('evaluaciones: timeout'), expect.anything());
+    log.mockRestore();
   });
 
   it('si un conteo falla, lanza 500 (no devuelve 0) y lo registra con el módulo', async () => {
@@ -46,7 +59,7 @@ describe('DashboardService.pendientes', () => {
 describe('contarPendientes de cada módulo', () => {
   const prisma = () => {
     const modelo = () => ({ count: vi.fn().mockResolvedValue(7), findMany: vi.fn() });
-    return { controlAcceso: modelo(), mantenimiento: modelo(), vulnerabilidad: modelo(), renovacion: modelo() };
+    return { controlAcceso: modelo(), mantenimiento: modelo(), vulnerabilidad: modelo(), renovacion: modelo(), periodoEndpoint: modelo(), evaluacionSistema: modelo() };
   };
   const nada = {} as never;
 
@@ -80,5 +93,19 @@ describe('contarPendientes de cada módulo', () => {
     await new RenovacionesService(p as unknown as PrismaService, nada, nada).contarPendientes();
     expect(p.renovacion.count).toHaveBeenCalledWith({ where: { estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, anuladoEn: null } });
     expect(p.renovacion.findMany).not.toHaveBeenCalled();
+  });
+
+  it('Protección de Endpoints: períodos ABIERTO y EN_PROGRESO, no anulados', async () => {
+    const p = prisma();
+    await expect(new PeriodosEndpointService(p as unknown as PrismaService, nada).contarPendientes()).resolves.toBe(7);
+    expect(p.periodoEndpoint.count).toHaveBeenCalledWith({ where: { estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, anuladoEn: null } });
+    expect(p.periodoEndpoint.findMany).not.toHaveBeenCalled();
+  });
+
+  it('Evaluación de Sistemas Productivos: ABIERTO y EN_PROGRESO, no anuladas (las vencidas ya incluidas)', async () => {
+    const p = prisma();
+    await expect(new EvaluacionesService(p as unknown as PrismaService, nada, nada).contarPendientes()).resolves.toBe(7);
+    expect(p.evaluacionSistema.count).toHaveBeenCalledWith({ where: { estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, anuladoEn: null } });
+    expect(p.evaluacionSistema.findMany).not.toHaveBeenCalled();
   });
 });

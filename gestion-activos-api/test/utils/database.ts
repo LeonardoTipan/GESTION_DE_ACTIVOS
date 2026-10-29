@@ -27,6 +27,8 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     // La cadena de renovaciones apunta a sí misma: se sueltan los enlaces antes de borrar.
     prisma.renovacion.updateMany({ data: { renovacionAnteriorId: null } }),
     prisma.renovacion.deleteMany(),
+    prisma.evaluacionSistema.deleteMany(),
+    prisma.periodoEndpoint.deleteMany(),
     prisma.vulnerabilidad.deleteMany(),
     prisma.historialControlAcceso.deleteMany(),
     prisma.controlAcceso.deleteMany(),
@@ -37,3 +39,9 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     prisma.criticidad.deleteMany(),
   ]);
 }
+
+/**
+ * Banderas de categoría que habilitan sus activos en los tres módulos con filtro
+ * (Catálogos > Categorías). Las suites que crean registros de esos módulos las usan.
+ */
+export const APLICA_EN_TODOS = { aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true } as const;

@@ -7,10 +7,12 @@ import { AuthModule } from './auth/auth.module.js';
 import { BackupsModule } from './backups/backups.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { DashboardModule } from './dashboard/dashboard.module.js';
+import { EndpointProtectionModule } from './endpoint-protection/endpoint-protection.module.js';
 import { GlpiSyncModule } from './glpi-sync/api/glpi-sync.module.js';
 import { InventoryModule } from './inventory/inventory.module.js';
 import { MaintenanceModule } from './maintenance/maintenance.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { ProductionEvaluationModule } from './production-evaluation/production-evaluation.module.js';
 import { RenewalsModule } from './renewals/renewals.module.js';
 import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.js';
 
@@ -27,6 +29,8 @@ import { VulnerabilitiesModule } from './vulnerabilities/vulnerabilities.module.
     AccessControlModule,
     RenewalsModule,
     DashboardModule,
+    EndpointProtectionModule,
+    ProductionEvaluationModule,
   ],
   controllers: [AppController],
   providers: [AppService],

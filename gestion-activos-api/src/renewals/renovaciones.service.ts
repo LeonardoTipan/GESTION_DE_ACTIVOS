@@ -149,7 +149,7 @@ export class RenovacionesService {
    * fechas se conservan. No admite dos renovaciones pendientes del mismo elemento.
    */
   async crear(dto: CrearRenovacionDto, usuario: AuthUser): Promise<RenovacionDto> {
-    await this.activos.exigirOperativo(dto.activoId);
+    await this.activos.exigirOperativo(dto.activoId, 'RENOVACION');
     exigirCaducidadActual(dto);
     await this.exigirSinPendiente(dto.activoId, dto.tipo);
     const id = await this.prisma.$transaction(async (tx) => {
@@ -202,7 +202,7 @@ export class RenovacionesService {
     }
     const activoId = datos.activoId ?? actual.activoId;
     const tipo = datos.tipo ?? actual.tipo;
-    if (datos.activoId !== undefined && datos.activoId !== actual.activoId) await this.activos.exigirOperativo(datos.activoId);
+    if (datos.activoId !== undefined && datos.activoId !== actual.activoId) await this.activos.exigirOperativo(datos.activoId, 'RENOVACION');
     if (cambiaElemento) await this.exigirSinPendiente(activoId, tipo, id);
     const sinCaducidadActual = datos.sinCaducidadActual ?? actual.sinCaducidadActual;
     const resultado = {

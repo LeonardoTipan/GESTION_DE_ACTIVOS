@@ -1,7 +1,7 @@
 /**
  * Tablero: GET /api/dashboard/pendientes contra MySQL (gestion_activos_test) y el
  * Keycloak de desarrollo. Los datos se siembran directamente en la base de pruebas
- * con estados conocidos de los cuatro módulos.
+ * con estados conocidos de los seis módulos.
  */
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
@@ -78,6 +78,27 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
         ...(anulado ? { anuladoEn: new Date(), anuladoPor: 'admin.test', motivoAnulacion: 'Registro duplicado por error' } : {}),
       },
     });
+  const periodo = (mes: number, estado: 'ABIERTO' | 'EN_PROGRESO' | 'CERRADO', anulado = false) =>
+    prisma.periodoEndpoint.create({
+      data: {
+        anio: 2026,
+        mes,
+        responsable: 'Soporte TIC',
+        estado,
+        ...(anulado ? { anuladoEn: new Date(), anuladoPor: 'admin.test', motivoAnulacion: 'Registro duplicado por error' } : {}),
+      },
+    });
+  const evaluacion = (estado: 'ABIERTO' | 'EN_PROGRESO' | 'CERRADO', fecha: string, anulado = false) =>
+    prisma.evaluacionSistema.create({
+      data: {
+        activoId,
+        fechaProgramadaProduccion: new Date(fecha),
+        responsable: 'Seguridad TIC',
+        descripcion: 'Pruebas de seguridad de la versión 2.1',
+        estado,
+        ...(anulado ? { anuladoEn: new Date(), anuladoPor: 'admin.test', motivoAnulacion: 'Registro duplicado por error' } : {}),
+      },
+    });
 
   beforeAll(async () => {
     const moduleFixture = await Test.createTestingModule({ imports: [AppModule] }).compile();
@@ -103,7 +124,7 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
 
   it('sin trámites, todo en 0 (son ceros reales, no un fallo)', async () => {
     const res = await pendientes(tokens.admin).expect(200);
-    expect(res.body).toEqual({ accesos: 0, mantenimientos: 0, vulnerabilidades: 0, renovaciones: 0, total: 0 });
+    expect(res.body).toEqual({ accesos: 0, mantenimientos: 0, vulnerabilidades: 0, renovaciones: 0, endpoints: 0, evaluaciones: 0, total: 0 });
   });
 
   it('cuenta ABIERTO y EN_PROGRESO (y sus equivalentes); excluye cerrados y anulados; total = suma', async () => {
@@ -129,6 +150,17 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
     await renovacion('EN_PROGRESO');
     await renovacion('CERRADO');
     await renovacion('ABIERTO', true);
+    // Protección de Endpoints: ABIERTO + EN_PROGRESO → 2 (un registro por mes); CERRADO y un ABIERTO anulado no.
+    await periodo(1, 'ABIERTO');
+    await periodo(2, 'EN_PROGRESO');
+    await periodo(3, 'CERRADO');
+    await periodo(4, 'ABIERTO', true);
+    // Evaluación: ABIERTO (VENCIDA: fecha programada pasada) + EN_PROGRESO → 2; la vencida cuenta
+    // UNA vez, no como pendiente y además como vencida. CERRADO y una ABIERTO anulada no.
+    await evaluacion('ABIERTO', '2020-01-15T10:00:00Z');
+    await evaluacion('EN_PROGRESO', '2099-01-15T10:00:00Z');
+    await evaluacion('CERRADO', '2099-02-15T10:00:00Z');
+    await evaluacion('ABIERTO', '2099-03-15T10:00:00Z', true);
 
     // Historial y auditoría no son registros de negocio: no suman.
     await prisma.historialControlAcceso.createMany({
@@ -139,13 +171,14 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
     });
 
     const res = await pendientes(tokens.admin).expect(200);
-    expect(res.body).toEqual({ accesos: 3, mantenimientos: 2, vulnerabilidades: 2, renovaciones: 2, total: 9 });
-    expect(res.body.total).toBe(res.body.accesos + res.body.mantenimientos + res.body.vulnerabilidades + res.body.renovaciones);
+    expect(res.body).toEqual({ accesos: 3, mantenimientos: 2, vulnerabilidades: 2, renovaciones: 2, endpoints: 2, evaluaciones: 2, total: 13 });
+    const { total, ...modulos } = res.body as Record<string, number>;
+    expect(total).toBe(Object.values(modulos).reduce((a, b) => a + b, 0));
   }, LENTO);
 
   it('coincide con los listados de cada módulo (sin anulados) para el mismo usuario', async () => {
     const get = (ruta: string) => request(app.getHttpServer()).get(ruta).set('Authorization', `Bearer ${tokens.auditor}`).expect(200);
-    const [abiertos, enGestion, programados, enEjecucion, vAbiertas, vEnProgreso, renov] = await Promise.all([
+    const [abiertos, enGestion, programados, enEjecucion, vAbiertas, vEnProgreso, renov, pAbiertos, pEnProgreso, evals, vencidas] = await Promise.all([
       get('/api/control-acceso?estado=ABIERTO'),
       get('/api/control-acceso?estado=PENDIENTE'),
       get('/api/mantenimientos?fase=PROGRAMADO&incluirAnulados=false'),
@@ -153,12 +186,21 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
       get('/api/vulnerabilidades?estado=ABIERTO&incluirAnulados=false'),
       get('/api/vulnerabilidades?estado=EN_PROGRESO&incluirAnulados=false'),
       get('/api/renovaciones?pendientes=true&incluirAnulados=false'),
+      get('/api/proteccion-endpoints/periodos?estado=ABIERTO'),
+      get('/api/proteccion-endpoints/periodos?estado=EN_PROGRESO'),
+      get('/api/evaluaciones-sistemas?pendientes=true'),
+      get('/api/evaluaciones-sistemas?vencidas=true'),
     ]);
     const res = await pendientes(tokens.auditor).expect(200);
     expect(res.body.accesos).toBe(abiertos.body.meta.total + enGestion.body.meta.total);
     expect(res.body.mantenimientos).toBe(programados.body.meta.total + enEjecucion.body.meta.total);
     expect(res.body.vulnerabilidades).toBe(vAbiertas.body.meta.total + vEnProgreso.body.meta.total);
     expect(res.body.renovaciones).toBe(renov.body.meta.total);
+    expect(res.body.endpoints).toBe(pAbiertos.body.meta.total + pEnProgreso.body.meta.total);
+    expect(res.body.evaluaciones).toBe(evals.body.meta.total);
+    // Las vencidas son un subconjunto de las pendientes: no se suman aparte.
+    expect(vencidas.body.meta.total).toBe(1);
+    expect(evals.body.data.some((e: { vencida: boolean }) => e.vencida)).toBe(true);
   }, LENTO);
 
   it('un cambio de estado se refleja: al cerrar una solicitud baja un pendiente', async () => {
@@ -169,7 +211,7 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
       .send({ fechaAtendido: '2026-10-03T15:00:00.000Z', resolucion: 'Acceso otorgado en el sistema contable.' })
       .expect(200);
     const res = await pendientes(tokens.analista).expect(200);
-    expect(res.body).toMatchObject({ accesos: 2, total: 8 });
+    expect(res.body).toMatchObject({ accesos: 2, endpoints: 2, evaluaciones: 2, total: 12 });
   }, LENTO);
 
   it('lo consultan admin, analista y auditor; sin sesión válida, 401', async () => {
@@ -193,7 +235,7 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);
     expect(res.body.paths['/api/dashboard/pendientes'].get).toBeDefined();
     expect(Object.keys(res.body.components.schemas.PendientesTableroDto.properties).sort()).toEqual(
-      ['accesos', 'mantenimientos', 'renovaciones', 'total', 'vulnerabilidades'],
+      ['accesos', 'endpoints', 'evaluaciones', 'mantenimientos', 'renovaciones', 'total', 'vulnerabilidades'],
     );
     // Respaldos ya tenía un esquema «PendientesDto»: el del tablero no debe pisarlo.
     expect(res.body.components.schemas.PendientesDto.properties).toHaveProperty('ejecucion');

@@ -6,6 +6,7 @@ import {
   HttpCode,
   HttpStatus,
   Param,
+  ParseEnumPipe,
   ParseIntPipe,
   Patch,
   Post,
@@ -34,6 +35,7 @@ import {
   BitacoraDto,
   PaginatedBitacoraDto,
 } from '../bitacora/dto/bitacora.dto.js';
+import { APLICACIONES, ENUM_APLICACION, type Aplicacion } from './aplicacion.js';
 import { ActivosService } from './activos.service.js';
 import {
   ActivoDto,
@@ -86,10 +88,14 @@ export class ActivosController {
       'Las categorías (tipos de GLPI) que tienen activos, con su recuento: alimenta los selectores de activos de los módulos. Una categoría sin activos no aparece.',
   })
   @ApiQuery({ name: 'operativos', required: false, type: Boolean, description: 'true = cuenta solo los activos operativos (los que admiten operaciones nuevas).' })
+  @ApiQuery({ name: 'aplica', required: false, enum: APLICACIONES, description: 'Solo categorías habilitadas para ese módulo (Catálogos > Categorías).' })
   @ApiOkResponse({ type: [CategoriaActivoDto] })
   @Get('categorias')
-  categorias(@Query('operativos') operativos?: string): Promise<CategoriaActivoDto[]> {
-    return this.activos.categorias(operativos === 'true');
+  categorias(
+    @Query('operativos') operativos?: string,
+    @Query('aplica', new ParseEnumPipe(ENUM_APLICACION, { optional: true })) aplica?: Aplicacion,
+  ): Promise<CategoriaActivoDto[]> {
+    return this.activos.categorias(operativos === 'true', aplica);
   }
 
   @ApiOperation({ summary: 'Detalle de un activo (también si está dado de baja)' })

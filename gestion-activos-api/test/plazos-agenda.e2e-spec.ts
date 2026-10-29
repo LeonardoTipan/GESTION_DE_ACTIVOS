@@ -11,7 +11,7 @@ import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
-import { limpiarBaseDeDatos } from './utils/database.js';
+import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 120_000;
@@ -38,7 +38,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
     prisma = app.get(PrismaService);
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
-    categoriaId = (await prisma.categoria.create({ data: { nombre: 'Computadoras', descripcion: '' } })).id;
+    categoriaId = (await prisma.categoria.create({ data: { ...APLICA_EN_TODOS, nombre: 'Computadoras', descripcion: '' } })).id;
     const criticidadId = (await prisma.criticidad.create({ data: { nivel: 'Alta' } })).id;
     activoId = (
       await prisma.activo.create({

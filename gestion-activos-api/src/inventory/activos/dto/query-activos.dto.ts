@@ -10,6 +10,7 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
+import { APLICACIONES, type Aplicacion } from '../aplicacion.js';
 import { Trim } from '../../../common/decorators/trim.decorator.js';
 import { PaginationQueryDto } from '../../../common/dto/pagination-query.dto.js';
 
@@ -112,4 +113,14 @@ export class QueryActivosDto extends PaginationQueryDto {
   @toBoolean()
   @IsBoolean()
   operativos: boolean = false;
+
+  @ApiPropertyOptional({
+    enum: APLICACIONES,
+    description:
+      'Solo activos cuya categoría está habilitada para ese módulo (Catálogos > Categorías). ' +
+      'Lo usan los selectores de Mantenimientos, Vulnerabilidades y Renovaciones, junto con operativos=true.',
+  })
+  @IsOptional()
+  @IsIn(APLICACIONES)
+  aplica?: Aplicacion;
 }
