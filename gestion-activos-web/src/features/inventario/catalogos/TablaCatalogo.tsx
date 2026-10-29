@@ -72,62 +72,65 @@ export function TablaCatalogo<
         </Alert>
       )}
       {filas && (
-        <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
-          <Table.Thead>
-            <Table.Tr>
-              {config.campos.map((c) => (
-                <Table.Th key={c.clave}>{c.etiqueta}</Table.Th>
-              ))}
-              <Table.Th w={100} />
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {filas.length === 0 && (
+        // Con muchas columnas (categorías) la tabla se desplaza en horizontal en vez de desbordarse.
+        <Table.ScrollContainer minWidth={config.campos.length > 4 ? 1300 : 0}>
+          <Table striped highlightOnHover withTableBorder verticalSpacing="sm">
+            <Table.Thead>
               <Table.Tr>
-                <Table.Td colSpan={config.campos.length + 1}>
-                  <Text c="dimmed" ta="center" py="md">
-                    Sin elementos todavía.
-                  </Text>
-                </Table.Td>
-              </Table.Tr>
-            )}
-            {filas.map((fila) => (
-              <Table.Tr key={fila.id}>
                 {config.campos.map((c) => (
-                  <Table.Td key={c.clave} fw={c.clave === principal ? 500 : undefined}>
-                    {c.tipo === 'interruptor' ? (
-                      <Badge size="sm" variant="light" color={fila[c.clave] ? 'green' : 'gray'}>
-                        {fila[c.clave] ? 'Sí' : 'No'}
-                      </Badge>
-                    ) : c.tipo === 'seleccion' ? (
-                      c.opciones?.find((o) => o.value === fila[c.clave])?.label ?? (
-                        <Text span size="sm" c="dimmed">
-                          {c.sinValor ?? '—'}
-                        </Text>
-                      )
-                    ) : (
-                      String(fila[c.clave] ?? '') || '—'
-                    )}
-                  </Table.Td>
+                  <Table.Th key={c.clave}>{c.etiqueta}</Table.Th>
                 ))}
-                <Table.Td>
-                  <Group gap={4} justify="flex-end" wrap="nowrap">
-                    <Tooltip label="Editar">
-                      <ActionIcon variant="subtle" aria-label={`Editar ${String(fila[principal])}`} onClick={() => setEditando(fila)}>
-                        <IconPencil size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                    <Tooltip label="Eliminar">
-                      <ActionIcon variant="subtle" color="red" aria-label={`Eliminar ${String(fila[principal])}`} onClick={() => confirmarEliminar(fila)}>
-                        <IconTrash size={16} />
-                      </ActionIcon>
-                    </Tooltip>
-                  </Group>
-                </Table.Td>
+                <Table.Th w={100} />
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {filas.length === 0 && (
+                <Table.Tr>
+                  <Table.Td colSpan={config.campos.length + 1}>
+                    <Text c="dimmed" ta="center" py="md">
+                      Sin elementos todavía.
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              )}
+              {filas.map((fila) => (
+                <Table.Tr key={fila.id}>
+                  {config.campos.map((c) => (
+                    <Table.Td key={c.clave} fw={c.clave === principal ? 500 : undefined}>
+                      {c.tipo === 'interruptor' ? (
+                        <Badge size="sm" variant="light" color={fila[c.clave] ? 'green' : 'gray'}>
+                          {fila[c.clave] ? 'Sí' : 'No'}
+                        </Badge>
+                      ) : c.tipo === 'seleccion' ? (
+                        c.opciones?.find((o) => o.value === fila[c.clave])?.label ?? (
+                          <Text span size="sm" c="dimmed">
+                            {c.sinValor ?? '—'}
+                          </Text>
+                        )
+                      ) : (
+                        String(fila[c.clave] ?? '') || '—'
+                      )}
+                    </Table.Td>
+                  ))}
+                  <Table.Td>
+                    <Group gap={4} justify="flex-end" wrap="nowrap">
+                      <Tooltip label="Editar">
+                        <ActionIcon variant="subtle" aria-label={`Editar ${String(fila[principal])}`} onClick={() => setEditando(fila)}>
+                          <IconPencil size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                      <Tooltip label="Eliminar">
+                        <ActionIcon variant="subtle" color="red" aria-label={`Eliminar ${String(fila[principal])}`} onClick={() => confirmarEliminar(fila)}>
+                          <IconTrash size={16} />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Group>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
       )}
 
       <CatalogoFormModal

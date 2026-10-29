@@ -78,14 +78,14 @@ export const MENU: readonly ItemMenu[] = [
     etiqueta: 'Protección de Endpoints',
     ruta: '/proteccion-endpoints',
     icono: IconDeviceLaptop,
-    descripcion: 'Módulo en desarrollo - Próximamente disponible',
+    descripcion: 'Cobertura mensual de antivirus/EDR: planificación de los períodos.',
     roles: [],
   },
   {
     etiqueta: 'Evaluación de Sistemas Productivos',
     ruta: '/evaluacion-sistemas-productivos',
     icono: IconClipboardCheck,
-    descripcion: 'Módulo en desarrollo - Próximamente disponible',
+    descripcion: 'Pruebas de seguridad antes del paso a producción: planificación.',
     roles: [],
   },
   {

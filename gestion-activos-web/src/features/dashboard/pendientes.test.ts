@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { pendientesDe, textoPendientes } from './pendientes.ts'
 
-const datos = { accesos: 3, mantenimientos: 1, vulnerabilidades: 0, renovaciones: 2, total: 6 }
+const datos = { accesos: 3, mantenimientos: 1, vulnerabilidades: 0, renovaciones: 2, endpoints: 1, evaluaciones: 4, total: 11 }
 
 describe('pendientes del tablero', () => {
   it('cada tarjeta de módulo toma su conteo', () => {
@@ -9,6 +9,8 @@ describe('pendientes del tablero', () => {
     expect(pendientesDe('/mantenimientos', datos)).toBe(1)
     expect(pendientesDe('/vulnerabilidades', datos)).toBe(0)
     expect(pendientesDe('/renovaciones', datos)).toBe(2)
+    expect(pendientesDe('/proteccion-endpoints', datos)).toBe(1)
+    expect(pendientesDe('/evaluacion-sistemas-productivos', datos)).toBe(4)
   })
 
   it('sin datos (cargando o error) o en otros módulos no muestra nada, nunca 0', () => {

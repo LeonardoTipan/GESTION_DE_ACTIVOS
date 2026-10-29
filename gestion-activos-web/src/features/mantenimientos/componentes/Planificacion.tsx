@@ -300,6 +300,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
           </Group>
         ) : (
           <SeleccionActivos
+            aplica="MANTENIMIENTO"
             titulo="Seleccionar activos para mantenimiento"
             etiqueta="Activos"
             value={seleccion}
@@ -317,7 +318,7 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
               return null
             }}
             error={mezcla ? 'Hay activos de distinta clase: deje solo los de hardware o solo los de software.' : undefined}
-            ayuda="Elija primero los activos: su clase (hardware o software) decide los tipos de mantenimiento. Solo se ofrecen activos operativos (también en condición «Malo»)."
+            ayuda="Elija primero los activos: su clase (hardware o software) decide los tipos de mantenimiento. Solo se ofrecen activos operativos (también en condición «Malo») de categorías habilitadas para Mantenimientos (Catálogos > Categorías)."
           />
         )}
         {!plan && (

@@ -125,6 +125,7 @@ function Formulario({ onClose, renovacion: r, onGuardada }: Omit<Props, 'opened'
       <Stack gap="sm">
         {editable ? (
           <SeleccionActivos
+            aplica="RENOVACION"
             titulo="Sistema"
             etiqueta="Sistema (activo de GLPI)"
             multiple={false}
@@ -132,7 +133,7 @@ function Formulario({ onClose, renovacion: r, onGuardada }: Omit<Props, 'opened'
             onChange={(ids) => form.setFieldValue('activoId', ids[0] ?? null)}
             insignia={(a) => <BadgeClase clase={claseDe(a.categoriaId)} size="xs" />}
             error={form.errors.activoId}
-            ayuda="Solo se ofrecen activos operativos. La renovación no modifica el activo."
+            ayuda="Solo se ofrecen activos operativos de categorías habilitadas para Renovaciones (Catálogos > Categorías). La renovación no modifica el activo."
           />
         ) : (
           <TextInput label="Sistema" value={`${r!.activo.codigo} · ${r!.activo.nombre}`} disabled description="El sistema y el tipo solo se cambian mientras está abierta." />

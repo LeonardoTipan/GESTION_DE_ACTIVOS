@@ -110,13 +110,14 @@ function FormRegistrar({ onClose, activoInicial, onRegistrada }: Omit<Props, 'op
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
         <SeleccionActivos
+          aplica="VULNERABILIDAD"
           titulo="Sistema afectado"
           etiqueta="Sistema (activo de GLPI)"
           value={form.values.activoIds}
           onChange={(ids) => form.setFieldValue('activoIds', ids)}
           insignia={(a) => <BadgeClase clase={claseDe(a.categoriaId)} size="xs" />}
           error={form.errors.activoIds}
-          ayuda="Uno o varios: se crea un registro por activo, todos o ninguno. Solo se ofrecen activos operativos."
+          ayuda="Uno o varios: se crea un registro por activo, todos o ninguno. Solo se ofrecen activos operativos de categorías habilitadas para Vulnerabilidades (Catálogos > Categorías), sean de hardware o de software."
         />
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <DateTimePicker

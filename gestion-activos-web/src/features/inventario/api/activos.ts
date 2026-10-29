@@ -80,11 +80,14 @@ export function useDarDeBajaActivo() {
 }
 
 /** Categorías que tienen activos, con su recuento (selectores de activos de los módulos). */
-export function useCategoriasConActivos({ operativos }: { operativos: boolean }) {
+/** Módulo cuyos activos elegibles se piden (bandera de la categoría en Catálogos). */
+export type Aplicacion = NonNullable<FiltrosApiActivos['aplica']>
+
+export function useCategoriasConActivos({ operativos, aplica }: { operativos: boolean; aplica?: Aplicacion }) {
   return useQuery({
-    queryKey: [...claves.activos, 'categorias', operativos],
+    queryKey: [...claves.activos, 'categorias', operativos, aplica],
     queryFn: () =>
-      ejecutar(api.GET('/api/activos/categorias', { params: { query: { operativos } } })),
+      ejecutar(api.GET('/api/activos/categorias', { params: { query: { operativos, aplica } } })),
   })
 }
 
@@ -95,13 +98,14 @@ export function useCategoriasConActivos({ operativos }: { operativos: boolean })
 export async function activosOperativosPorCriticidad(
   criticidadIds: number[],
   categoriaId?: number,
+  aplica?: Aplicacion,
 ): Promise<Activo[]> {
   const todos: Activo[] = []
   for (const criticidadId of criticidadIds) {
     for (let page = 1; ; page++) {
       const r = await ejecutar(
         api.GET('/api/activos', {
-          params: { query: { operativos: true, criticidadId, categoriaId, page, limit: 100, sort: 'codigo', order: 'asc' } },
+          params: { query: { operativos: true, aplica, criticidadId, categoriaId, page, limit: 100, sort: 'codigo', order: 'asc' } },
         }),
       )
       todos.push(...r.data)

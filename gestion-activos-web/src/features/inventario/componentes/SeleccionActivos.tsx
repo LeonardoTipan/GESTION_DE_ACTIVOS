@@ -20,6 +20,7 @@ import {
   useActivos,
   useCategoriasConActivos,
   type Activo,
+  type Aplicacion,
 } from '../api/activos.ts'
 import { useCriticidades } from '../api/catalogos.ts'
 import { BadgeCriticidad } from './BadgeCriticidad.tsx'
@@ -45,6 +46,11 @@ interface Props {
   error?: ReactNode
   /** Texto de ayuda bajo la lista. */
   ayuda?: ReactNode
+  /**
+   * Módulo que filtra por categoría (Catálogos > Categorías): solo se ofrecen activos de
+   * categorías habilitadas para él. El backend lo vuelve a validar al guardar.
+   */
+  aplica?: Aplicacion
 }
 
 /**
@@ -65,6 +71,7 @@ export function SeleccionActivos({
   onElegidos,
   error,
   ayuda,
+  aplica,
 }: Props) {
   const [categoria, setCategoria] = useState<string>(TODAS_LAS_CATEGORIAS)
   const [busqueda, setBusqueda] = useState('')
@@ -74,10 +81,11 @@ export function SeleccionActivos({
   const [buscandoCriticos, setBuscandoCriticos] = useState(false)
   const categoriaId = categoria ? Number(categoria) : undefined
 
-  const categorias = useCategoriasConActivos({ operativos: true })
+  const categorias = useCategoriasConActivos({ operativos: true, aplica })
   const criticidades = useCriticidades()
   const lista = useActivos({
     operativos: true,
+    aplica,
     categoriaId,
     q: q || undefined,
     page: pagina,
@@ -108,7 +116,7 @@ export function SeleccionActivos({
     }
     setBuscandoCriticos(true)
     try {
-      const criticos = await activosOperativosPorCriticidad(ids, categoriaId)
+      const criticos = await activosOperativosPorCriticidad(ids, categoriaId, aplica)
       recordar(criticos)
       const elegibles = criticos.filter((a) => !noElegible(a)).map((a) => a.id)
       const descartados = criticos.length - elegibles.length
@@ -203,7 +211,8 @@ export function SeleccionActivos({
             {!lista.isPending && activos.length === 0 && (
               <Text size="sm" c="dimmed">
                 No se encontraron activos operativos{categoriaId ? ' en esta categoría' : ''}
-                {q ? ` que coincidan con «${q}»` : ''}.
+                {q ? ` que coincidan con «${q}»` : ''}
+                {aplica ? ' en las categorías habilitadas para este módulo (Catálogos > Categorías)' : ''}.
               </Text>
             )}
             {activos.map((a) => {

@@ -6,6 +6,8 @@ const POR_RUTA: Record<string, Exclude<keyof Pendientes, 'total'>> = {
   '/mantenimientos': 'mantenimientos',
   '/vulnerabilidades': 'vulnerabilidades',
   '/renovaciones': 'renovaciones',
+  '/proteccion-endpoints': 'endpoints',
+  '/evaluacion-sistemas-productivos': 'evaluaciones',
 }
 
 /**
