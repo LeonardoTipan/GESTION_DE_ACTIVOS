@@ -102,7 +102,7 @@ describe('Editar con motivo y anular (e2e)', () => {
       ).id;
     });
 
-    const nuevo = () => crear('/api/mantenimientos', { planId, fecha: HACE_UNA_HORA, fechaLimite: MANANA });
+    const nuevo = () => crear('/api/mantenimientos', { planId, fecha: HACE_UNA_HORA, fechaLimite: MANANA, adicional: true, justificacion: 'Ejecución auxiliar de la prueba (varias por plan).' });
 
     it('editar tipo, actividad y fecha mientras está PROGRAMADO → 200', async () => {
       const { id } = await nuevo();
@@ -288,6 +288,14 @@ describe('Editar con motivo y anular (e2e)', () => {
         fechaLimite: MANANA,
       });
 
+      // Con procesos abiertos la baja manual se rechaza (409) y no toca nada.
+      const rechazo = await api(tokens.admin).delete(`/api/activos/${otro.id}`).expect(409);
+      expect(rechazo.body.message).toContain('1 mantenimiento(s) pendiente(s)');
+      expect(rechazo.body.message).toContain('1 plan(es) de respaldo vigente(s)');
+      // Se cierran por sus módulos, cada uno con su motivo y su traza; entonces se permite.
+      await api(tokens.analista).patch(`/api/mantenimientos/${mantenimiento.id}/cancelar`, { motivo: 'El equipo se retira del servicio.' }).expect(200);
+      await api(tokens.analista).patch(`/api/mantenimientos/planes/${planMantenimiento.id}`, { estado: 'SUSPENDIDO', motivoCambio: MOTIVO }).expect(200);
+      await api(tokens.analista).patch(`/api/respaldos/planes/${plan.id}`, { estado: 'SUSPENDIDO', motivoCambio: MOTIVO }).expect(200);
       await api(tokens.admin).delete(`/api/activos/${otro.id}`).expect(204);
 
       // El historial sigue consultable, con los datos del activo dado de baja.

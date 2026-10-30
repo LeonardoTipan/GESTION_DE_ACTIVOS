@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AuditModule } from '../audit/audit.module.js';
 import { ActivosController } from './activos/activos.controller.js';
 import { ActivosService } from './activos/activos.service.js';
 import { BitacoraService } from './bitacora/bitacora.service.js';
@@ -9,6 +10,8 @@ import { CriticidadesService } from './criticidades/criticidades.service.js';
 
 /** Inventario de activos: catálogos, activos y su bitácora de cambios. */
 @Module({
+  // Solo para la traza de los catálogos (la auditoría no depende del inventario).
+  imports: [AuditModule],
   controllers: [
     ActivosController,
     CategoriasController,

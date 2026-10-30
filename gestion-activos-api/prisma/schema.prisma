@@ -35,10 +35,10 @@ model Categoria {
   aplicaMantenimiento  Boolean             @default(false)
   aplicaVulnerabilidad Boolean             @default(false)
   aplicaRenovacion     Boolean             @default(false)
-  // Preparadas para módulos futuros (Evaluación de Sistemas Productivos y Protección de
-  // Endpoints): aún no habilitan selectores ni operaciones.
   aplicaEvaluacion     Boolean             @default(false)
   aplicaEndpoint       Boolean             @default(false)
+  // Respaldos: activos de los que se planifican copias (planes de respaldo).
+  aplicaRespaldo       Boolean             @default(false)
 
   activos Activo[] // CATEGORIA ||--o{ ACTIVO : "agrupa"
 
@@ -929,6 +929,11 @@ model PeriodoEndpoint {
   totalActivos           Int?
   // Equipos con antivirus/EDR activo (≤ totalActivos). La cobertura se calcula, no se guarda
   equiposConAntivirus    Int?
+  // Fecha REAL en que se hizo la medición del mes: la indica el usuario (no futura, no anterior
+  // al inicio del mes del período). No es la fecha de apertura ni la de cierre
+  fechaEjecucion         DateTime?
+  // Quién realizó la medición (puede ser distinto del responsable asignado al abrir)
+  responsableEjecucion   String?
   // «Verificable»: inventario de equipos del mes
   evidencia              String?
   // «Repositorio Verificable»: carpeta o URL http(s)

@@ -44,4 +44,4 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
  * Banderas de categoría que habilitan sus activos en los tres módulos con filtro
  * (Catálogos > Categorías). Las suites que crean registros de esos módulos las usan.
  */
-export const APLICA_EN_TODOS = { aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true } as const;
+export const APLICA_EN_TODOS = { aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true, aplicaRespaldo: true } as const;

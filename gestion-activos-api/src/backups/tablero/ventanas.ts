@@ -129,7 +129,7 @@ export function ventanasDe(
   return salida;
 }
 
-/** Cumplida si hay algún registro dentro de la ventana; si no, según la fecha de hoy. */
+/** Cumplida si hay algún registro (EXITOSO: lo filtra quien llama) dentro de la ventana; si no, según la fecha de hoy. */
 export function estadoVentana(
   ventana: Ventana,
   fechasRegistradas: string[],

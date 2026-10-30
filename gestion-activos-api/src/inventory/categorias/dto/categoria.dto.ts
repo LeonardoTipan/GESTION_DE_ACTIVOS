@@ -67,6 +67,11 @@ export class CreateCategoriaDto {
   @IsOptional()
   @IsBoolean()
   aplicaEndpoint?: boolean;
+
+  @ApiPropertyOptional({ description: 'Sus activos (operativos) admiten planes de respaldo. Falso si se omite.' })
+  @IsOptional()
+  @IsBoolean()
+  aplicaRespaldo?: boolean;
 }
 
 /** En PATCH todos los campos son opcionales. */
@@ -107,4 +112,7 @@ export class CategoriaDto {
 
   @ApiProperty({ description: 'Elegible en Protección de Endpoints.' })
   aplicaEndpoint: boolean;
+
+  @ApiProperty({ description: 'Elegible en Respaldos.' })
+  aplicaRespaldo: boolean;
 }

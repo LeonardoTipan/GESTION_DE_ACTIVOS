@@ -13,6 +13,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
 import {
@@ -70,6 +71,13 @@ export class EvaluacionesController {
   @Get('bitacora/especifica')
   bitacoraEspecifica(@Query() q: QueryBitacoraEspecificaEvaluacionDto): Promise<Paginated<EvaluacionSistemaDto>> {
     return this.evaluaciones.bitacoraEspecifica(q);
+  }
+
+  @ApiOperation({ summary: 'Agenda del calendario', description: 'Paso a producción programado (previsto) y pruebas de seguridad reales, en un rango.' })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get('agenda')
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.evaluaciones.agenda(q);
   }
 
   @ApiOperation({ summary: 'Consultar una evaluación' })

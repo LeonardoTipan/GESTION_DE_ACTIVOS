@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { MOTIVO_MINIMO } from '../../audit/dto/traza.dto.js';
 import { TrazasService } from '../../audit/trazas.service.js';
 import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import {
@@ -26,7 +27,8 @@ import type {
   QueryPlanesMantenimientoDto,
   TableroMantenimientosDto,
 } from './dto.js';
-import { siguienteFecha } from './frecuencia.js';
+import { proximaIntervencion } from './frecuencia.js';
+import { exigirIntervalo } from '../../common/plazos/plazos.js';
 import { exigirTipoPermitido, rangoDe, semestreDe } from '../planificacion.js';
 import type { TipoMantenimiento } from '../../generated/prisma/enums.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../../common/dto/agenda.dto.js';
@@ -34,34 +36,63 @@ import { agendaMantenimientos } from './agenda.js';
 
 const INCLUDE = {
   activo: SELECT_ACTIVO,
-  // Para contar las ejecuciones (todas) y las completadas sin una consulta por plan.
-  mantenimientos: { select: { fase: true, anuladoEn: true } },
+  // Para contar las ejecuciones (todas) y las completadas, la última finalización real y la
+  // ejecución pendiente, sin una consulta por plan.
+  mantenimientos: { select: { id: true, fase: true, anuladoEn: true, fechaFin: true } },
 } as const;
 type PlanConActivo = Prisma.PlanMantenimientoGetPayload<{ include: typeof INCLUDE }>;
 
+/** Ejecuciones que aún no terminaron: un plan tiene a lo sumo una (salvo adicionales justificadas). */
+const FASES_PENDIENTES = ['PROGRAMADO', 'EN_EJECUCION'] as const;
+const PENDIENTE = { fase: { in: [...FASES_PENDIENTES] }, anuladoEn: null };
+const esPendiente = (m: { fase: string; anuladoEn: Date | null }) =>
+  (FASES_PENDIENTES as readonly string[]).includes(m.fase) && !m.anuladoEn;
+
 const aDto = (p: PlanConActivo, ahora = new Date()): PlanMantenimientoDto => {
   const { mantenimientos, ...plan } = p;
+  const pendiente = mantenimientos.find(esPendiente);
   return {
     ...plan,
     proximaFecha: plan.proximaFecha as Date,
     activo: activoBreve(plan.activo),
     intervenciones: mantenimientos.length,
     ejecucionesCompletadas: mantenimientos.filter((m) => m.fase === 'FINALIZADO' && !m.anuladoEn).length,
+    ultimaFinalizacion: proximaIntervencion(plan, mantenimientos).ultimaFinalizacion,
+    ejecucionPendienteId: pendiente?.id ?? null,
     semestrePlanificado: semestreDe(plan.fechaInicio),
+    // Con una ejecución pendiente, el retraso se ve en esa ejecución, no en el plan.
     vencido:
       plan.estado === 'VIGENTE' &&
       !plan.anuladoEn &&
+      !pendiente &&
       plan.proximaFecha !== null &&
       plan.proximaFecha < ahora,
   };
 };
 
 const VIGENTE = { estado: 'VIGENTE', anuladoEn: null } as const;
+/** Vigente y sin ejecución pendiente: su próxima intervención está «por programar». */
+const POR_PROGRAMAR = { ...VIGENTE, mantenimientos: { none: PENDIENTE } } as const;
+
+/** Programar una ejecución desde la planificación (los dos caminos de la interfaz usan esto). */
+export interface OpcionesProgramar {
+  /** Inicio previsto; por defecto, la próxima intervención del plan. */
+  fecha?: Date;
+  /** Límite previsto; por defecto, inicio + plazo del plan. */
+  fechaLimite?: Date;
+  /** Ejecución ADICIONAL (trabajo extra, intervención parcial): exige fecha y justificación. */
+  adicional?: boolean;
+  justificacion?: string;
+}
 
 /**
  * Capa 1 · Planificación de mantenimientos: qué necesita cada activo y cada
- * cuánto. Un activo tiene a lo sumo un plan vigente de cada tipo. Desde el
- * plan se programa la intervención (capa 2) y la próxima fecha avanza sola.
+ * cuánto. Un activo tiene a lo sumo un plan vigente de cada tipo.
+ *
+ * PRÓXIMA INTERVENCIÓN: se DERIVA del historial (ver proximaIntervencion): fin REAL de la
+ * última ejecución finalizada + período; sin ninguna, la fecha de inicio planificada.
+ * Programar o cancelar no la mueven; finalizar, corregir el fin real, anular/revertir una
+ * ejecución o cambiar el período/inicio del plan la recalculan (recalcularProxima).
  */
 @Injectable()
 export class PlanesMantenimientoService {
@@ -78,7 +109,7 @@ export class PlanesMantenimientoService {
       tipo: q.tipo,
       estado: q.estado,
       ...(q.responsable ? { responsable: { contains: q.responsable } } : {}),
-      ...(q.vencidos ? { ...VIGENTE, proximaFecha: { lt: ahora } } : {}),
+      ...(q.vencidos ? { ...POR_PROGRAMAR, proximaFecha: { lt: ahora } } : {}),
     };
     if (q.semestre && !q.anio) throw new BadRequestException('El semestre exige el año.');
     if (q.anio) {
@@ -104,22 +135,31 @@ export class PlanesMantenimientoService {
     return aDto(plan);
   }
 
-  async crear(dto: CrearPlanesMantenimientoDto): Promise<PlanMantenimientoDto[]> {
+  async crear(dto: CrearPlanesMantenimientoDto, u: AuthUser): Promise<PlanMantenimientoDto[]> {
     const { activoIds, ...parametros } = dto;
     for (const id of activoIds) await this.activos.exigirOperativo(id, 'MANTENIMIENTO');
     await this.exigirTipoParaActivos(activoIds, dto.tipo);
     await this.exigirSinPlanVigente(activoIds, dto.tipo);
-    const creados = await this.prisma.$transaction((tx) =>
-      Promise.all(
-        activoIds.map((activoId) =>
-          // La primera intervención prevista es la de la fecha de inicio planificada.
-          tx.planMantenimiento.create({
-            data: { ...parametros, proximaFecha: parametros.proximaFecha ?? parametros.fechaInicio, activoId },
-            include: INCLUDE,
-          }),
-        ),
-      ),
-    );
+    const creados = await this.prisma.$transaction(async (tx) => {
+      const planes: PlanConActivo[] = [];
+      for (const activoId of activoIds) {
+        // La primera intervención prevista es la de la fecha de inicio planificada.
+        const p = await tx.planMantenimiento.create({
+          data: { ...parametros, proximaFecha: parametros.fechaInicio, activoId },
+          include: INCLUDE,
+        });
+        await this.trazas.registrarAlta(
+          tx,
+          'PLAN_MANTENIMIENTO',
+          p.id,
+          { activoId, tipo: p.tipo, frecuencia: p.frecuencia, fechaInicio: p.fechaInicio, responsable: p.responsable, actividades: p.actividades, plazoDias: p.plazoDias, estado: p.estado },
+          'Alta de la planificación.',
+          u.username,
+        );
+        planes.push(p);
+      }
+      return planes;
+    });
     return creados.map((p) => aDto(p));
   }
 
@@ -134,6 +174,9 @@ export class PlanesMantenimientoService {
       await this.exigirSinPlanVigente([actual.activoId], tipo, id);
     }
     await this.trazas.modificar('PLAN_MANTENIMIENTO', id, datos, motivoCambio, u.username);
+    // Otro período o inicio: la próxima intervención se recalcula con la MISMA regla (desde el
+    // fin real de la última ejecución finalizada; sin ninguna, desde el nuevo inicio).
+    if (datos.frecuencia !== undefined || datos.fechaInicio !== undefined) await this.recalcularProxima(id);
     return this.findOne(id);
   }
 
@@ -152,41 +195,44 @@ export class PlanesMantenimientoService {
   }
 
   /**
-   * Programa la intervención prevista (capa 2) y adelanta la próxima fecha
-   * según la frecuencia (o la deja vacía si el plan era de una sola vez).
+   * Programa una EJECUCIÓN (fase PROGRAMADO) de la planificación. Es la ÚNICA forma de crear
+   * ejecuciones (la usan «Programar» desde el plan y «Nueva ejecución»), así que las reglas
+   * son las mismas en los dos caminos:
+   * - NO mueve la próxima intervención (se recalcula al finalizar, desde el fin real);
+   * - una sola ejecución pendiente por plan; una adicional exige fecha y justificación, que
+   *   queda en la auditoría (alta de la ejecución);
+   * - sin fecha, la próxima intervención del plan (ÚNICA ya ejecutada: solo adicional).
+   * El plan se bloquea (SELECT … FOR UPDATE) para que dos peticiones simultáneas no creen dos.
    */
-  async programar(
-    id: number,
-    opciones: { fecha?: Date; adicional?: boolean } = {},
-  ): Promise<{ mantenimientoId: number; plan: PlanMantenimientoDto }> {
-    const { fecha, adicional = false } = opciones;
+  async programar(id: number, opciones: OpcionesProgramar, u: AuthUser): Promise<{ mantenimientoId: number; plan: PlanMantenimientoDto }> {
+    const { fecha, fechaLimite, adicional = false } = opciones;
+    const justificacion = opciones.justificacion?.trim() ?? '';
     const plan = await this.findOne(id);
     if (plan.anuladoEn || plan.estado !== 'VIGENTE') {
       throw new ConflictException(`La planificación ${id} no está vigente.`);
     }
-    if (adicional && !fecha) {
-      throw new BadRequestException('Una ejecución adicional exige su fecha prevista.');
+    if (adicional && (!fecha || justificacion.length < MOTIVO_MINIMO)) {
+      throw new BadRequestException(
+        `Una ejecución adicional exige su fecha prevista y la justificación (al menos ${MOTIVO_MINIMO} caracteres).`,
+      );
     }
-    if (!adicional && !plan.proximaFecha) {
+    if (!adicional && !fecha && !plan.proximaFecha) {
       throw new ConflictException(
-        `La planificación ${id} no tiene más intervenciones previstas: registre una ejecución adicional si hace falta.`,
+        `La planificación ${id} no tiene más intervenciones previstas: registre una ejecución adicional justificada si hace falta.`,
       );
     }
     await this.activos.exigirOperativo(plan.activoId, 'MANTENIMIENTO');
-    const prevista = adicional ? fecha! : new Date(plan.proximaFecha);
+    const inicio = fecha ?? new Date(plan.proximaFecha);
+    const limite = fechaLimite ?? new Date(inicio.getTime() + (plan.plazoDias ?? 7) * 86_400_000);
+    exigirIntervalo(inicio, limite, 'Mantenimiento');
     const mantenimientoId = await this.prisma.$transaction(async (tx) => {
-      if (!adicional) {
-        // Condicional: si otra petición ya programó esta fecha, no se duplica.
-        const { count } = await tx.planMantenimiento.updateMany({
-          where: { id, proximaFecha: prevista, ...VIGENTE },
-          data: { proximaFecha: siguienteFecha(prevista, plan.frecuencia) },
-        });
-        if (count === 0) {
-          throw new ConflictException(`La planificación ${id} cambió mientras se programaba; vuelve a consultarla.`);
-        }
+      await tx.$queryRaw`SELECT id FROM plan_mantenimiento WHERE id = ${id} FOR UPDATE`;
+      const pendiente = await tx.mantenimiento.findFirst({ where: { planId: id, ...PENDIENTE }, select: { id: true } });
+      if (pendiente && !adicional) {
+        throw new ConflictException(
+          `La planificación ${id} ya tiene la ejecución #${pendiente.id} pendiente: finalícela o cancélela, o registre una ejecución adicional justificada.`,
+        );
       }
-      // Intervalo previsto: desde el inicio, con el plazo del plan.
-      const inicio = fecha ?? prevista;
       const m = await tx.mantenimiento.create({
         data: {
           activoId: plan.activoId,
@@ -194,12 +240,37 @@ export class PlanesMantenimientoService {
           tipo: plan.tipo,
           actividad: plan.actividades.slice(0, 191),
           fecha: inicio,
-          fechaLimite: new Date(inicio.getTime() + (plan.plazoDias ?? 7) * 86_400_000),
+          fechaLimite: limite,
         },
       });
+      await this.trazas.registrarAlta(
+        tx,
+        'MANTENIMIENTO',
+        m.id,
+        { planId: id, activoId: m.activoId, tipo: m.tipo, fecha: m.fecha, fechaLimite: m.fechaLimite, fase: m.fase },
+        adicional ? `Ejecución adicional: ${justificacion}`.slice(0, 5000) : 'Ejecución programada desde la planificación.',
+        u.username,
+      );
       return m.id;
     });
     return { mantenimientoId, plan: await this.findOne(id) };
+  }
+
+  /**
+   * Recalcula la próxima intervención desde el historial (fin real de la última ejecución
+   * finalizada y no anulada + período). Es un dato DERIVADO: no sube la versión del plan ni
+   * genera traza propia (la traza está en la ejecución que lo provocó). Idempotente.
+   */
+  async recalcularProxima(planId: number, tx: Prisma.TransactionClient = this.prisma): Promise<void> {
+    const plan = await tx.planMantenimiento.findUnique({
+      where: { id: planId },
+      select: { fechaInicio: true, frecuencia: true, proximaFecha: true, mantenimientos: { select: { fase: true, fechaFin: true, anuladoEn: true } } },
+    });
+    if (!plan) return;
+    const { proximaFecha } = proximaIntervencion(plan, plan.mantenimientos);
+    if ((proximaFecha?.getTime() ?? null) !== (plan.proximaFecha?.getTime() ?? null)) {
+      await tx.planMantenimiento.update({ where: { id: planId }, data: { proximaFecha } });
+    }
   }
 
   /** Agenda de las dos fases (planificación y ejecución) en un rango, con los filtros del calendario. */
@@ -223,7 +294,7 @@ export class PlanesMantenimientoService {
         take: 2000,
       }),
       this.prisma.planMantenimiento.findMany({
-        where: { ...VIGENTE, proximaFecha: { not: null, lte: q.hasta }, ...deActivo, ...(contiene ? { responsable: contiene } : {}) },
+        where: { ...POR_PROGRAMAR, proximaFecha: { not: null, lte: q.hasta }, ...deActivo, ...(contiene ? { responsable: contiene } : {}) },
         include: { activo: SELECT_ACTIVO },
       }),
     ]);
@@ -248,7 +319,7 @@ export class PlanesMantenimientoService {
     const [planes, programados, activosSinPlan, ejemplos, planesVencidos] =
       await Promise.all([
         this.prisma.planMantenimiento.findMany({
-          where: { ...VIGENTE, proximaFecha: { not: null, lte: limite } },
+          where: { ...POR_PROGRAMAR, proximaFecha: { not: null, lte: limite } },
           include: { activo: SELECT_ACTIVO },
           orderBy: { proximaFecha: 'asc' },
           take: 50,
@@ -261,7 +332,7 @@ export class PlanesMantenimientoService {
         }),
         this.prisma.activo.count({ where: sinPlan }),
         this.prisma.activo.findMany({ where: sinPlan, ...SELECT_ACTIVO, orderBy: { codigo: 'asc' }, take: 20 }),
-        this.prisma.planMantenimiento.count({ where: { ...VIGENTE, proximaFecha: { lt: ahora } } }),
+        this.prisma.planMantenimiento.count({ where: { ...POR_PROGRAMAR, proximaFecha: { lt: ahora } } }),
       ]);
     const proximas = [
       ...planes.map((p) => ({

@@ -72,7 +72,7 @@ describe('contarPendientes de cada módulo', () => {
 
   it('Mantenimientos: PROGRAMADO y EN_EJECUCION, no anulados, con activo', async () => {
     const p = prisma();
-    await new MantenimientosService(p as unknown as PrismaService, nada, nada, nada).contarPendientes();
+    await new MantenimientosService(p as unknown as PrismaService, nada, nada, nada, nada).contarPendientes();
     expect(p.mantenimiento.count).toHaveBeenCalledWith({
       where: { fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] }, anuladoEn: null, activo: { id: { gt: 0 } } },
     });

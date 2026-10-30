@@ -600,7 +600,7 @@ describe('Sincronización con GLPI desde la aplicación (e2e)', () => {
 
   describe('configuración local de las categorías', () => {
     it('una sincronización COMPLETA conserva las banderas de aplicación por módulo (GLPI no las conoce)', async () => {
-      const banderas = { aplicaMantenimiento: true, aplicaVulnerabilidad: false, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: false };
+      const banderas = { aplicaMantenimiento: true, aplicaVulnerabilidad: false, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: false, aplicaRespaldo: true };
       const hardware = await prisma.categoria.findUniqueOrThrow({ where: { nombre: 'Hardware' } });
       await api(tokens.admin).patch(`/api/categorias/${hardware.id}`, banderas).expect(200);
       const antes = await prisma.categoria.findMany({ orderBy: { id: 'asc' } });

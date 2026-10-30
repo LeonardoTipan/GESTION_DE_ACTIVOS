@@ -155,15 +155,13 @@ describe('Planificación y ejecución de mantenimientos, vulnerabilidades en lot
       expect(res.body.ejemplosSinPlan[0].codigo).toBe('MON-0001');
     });
 
-    it('programar crea el mantenimiento y adelanta la próxima fecha según la frecuencia', async () => {
+    it('programar crea el mantenimiento y NO mueve la próxima fecha (se recalcula al finalizar, desde el fin real)', async () => {
       const antes = await prisma.planMantenimiento.findUniqueOrThrow({ where: { id: planId } });
       const res = await api(tokens.analista).post(`/api/mantenimientos/planes/${planId}/programar`).expect(201);
       const despues = await prisma.planMantenimiento.findUniqueOrThrow({ where: { id: planId } });
-      const meses =
-        (despues.proximaFecha!.getUTCFullYear() - antes.proximaFecha!.getUTCFullYear()) * 12 +
-        despues.proximaFecha!.getUTCMonth() -
-        antes.proximaFecha!.getUTCMonth();
-      expect(meses).toBe(3);
+      expect(despues.proximaFecha).toEqual(antes.proximaFecha);
+      // Una segunda programación sin justificar: 409 (una sola ejecución pendiente por plan).
+      await api(tokens.analista).post(`/api/mantenimientos/planes/${planId}/programar`).expect(409);
       const m = await prisma.mantenimiento.findUniqueOrThrow({ where: { id: res.body.mantenimientoId } });
       expect(m).toMatchObject({ planId, activoId: ids.pc, fase: 'PROGRAMADO' });
       const porPlan = await api(tokens.auditor).get(`/api/mantenimientos?planId=${planId}`).expect(200);

@@ -15,7 +15,7 @@ import { limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
 
 const LENTO = 30_000;
-const BANDERAS = ['aplicaMantenimiento', 'aplicaVulnerabilidad', 'aplicaRenovacion', 'aplicaEvaluacion', 'aplicaEndpoint'] as const;
+const BANDERAS = ['aplicaMantenimiento', 'aplicaVulnerabilidad', 'aplicaRenovacion', 'aplicaEvaluacion', 'aplicaEndpoint', 'aplicaRespaldo'] as const;
 
 describe('Categorías: elegibilidad de los activos por módulo (e2e)', () => {
   let app: INestApplication<App>;
@@ -177,6 +177,29 @@ describe('Categorías: elegibilidad de los activos por módulo (e2e)', () => {
       expect(await prisma.activo.findUniqueOrThrow({ where: { id: ids.pc } })).toMatchObject({ categoriaId: ids.equipos, deletedAt: null });
       expect(await prisma.vulnerabilidad.count({ where: { id: v.id } })).toBe(1);
     }, LENTO);
+  });
+
+  it('Respaldos (aplicaRespaldo): el selector filtra y el backend exige la bandera al crear el plan; el inventario sigue completo', async () => {
+    const plan = {
+      frecuencia: 'MENSUAL', tipo: 'COMPLETO', medio: 'CINTA_LTO8', ventana: 'NOCTURNA_22_02', retencion: 'ANIOS_3', frecuenciaPrueba: 'TRIMESTRAL',
+      rpoHoras: 24, rtoMinutos: 240, responsable: 'Infraestructura', justificacion: 'Servidor con información institucional reservada.',
+      vigenteDesde: new Date().toISOString().slice(0, 10),
+    };
+    // Ninguna categoría del escenario tiene la bandera: el selector del módulo queda vacío.
+    expect((await api(tokens.auditor).get('/api/activos?operativos=true&aplica=RESPALDO').expect(200)).body.meta.total).toBe(0);
+    const rechazo = await api(tokens.analista).post('/api/respaldos/planes', { ...plan, activoIds: [ids.pc] }).expect(400);
+    expect(rechazo.body.message).toContain('no está habilitada para Respaldos');
+    // El admin la habilita en Catálogos: solo esa bandera cambia y el plan se acepta.
+    await api(tokens.admin).patch(`/api/categorias/${ids.equipos}`, { aplicaRespaldo: true }).expect(200);
+    const equipos = (await api(tokens.auditor).get('/api/categorias').expect(200)).body.find((c: { id: number }) => c.id === ids.equipos);
+    expect(equipos).toMatchObject({ aplicaRespaldo: true, aplicaMantenimiento: true, aplicaEvaluacion: false });
+    // Catálogos queda en la auditoría común: solo el campo que cambió, con antes y después y el usuario.
+    const trazas = (await api(tokens.auditor).get(`/api/trazas?entidad=CATEGORIA&registroId=${ids.equipos}`).expect(200)).body;
+    expect(trazas[0]).toMatchObject({ accion: 'MODIFICAR', responsable: 'admin.test', cambios: [{ campo: 'aplicaRespaldo', antes: false, despues: true }] });
+    expect((await api(tokens.auditor).get('/api/activos?operativos=true&aplica=RESPALDO').expect(200)).body.data.map((a: { codigo: string }) => a.codigo)).toEqual(['PC-01']);
+    await api(tokens.analista).post('/api/respaldos/planes', { ...plan, activoIds: [ids.pc] }).expect(201);
+    // El inventario general no se filtra.
+    expect((await api(tokens.auditor).get('/api/activos?limit=100').expect(200)).body.meta.total).toBeGreaterThanOrEqual(3);
   });
 
   it('Swagger documenta las banderas y el filtro «aplica»', async () => {

@@ -8,6 +8,8 @@ import type { EstadoEvaluacionSistema } from '../generated/prisma/enums.js';
 import { ActivosService } from '../inventory/activos/activos.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { bitacoraGeneral } from './bitacora.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
+
 import type {
   BitacoraEvaluacionDto,
   DatosEjecucionEvaluacionDto,
@@ -64,6 +66,7 @@ export class EvaluacionesService {
     const ahora = new Date();
     const filtros: Prisma.EvaluacionSistemaWhereInput[] = [{ activoId: q.activoId, estado: q.estado }];
     if (!q.incluirAnulados) filtros.push({ anuladoEn: null });
+    if (q.responsable) filtros.push({ responsable: { contains: q.responsable } });
     if (q.pendientes === true) filtros.push({ estado: { in: PENDIENTES } });
     if (q.pendientes === false) filtros.push({ estado: 'CERRADO' });
     if (q.vencidas) filtros.push({ estado: { in: PENDIENTES }, fechaProgramadaProduccion: { lt: ahora } });
@@ -213,6 +216,40 @@ export class EvaluacionesService {
     if (q.responsable) filtros.push({ responsable: { contains: q.responsable } });
     if (q.situacion) filtros.push(this.filtroSituacion(q.situacion, ahora));
     return this.pagina({ AND: filtros }, q, ahora);
+  }
+
+  // ── Agenda (calendario general) ───────────────────────────────────────────
+
+  /**
+   * Eventos del calendario: capa 1 · paso a producción PROGRAMADO (pendiente y pasado → vencido);
+   * capa 2 · pruebas de seguridad REALES (fecha de las pruebas). Nunca la fecha de registro.
+   */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const ahora = new Date();
+    const enRango = { gte: q.desde, lte: q.hasta };
+    const filas = await this.prisma.evaluacionSistema.findMany({
+      where: {
+        anuladoEn: null,
+        ...(q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {}),
+        ...(q.responsable ? { responsable: { contains: q.responsable } } : {}),
+        OR: [{ fechaProgramadaProduccion: enRango }, { fechaPruebas: enRango }],
+      },
+      include: INCLUDE,
+      take: 2000,
+    });
+    const eventos: EventoAgendaDto[] = [];
+    const quiere = (c: number) => !q.capa || q.capa === c;
+    for (const e of filas.map((f) => aDto(f, ahora))) {
+      const base = { modulo: 'evaluaciones' as const, activo: e.activo, responsable: e.responsable, ruta: `/evaluacion-sistemas-productivos/${e.id}` };
+      if (quiere(1) && e.fechaProgramadaProduccion >= q.desde && e.fechaProgramadaProduccion <= q.hasta) {
+        const estado = e.estado === 'CERRADO' ? 'COMPLETADO' : e.vencida ? 'VENCIDO' : e.estado === 'EN_PROGRESO' ? 'EN_CURSO' : 'PROGRAMADO';
+        eventos.push({ ...base, clave: `ev1-${e.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Paso a producción · ${e.activo.codigo}`, inicio: e.fechaProgramadaProduccion, fin: null, estado, fueraDePlazo: false, detalle: `Evaluación #${e.id}` });
+      }
+      if (quiere(2) && e.fechaPruebas && e.fechaPruebas >= q.desde && e.fechaPruebas <= q.hasta) {
+        eventos.push({ ...base, clave: `ev2-${e.id}`, capa: 2, tipo: 'REAL', titulo: `Pruebas de seguridad · ${e.activo.codigo}`, inicio: e.fechaPruebas, fin: null, estado: e.estado === 'CERRADO' ? 'COMPLETADO' : 'EN_CURSO', fueraDePlazo: e.tardia, detalle: e.tardia ? 'Posteriores a la fecha programada (justificadas)' : null });
+      }
+    }
+    return (q.estado ? eventos.filter((x) => x.estado === q.estado) : eventos).sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
   }
 
   // ── Auxiliares ────────────────────────────────────────────────────────────

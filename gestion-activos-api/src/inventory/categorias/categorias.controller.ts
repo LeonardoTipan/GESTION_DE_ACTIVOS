@@ -23,6 +23,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import { CategoriasService } from './categorias.service.js';
 import {
@@ -60,8 +62,8 @@ export class CategoriasController {
   })
   @Roles('admin')
   @Post()
-  create(@Body() dto: CreateCategoriaDto): Promise<CategoriaDto> {
-    return this.categorias.create(dto);
+  create(@Body() dto: CreateCategoriaDto, @CurrentUser() u: AuthUser): Promise<CategoriaDto> {
+    return this.categorias.create(dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar categoría (admin)' })
@@ -76,8 +78,9 @@ export class CategoriasController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCategoriaDto,
+    @CurrentUser() u: AuthUser,
   ): Promise<CategoriaDto> {
-    return this.categorias.update(id, dto);
+    return this.categorias.update(id, dto, u);
   }
 
   @ApiOperation({
@@ -93,7 +96,7 @@ export class CategoriasController {
   @Roles('admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.categorias.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: AuthUser): Promise<void> {
+    return this.categorias.remove(id, u);
   }
 }

@@ -66,8 +66,8 @@ describe('calcularTablero · indicadores RES-00…RES-07', () => {
       { id: 2, activoId: 1, fecha: '2026-08-12', resultado: 'FALLIDO', cifrado: false, fueraSitio: false, inmutable: false, integridad: false },
     ],
     restauraciones: [
-      { id: 5, activoId: 1, fecha: '2026-07-24', motivo: 'PRUEBA_PROGRAMADA', tiempoRealMin: 96, rtoMinutos: 240 },
-      { id: 6, activoId: 1, fecha: '2026-08-28', motivo: 'INCIDENTE_DISPONIBILIDAD', tiempoRealMin: 300, rtoMinutos: 240 },
+      { id: 5, activoId: 1, fecha: '2026-07-24', motivo: 'PRUEBA_PROGRAMADA', resultado: 'EXITOSO', tiempoRealMin: 96, rtoMinutos: 240 },
+      { id: 6, activoId: 1, fecha: '2026-08-28', motivo: 'INCIDENTE_DISPONIBILIDAD', resultado: 'EXITOSO', tiempoRealMin: 300, rtoMinutos: 240 },
     ],
   });
 
@@ -76,8 +76,8 @@ describe('calcularTablero · indicadores RES-00…RES-07', () => {
     const ind = Object.fromEntries(indicadores.map((i) => [i.id, i]));
     expect(ind['RES-00']).toMatchObject({ valor: 50, estado: 'FUERA_DE_META', formula: expect.stringContaining('1/2') });
     expect(ind['RES-00'].hallazgo).toContain('Activo 2');
-    // Ventanas de jul, ago y sep: cubiertas jul y ago (la fallida también cuenta); sep vencida.
-    expect(ind['RES-01b']).toMatchObject({ valor: 66.7 });
+    // Ventanas de jul, ago y sep: solo jul cumplida (EXITOSO); ago tiene una ejecución FALLIDA, que no cumple; sep vencida.
+    expect(ind['RES-01b']).toMatchObject({ valor: 33.3 }); // 1 de 3 ventanas: la fallida ya no cuenta como cumplida
     expect(ind['RES-01']).toMatchObject({ valor: 50 });
     expect(ind['RES-02']).toMatchObject({ valor: 50 });
     expect(ind['RES-03']).toMatchObject({ valor: 50 }); // solo el activo 1 tiene copia fuera de sitio e inmutable
@@ -87,10 +87,10 @@ describe('calcularTablero · indicadores RES-00…RES-07', () => {
     expect(ind['RES-07']).toMatchObject({ valor: 50 });
     expect(calendario[0].ejecucion.map((w) => [w.corto, w.estado, w.registros])).toEqual([
       ['jul 2026', 'CUMPLIDA', [1]],
-      ['ago 2026', 'CUMPLIDA', [2]],
+      ['ago 2026', 'VENCIDA', [2]], // la fallida sigue listada en su ventana, pero no la cumple
       ['sep 2026', 'VENCIDA', []],
     ]);
-    expect(pendientes).toEqual({ ejecucion: 1, prueba: 0 });
+    expect(pendientes).toEqual({ ejecucion: 2, prueba: 0 }); // ago (solo fallida) y sep siguen sin una copia válida
   });
 
   it('sin datos en el período: indicadores "sin datos", no ceros engañosos', () => {

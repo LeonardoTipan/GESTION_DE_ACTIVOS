@@ -20,11 +20,19 @@ export const ENTIDADES = {
   EVALUACION_SISTEMA: { modelo: 'evaluacionSistema', nombre: 'La evaluación del sistema' },
   PLAN_MANTENIMIENTO: { modelo: 'planMantenimiento', nombre: 'El plan de mantenimiento' },
 } as const;
-export type Entidad = keyof typeof ENTIDADES;
-export const NOMBRES_ENTIDAD = Object.keys(ENTIDADES) as Entidad[];
+export type EntidadVersionada = keyof typeof ENTIDADES;
+/**
+ * Catálogos (Catálogos > Categorías y Criticidades): no tienen versión ni anulación lógica
+ * (se editan y, si nadie los usa, se eliminan), pero cada alta, cambio y eliminación queda
+ * en la MISMA traza común (registro_cambio) con usuario, fecha, valor anterior y nuevo.
+ */
+export const ENTIDADES_CATALOGO = ['CATEGORIA', 'CRITICIDAD'] as const;
+export type EntidadCatalogo = (typeof ENTIDADES_CATALOGO)[number];
+export type Entidad = EntidadVersionada | EntidadCatalogo;
+export const NOMBRES_ENTIDAD = [...(Object.keys(ENTIDADES) as EntidadVersionada[]), ...ENTIDADES_CATALOGO] as Entidad[];
 
-/** REGISTRAR: alta del registro (quién lo creó y con qué valores). */
-export type AccionTraza = 'REGISTRAR' | 'MODIFICAR' | 'ANULAR' | 'REVERSAR';
+/** REGISTRAR: alta del registro (quién lo creó y con qué valores). ELIMINAR: borrado de un catálogo sin uso. */
+export type AccionTraza = 'REGISTRAR' | 'MODIFICAR' | 'ANULAR' | 'REVERSAR' | 'ELIMINAR';
 
 /** Un campo que cambió: valor anterior y nuevo. */
 export interface CambioCampo {
@@ -80,13 +88,13 @@ interface Delegado {
 export class TrazasService {
   constructor(private readonly prisma: PrismaService) {}
 
-  private delegado(tx: Prisma.TransactionClient, entidad: Entidad): Delegado {
+  private delegado(tx: Prisma.TransactionClient, entidad: EntidadVersionada): Delegado {
     return (tx as unknown as Record<string, Delegado>)[ENTIDADES[entidad].modelo];
   }
 
   private async cargar(
     tx: Prisma.TransactionClient,
-    entidad: Entidad,
+    entidad: EntidadVersionada,
     id: number,
   ): Promise<Versionado> {
     const actual = await this.delegado(tx, entidad).findUnique({ where: { id } });
@@ -102,7 +110,7 @@ export class TrazasService {
    * `ademas` escribe algo más (p. ej. un aviso) en la MISMA transacción.
    */
   async modificar(
-    entidad: Entidad,
+    entidad: EntidadVersionada,
     id: number,
     datos: Record<string, unknown>,
     motivo: string,
@@ -146,7 +154,7 @@ export class TrazasService {
 
   /** Eliminación lógica: el registro se conserva y deja de contar en los indicadores. */
   async anular(
-    entidad: Entidad,
+    entidad: EntidadVersionada,
     id: number,
     motivo: string,
     responsable: string,
@@ -177,7 +185,7 @@ export class TrazasService {
 
   /** Deshace una anulación: el registro vuelve a contar. La anulación queda en la traza. */
   async reversar(
-    entidad: Entidad,
+    entidad: EntidadVersionada,
     id: number,
     motivo: string,
     responsable: string,
@@ -212,7 +220,7 @@ export class TrazasService {
    */
   async registrarAlta(
     tx: Prisma.TransactionClient,
-    entidad: Entidad,
+    entidad: EntidadVersionada,
     id: number,
     valores: Record<string, unknown>,
     motivo: string,
@@ -222,6 +230,34 @@ export class TrazasService {
       .filter(([, v]) => v !== undefined && v !== null && v !== '')
       .map(([campo, despues]) => ({ campo, antes: null, despues: despues instanceof Date ? despues.toISOString() : despues }));
     await this.registrar(tx, { entidad, registroId: id, version: 0, accion: 'REGISTRAR', motivo, cambios: cambios as CambioCampo[], responsable });
+  }
+
+  /**
+   * Traza de un catálogo (categoría o criticidad) dentro de la transacción del cambio. En una
+   * modificación solo se guardan los campos que cambian; sin cambios, no se escribe nada.
+   */
+  async registrarCatalogo(
+    tx: Prisma.TransactionClient,
+    entidad: EntidadCatalogo,
+    id: number,
+    accion: 'REGISTRAR' | 'MODIFICAR' | 'ELIMINAR',
+    antes: object,
+    despues: object,
+    responsable: string,
+  ): Promise<void> {
+    const cambios =
+      accion === 'MODIFICAR'
+        ? diferencias(antes, despues)
+        : Object.entries(accion === 'REGISTRAR' ? despues : antes)
+            .filter(([campo, v]) => campo !== 'id' && v !== undefined && v !== null && v !== '')
+            .map(([campo, v]) => ({
+              campo,
+              antes: accion === 'REGISTRAR' ? null : normalizar(v),
+              despues: accion === 'REGISTRAR' ? normalizar(v) : null,
+            }));
+    if (!cambios.length) return;
+    const motivo = { REGISTRAR: 'Alta en Catálogos.', MODIFICAR: 'Modificación en Catálogos.', ELIMINAR: 'Eliminación en Catálogos (sin activos asignados).' }[accion];
+    await this.registrar(tx, { entidad, registroId: id, version: 0, accion, motivo, cambios, responsable });
   }
 
   async listar(entidad: Entidad, registroId: number): Promise<TrazaDto[]> {

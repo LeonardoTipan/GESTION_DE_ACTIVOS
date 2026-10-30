@@ -9,6 +9,7 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { AppModule } from './../src/app.module.js';
 import { configureApp } from './../src/app.setup.js';
+import { siguienteFecha } from './../src/maintenance/planes/frecuencia.js';
 import { PrismaService } from './../src/prisma/prisma.service.js';
 import { APLICA_EN_TODOS, limpiarBaseDeDatos } from './utils/database.js';
 import { getTokensDePrueba } from './utils/keycloak.js';
@@ -233,16 +234,26 @@ describe('Mantenimiento: planificación, ejecución y bitácoras (e2e)', () => {
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: dia('2025-07-06') }).expect(409);
     });
 
-    it('una ejecución adicional desde la planificación no adelanta la próxima fecha del período', async () => {
+    it('una ejecución adicional exige fecha y justificación; programar no mueve la próxima fecha y finalizar la recalcula desde el fin real', async () => {
       const antes = await prisma.planMantenimiento.findUniqueOrThrow({ where: { id: junio } });
-      await api(tokens.analista).post(`/api/mantenimientos/planes/${junio}/programar`, { adicional: true }).expect(400); // adicional exige fecha
+      const JUSTIFICACION = 'Segunda intervención: el equipo volvió a fallar tras la primera.';
+      await api(tokens.analista).post(`/api/mantenimientos/planes/${junio}/programar`, { adicional: true, justificacion: JUSTIFICACION }).expect(400); // sin fecha
+      await api(tokens.analista).post(`/api/mantenimientos/planes/${junio}/programar`, { adicional: true, fecha: dia('2025-07-10') }).expect(400); // sin justificación
       const res = await api(tokens.analista)
-        .post(`/api/mantenimientos/planes/${junio}/programar`, { adicional: true, fecha: dia('2025-07-10') })
+        .post(`/api/mantenimientos/planes/${junio}/programar`, { adicional: true, fecha: dia('2025-07-10'), justificacion: JUSTIFICACION })
         .expect(201);
       const despues = await prisma.planMantenimiento.findUniqueOrThrow({ where: { id: junio } });
       expect(despues.proximaFecha).toEqual(antes.proximaFecha);
+      const alta = (await trazas(res.body.mantenimientoId)).find((t) => t.accion === 'REGISTRAR')!;
+      expect(alta).toMatchObject({ responsable: 'analista.test', motivo: `Ejecución adicional: ${JUSTIFICACION}` });
       // Segunda ejecución COMPLETADA de la misma planificación (para la prueba 12).
       await completar(res.body.mantenimientoId, dia('2025-07-11'), '2025-07-11T18:00:00.000Z');
+      // La próxima intervención sale del fin REAL de la última completada + período (semestral).
+      const plan = (await api(tokens.auditor).get(`/api/mantenimientos/planes/${junio}`).expect(200)).body;
+      const fines = (await prisma.mantenimiento.findMany({ where: { planId: junio, fase: 'FINALIZADO', anuladoEn: null } })).map((m) => m.fechaFin!.getTime());
+      const ultima = new Date(Math.max(...fines));
+      expect(plan.ultimaFinalizacion).toBe(ultima.toISOString());
+      expect(plan.proximaFecha).toBe(siguienteFecha(ultima, 'SEMESTRAL')!.toISOString());
       // Y la del evolutivo, completada en marzo (S1 real).
       const e = await ejecutar(evolutivo, dia('2025-03-15'), dia('2025-03-20'));
       await completar(e.id, dia('2025-03-16'), dia('2025-03-17'));
@@ -253,7 +264,9 @@ describe('Mantenimiento: planificación, ejecución y bitácoras (e2e)', () => {
     it('iniciar y completar dejan su traza (situación y fechas reales) y la versión cuadra', async () => {
       const t = await trazas(ejecucionJulio);
       const m = await prisma.mantenimiento.findUniqueOrThrow({ where: { id: ejecucionJulio } });
-      expect(m.version).toBe(1 + t.length);
+      // El alta (REGISTRAR) no sube la versión; cada modificación sí.
+      expect(t.filter((x) => x.accion === 'REGISTRAR')).toHaveLength(1);
+      expect(m.version).toBe(1 + t.filter((x) => x.accion !== 'REGISTRAR').length);
       const inicio = t.find((x) => x.motivo === 'Inicio de la ejecución.')!;
       expect(inicio).toMatchObject({ accion: 'MODIFICAR', responsable: 'analista.test' });
       expect(inicio.cambios).toEqual(expect.arrayContaining([expect.objectContaining({ campo: 'fase', antes: 'PROGRAMADO', despues: 'EN_EJECUCION' })]));
@@ -416,8 +429,14 @@ describe('Mantenimiento: planificación, ejecución y bitácoras (e2e)', () => {
         .patch(`/api/mantenimientos/${id}/ejecucion`, { tecnico: 'mlopez', fechaInicio: dia('2025-09-03'), motivoCambio: MOTIVO })
         .expect(200);
       expect(res.body).toMatchObject({ tecnico: 'mlopez', fechaInicio: dia('2025-09-03'), fase: 'EN_EJECUCION' });
+      // Una segunda ejecución pendiente del mismo plan: sin justificar, 409; justificada, se admite.
+      await api(tokens.analista).post('/api/mantenimientos', { planId: correctivo, fecha: dia('2025-09-10'), fechaLimite: dia('2025-09-12') }).expect(409);
+      const pendiente = (
+        await api(tokens.analista)
+          .post('/api/mantenimientos', { planId: correctivo, fecha: dia('2025-09-10'), fechaLimite: dia('2025-09-12'), adicional: true, justificacion: 'Revisión adicional pedida por el usuario del equipo.' })
+          .expect(201)
+      ).body as { id: number };
       // Una pendiente no tiene nada ejecutado que corregir.
-      const pendiente = await ejecutar(correctivo, dia('2025-09-10'), dia('2025-09-12'));
       await api(tokens.analista).patch(`/api/mantenimientos/${pendiente.id}/ejecucion`, { tecnico: 'x', motivoCambio: MOTIVO }).expect(409);
     });
   });

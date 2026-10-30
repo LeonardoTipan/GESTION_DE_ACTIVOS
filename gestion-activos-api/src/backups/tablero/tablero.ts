@@ -54,6 +54,7 @@ export interface DatosTablero {
     activoId: number;
     fecha: string;
     motivo: string;
+    resultado: string;
     tiempoRealMin: number;
     rtoMinutos: number;
   }[];
@@ -91,13 +92,16 @@ export function calcularTablero(d: DatosTablero): Tablero {
       xs.filter((x) => x.activoId === p.activo.id);
     const ejecuciones = delActivo(d.ejecuciones);
     const pruebas = delActivo(d.restauraciones).filter((r) => MOTIVOS_PRUEBA.includes(r.motivo));
+    // Solo un registro EXITOSO cumple la ventana: una ejecución FALLIDA o PARCIAL (copia
+    // incompleta), o una prueba de restauración fallida, no garantizan la copia. Todos siguen
+    // listados en la ventana (registros) y en el historial; solo no cuentan como cumplimiento.
     const conEstado = (
       ventanas: Ventana[],
-      registros: { id: number; fecha: string }[],
+      registros: { id: number; fecha: string; resultado: string }[],
     ): VentanaConEstado[] =>
       ventanas.map((w) => ({
         ...w,
-        estado: estadoVentana(w, registros.map((r) => r.fecha), hoy),
+        estado: estadoVentana(w, registros.filter((r) => r.resultado === 'EXITOSO').map((r) => r.fecha), hoy),
         registros: registros.filter((r) => r.fecha >= w.ini && r.fecha <= w.fin).map((r) => r.id),
       }));
     return {

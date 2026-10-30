@@ -106,6 +106,13 @@ export class QueryEvaluacionesDto extends PaginationQueryDto {
   @Min(1)
   activoId?: number;
 
+  @ApiPropertyOptional({ description: '«Asignado» (contiene el texto).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  responsable?: string;
+
   @ApiPropertyOptional({ enum: EstadoEvaluacionSistema })
   @IsOptional()
   @IsEnum(EstadoEvaluacionSistema)

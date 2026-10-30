@@ -116,6 +116,14 @@ export class EjecucionesRespaldoService {
         data: { ...datos, ...excepcion, activoId: plan.activoId },
         include: INCLUDE,
       });
+      await this.trazas.registrarAlta(
+        tx,
+        'EJECUCION_RESPALDO',
+        creada.id,
+        { planId: creada.planId, activoId: creada.activoId, fecha: creada.fecha, resultado: creada.resultado, responsable: creada.responsable, evidencia: creada.evidencia, fueraDePlazo: creada.fueraDePlazo },
+        excepcion.fueraDePlazo ? `Ejecución registrada fuera del plan: ${excepcion.motivoExcepcion}` : 'Ejecución registrada.',
+        usuario?.username ?? creada.responsable,
+      );
       if (creada.resultado === 'FALLIDO') {
         await this.avisos.avisar(
           {
@@ -293,9 +301,20 @@ export class RestauracionesService {
         usuario,
       });
     }
-    const r = await this.prisma.restauracion.create({
-      data: { ...datos, ...excepcion, activoId: origen.activoId },
-      include: INCLUDE,
+    const r = await this.prisma.$transaction(async (tx) => {
+      const creada = await tx.restauracion.create({
+        data: { ...datos, ...excepcion, activoId: origen.activoId },
+        include: INCLUDE,
+      });
+      await this.trazas.registrarAlta(
+        tx,
+        'RESTAURACION',
+        creada.id,
+        { ejecucionId: creada.ejecucionId, activoId: creada.activoId, fecha: creada.fecha, motivo: creada.motivo, resultado: creada.resultado, evidencia: creada.evidencia, fueraDePlazo: creada.fueraDePlazo },
+        excepcion.fueraDePlazo ? `Restauración registrada fuera de plazo: ${excepcion.motivoExcepcion}` : 'Restauración registrada.',
+        usuario?.username ?? creada.responsable,
+      );
+      return creada;
     });
     return aDto(r);
   }

@@ -84,8 +84,8 @@ export class PlanesMantenimientoController {
   @ApiConflictResponse({ type: ApiErrorDto })
   @Roles('admin', 'analista')
   @Post('planes')
-  crear(@Body() dto: CrearPlanesMantenimientoDto): Promise<PlanMantenimientoDto[]> {
-    return this.planes.crear(dto);
+  crear(@Body() dto: CrearPlanesMantenimientoDto, @CurrentUser() u: AuthUser): Promise<PlanMantenimientoDto[]> {
+    return this.planes.crear(dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar un plan con motivo (admin, analista)' })
@@ -100,8 +100,8 @@ export class PlanesMantenimientoController {
   @ApiCreatedResponse({ type: ProgramacionDesdePlanDto })
   @Roles('admin', 'analista')
   @Post('planes/:id/programar')
-  programar(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarDesdePlanDto): Promise<ProgramacionDesdePlanDto> {
-    return this.planes.programar(id, dto);
+  programar(@Param('id', ParseIntPipe) id: number, @Body() dto: ProgramarDesdePlanDto, @CurrentUser() u: AuthUser): Promise<ProgramacionDesdePlanDto> {
+    return this.planes.programar(id, dto, u);
   }
 
   @ApiOperation({ summary: 'Anular un plan (eliminación lógica, admin)' })

@@ -34,10 +34,12 @@ describe('agenda de mantenimientos', () => {
     expect(todas[0].titulo).toContain('predictivo');
   });
 
-  it('capa 1: proyecta las próximas intervenciones de un plan según su frecuencia, dentro del rango', () => {
+  it('capa 1: solo la PRÓXIMA intervención del plan (las siguientes dependen del fin real: no se proyectan)', () => {
     const plan = { id: 7, tipo: 'PREVENTIVO', frecuencia: 'MENSUAL' as const, proximaFecha: d('2026-12-15T13:00:00Z'), plazoDias: 3, responsable: 'TIC', activo };
     const eventos = agendaMantenimientos({ ...rango, mantenimientos: [], planes: [plan], ahora: d('2026-12-01T00:00:00Z'), capa: 1 });
-    expect(eventos.map((e) => e.inicio.toISOString().slice(0, 10))).toEqual(['2026-12-15', '2027-01-15']);
+    expect(eventos.map((e) => e.inicio.toISOString().slice(0, 10))).toEqual(['2026-12-15']);
     expect(eventos[0].fin?.toISOString().slice(0, 10)).toBe('2026-12-18');
+    // Fuera del rango consultado, nada.
+    expect(agendaMantenimientos({ ...rango, mantenimientos: [], planes: [{ ...plan, proximaFecha: d('2028-01-01T13:00:00Z') }], ahora: d('2026-12-01T00:00:00Z'), capa: 1 })).toEqual([]);
   });
 });

@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
+import { IsBoolean, IsDate, IsEnum, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength } from 'class-validator';
 import { Trim } from '../common/decorators/trim.decorator.js';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto.js';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
@@ -60,7 +60,28 @@ export class DatosRegistroPeriodoDto {
   @Max(1_000_000)
   equiposConAntivirus?: number;
 
-  @ApiPropertyOptional({ example: 'Inventario de equipos octubre 2026.xlsx', description: '«Verificable»: inventario de equipos del mes.' })
+  @ApiPropertyOptional({
+    type: String,
+    format: 'date-time',
+    description: 'Fecha REAL en que se hizo la medición: la indica el usuario (no futura, no anterior al mes del período).',
+  })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaEjecucion?: Date;
+
+  @ApiPropertyOptional({ example: 'Soporte TIC · J. Pérez', description: 'Quién realizó la medición del mes.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  responsableEjecucion?: string;
+
+  @ApiPropertyOptional({
+    example: 'Inventario de equipos octubre 2026.xlsx',
+    description: '«Verificable»: nombre del archivo Excel del inventario de equipos del mes (la aplicación no guarda archivos).',
+  })
   @IsOptional()
   @Trim()
   @IsString()
@@ -100,6 +121,14 @@ export class QueryPeriodosDto extends PaginationQueryDto {
   @Max(2100)
   anio?: number;
 
+  @ApiPropertyOptional({ minimum: 1, maximum: 12 })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  mes?: number;
+
   @ApiPropertyOptional({ enum: EstadoPeriodoEndpoint })
   @IsOptional()
   @IsEnum(EstadoPeriodoEndpoint)
@@ -122,6 +151,8 @@ export class PeriodoEndpointDto extends RegistroDto {
   // Fase 2
   @ApiProperty({ type: Number, nullable: true }) totalActivos: number | null;
   @ApiProperty({ type: Number, nullable: true }) equiposConAntivirus: number | null;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Fecha real de la medición.' }) fechaEjecucion: Date | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Quién realizó la medición.' }) responsableEjecucion: string | null;
   @ApiProperty({ type: String, nullable: true, description: '«Verificable».' }) evidencia: string | null;
   @ApiProperty({ type: String, nullable: true, description: '«Repositorio Verificable».' }) repositorioVerificable: string | null;
   @ApiProperty({ type: String, nullable: true }) cerradoPor: string | null;

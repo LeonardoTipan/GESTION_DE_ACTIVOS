@@ -38,6 +38,7 @@ import {
 import { indicadoresMantenimiento } from './indicadores.js';
 import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import { BitacoraService } from '../../inventory/bitacora/bitacora.service.js';
+import { PlanesMantenimientoService } from '../planes/planes-mantenimiento.service.js';
 import { calcularCambios } from '../../inventory/bitacora/cambios.js';
 import { exigirFechasReales, exigirRepositorioValido, exigirTipoPermitido, semestreDe } from '../planificacion.js';
 
@@ -70,6 +71,7 @@ export class MantenimientosService {
     private readonly activos: ActivosService,
     private readonly trazas: TrazasService,
     private readonly bitacora: BitacoraService,
+    private readonly planes: PlanesMantenimientoService,
   ) {}
 
   /**
@@ -159,31 +161,20 @@ export class MantenimientosService {
    * planificación ni a otro activo. No adelanta la próxima fecha del período (eso
    * lo hace «programar» desde la planificación).
    */
-  async programar(dto: ProgramarMantenimientoDto): Promise<MantenimientoDto> {
+  async programar(dto: ProgramarMantenimientoDto, usuario: AuthUser): Promise<MantenimientoDto> {
     const plan = await this.prisma.planMantenimiento.findUnique({ where: { id: dto.planId } });
     if (!plan) throw new BadRequestException(`La planificación ${dto.planId} no existe.`);
-    if (plan.anuladoEn || plan.estado !== 'VIGENTE') {
-      throw new ConflictException(`La planificación ${dto.planId} no está vigente.`);
-    }
     if (dto.activoId !== undefined && dto.activoId !== plan.activoId) {
       throw new BadRequestException(`El activo ${dto.activoId} no es el de la planificación ${dto.planId}.`);
     }
-    // Validado aquí, en el backend: la interfaz solo ofrece equipos operativos.
-    await this.activos.exigirOperativo(plan.activoId, 'MANTENIMIENTO');
-    const fechaLimite = dto.fechaLimite ?? new Date(dto.fecha.getTime() + plan.plazoDias * 86_400_000);
-    exigirIntervalo(dto.fecha, fechaLimite, 'Mantenimiento');
-    const mantenimiento = await this.prisma.mantenimiento.create({
-      data: {
-        planId: plan.id,
-        activoId: plan.activoId,
-        tipo: plan.tipo,
-        actividad: plan.actividades.slice(0, 191),
-        fecha: dto.fecha,
-        fechaLimite,
-      },
-      include: INCLUDE,
-    });
-    return conVencido(mantenimiento);
+    // Las MISMAS reglas que «Programar» desde el plan: una sola ejecución pendiente (o adicional
+    // justificada), no mueve la próxima intervención, alta auditada.
+    const { mantenimientoId } = await this.planes.programar(
+      dto.planId,
+      { fecha: dto.fecha, fechaLimite: dto.fechaLimite, adicional: dto.adicional, justificacion: dto.justificacion },
+      usuario,
+    );
+    return this.findOne(mantenimientoId);
   }
 
   /**
@@ -283,7 +274,9 @@ export class MantenimientosService {
         cambios: calcularCambios(activo, { ultimaRevision: fechaFin }),
       });
     });
-    return resultado;
+    // La próxima intervención del plan sale de ESTE fin real (+ período).
+    if (actual.planId) await this.planes.recalcularProxima(actual.planId);
+    return actual.planId ? this.findOne(id) : resultado;
   }
 
   /**
@@ -332,6 +325,8 @@ export class MantenimientosService {
     exigirRepositorioValido(datos.repositorioVerificable);
     if (datos.tipo && datos.tipo !== actual.tipo) await this.exigirTipoDelActivo(actual.activoId, datos.tipo);
     await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: actual.fase });
+    // Corregir el fin real de una completada cambia la próxima intervención del plan.
+    if (actual.planId) await this.planes.recalcularProxima(actual.planId);
     return this.findOne(id);
   }
 
@@ -434,14 +429,19 @@ export class MantenimientosService {
   async anular(id: number, motivo: string, usuario: AuthUser): Promise<MantenimientoDto> {
     await this.findOne(id);
     await this.trazas.anular('MANTENIMIENTO', id, motivo, usuario.username);
-    return this.findOne(id);
+    const m = await this.findOne(id);
+    // Una ejecución anulada deja de contar para la próxima intervención (y viceversa al revertir).
+    if (m.planId) await this.planes.recalcularProxima(m.planId);
+    return m;
   }
 
   /** Deshace la anulación (solo admin). */
   async reversar(id: number, motivo: string, usuario: AuthUser): Promise<MantenimientoDto> {
     await this.findOne(id);
     await this.trazas.reversar('MANTENIMIENTO', id, motivo, usuario.username);
-    return this.findOne(id);
+    const m = await this.findOne(id);
+    if (m.planId) await this.planes.recalcularProxima(m.planId);
+    return m;
   }
 
   /** Indicadores del período (por fecha programada); los anulados no cuentan. */

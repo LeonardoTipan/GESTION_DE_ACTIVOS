@@ -74,6 +74,7 @@ describe('Inventario (e2e)', () => {
         aplicaRenovacion: false,
         aplicaEvaluacion: false,
         aplicaEndpoint: false,
+        aplicaRespaldo: false,
       });
       categoriaId = res.body.id;
     });
@@ -419,6 +420,20 @@ describe('Inventario (e2e)', () => {
 
       it('analista NO puede dar de baja → 403', () =>
         api(tokens.analista).delete(`/api/activos/${id}`).expect(403));
+
+      it('con un proceso abierto (solicitud de acceso sin cerrar) la baja manual se rechaza → 409, sin tocar nada', async () => {
+        const solicitud = await prisma.controlAcceso.create({
+          data: {
+            codigoUnico: 'CAL-BAJA-1', tipoAcceso: 'LOGICO', activoId: id, fechaSolicitud: new Date(), nombreSolicitante: 'Jefe TIC',
+            nombreUsuarioBeneficiario: 'Usuario', departamento: 'TIC', tipoSolicitud: 'ACCESO', descripcion: 'Acceso de prueba', estado: 'ABIERTO',
+          },
+        });
+        const res = await api(tokens.admin).delete(`/api/activos/${id}`).expect(409);
+        expect(res.body.message).toContain('OLD-001: tiene 1 solicitud(es) de acceso sin cerrar');
+        expect((await prisma.activo.findUniqueOrThrow({ where: { id } })).deletedAt).toBeNull();
+        // Cerrada la solicitud (con su propia trazabilidad en el módulo), la baja se permite.
+        await prisma.controlAcceso.update({ where: { id: solicitud.id }, data: { estado: 'CERRADO', resolucion: 'Atendida', fechaAtendido: new Date() } });
+      });
 
       it('admin da de baja → 204', () =>
         api(tokens.admin).delete(`/api/activos/${id}`).expect(204));

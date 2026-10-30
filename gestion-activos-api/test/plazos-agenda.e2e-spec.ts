@@ -73,7 +73,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
 
   describe('Mantenimientos', () => {
     const programar = (fecha: number, fechaLimite: number) =>
-      api(tokens.analista).post('/api/mantenimientos', { planId, fecha: iso(fecha), fechaLimite: iso(fechaLimite) });
+      api(tokens.analista).post('/api/mantenimientos', { planId, fecha: iso(fecha), fechaLimite: iso(fechaLimite), adicional: true, justificacion: 'Ejecución auxiliar de la prueba (varias por plan).' });
 
     it('la fecha límite no puede ser anterior al inicio previsto → 400', async () => {
       const res = await programar(ahora + DIA, ahora).expect(400);
@@ -150,7 +150,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       expect(otraCategoria).toEqual([]);
     });
 
-    it('un plan genera el intervalo de cada intervención con su plazo, cruzando de año, sin duplicar al programar', async () => {
+    it('un plan muestra su PRÓXIMA intervención con su plazo (cruzando de año); al programarla, la sustituye la ejecución, sin duplicar', async () => {
       const proxima = '2026-12-30T13:00:00.000Z';
       const [plan] = (
         await api(tokens.analista)
@@ -159,14 +159,16 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
       ).body;
       const eventos = await agenda('mantenimientos', 1, Date.parse('2026-12-01T00:00:00Z'), Date.parse('2027-02-28T00:00:00Z'));
       const delPlan = eventos.filter((e) => e.clave.startsWith(`p1-${plan.id}-`));
-      expect(delPlan.map((e) => [e.inicio.slice(0, 10), e.fin?.slice(0, 10)])).toEqual([
-        ['2026-12-30', '2027-01-04'],
-        ['2027-01-30', '2027-02-04'],
-      ]);
+      // Solo la próxima: las siguientes dependen del fin real de esta (no se proyectan fechas ficticias).
+      expect(delPlan.map((e) => [e.inicio.slice(0, 10), e.fin?.slice(0, 10)])).toEqual([['2026-12-30', '2027-01-04']]);
       const p = await api(tokens.analista).post(`/api/mantenimientos/planes/${plan.id}/programar`).expect(201);
       const m = await prisma.mantenimiento.findUniqueOrThrow({ where: { id: p.body.mantenimientoId } });
       expect([m.fecha.toISOString(), m.fechaLimite?.toISOString()]).toEqual([proxima, '2027-01-04T13:00:00.000Z']);
       expect(await prisma.mantenimiento.count({ where: { planId: plan.id } })).toBe(1);
+      // Con la ejecución pendiente, el plan ya no aparece «por ejecutar» en la agenda (lo muestra la ejecución).
+      const despues = await agenda('mantenimientos', 1, Date.parse('2026-12-01T00:00:00Z'), Date.parse('2027-02-28T00:00:00Z'));
+      expect(despues.filter((e) => e.clave.startsWith(`p1-${plan.id}-`))).toEqual([]);
+      expect(despues.some((e) => e.clave === `m1-${p.body.mantenimientoId}`)).toBe(true);
     });
   });
 

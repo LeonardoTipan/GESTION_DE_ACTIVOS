@@ -112,6 +112,7 @@ describe('Mantenimientos (e2e)', () => {
           planId: planPreventivoId,
           fecha: HACE_DOS_HORAS,
           fechaLimite: EN_UNA_SEMANA,
+          adicional: true, justificacion: 'Ejecución auxiliar de la prueba (varias por plan).',
           ...extra,
         })
         .expect(201)

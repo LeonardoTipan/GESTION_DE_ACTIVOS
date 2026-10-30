@@ -1,12 +1,17 @@
 import { BadRequestException } from '@nestjs/common';
-import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, type DatosRegistroPeriodo } from './reglas.js';
+import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo } from './reglas.js';
 
+const OCTUBRE = { anio: 2026, mes: 10 };
+const AHORA = new Date('2026-10-29T17:00:00Z');
 const completo: DatosRegistroPeriodo = {
   totalActivos: 26,
   equiposConAntivirus: 25,
+  fechaEjecucion: new Date('2026-10-28T15:00:00Z'),
+  responsableEjecucion: 'Soporte TIC',
   evidencia: 'Inventario de equipos octubre 2026.xlsx',
   repositorioVerificable: 'Carpeta Compartida TICs/Antivirus',
 };
+const vacio: DatosRegistroPeriodo = { totalActivos: null, equiposConAntivirus: null, fechaEjecucion: null, responsableEjecucion: null, evidencia: null, repositorioVerificable: null };
 
 describe('Protección de Endpoints · reglas de la fase 2', () => {
   it('cobertura con 1 decimal; sin datos o con total 0, null', () => {
@@ -24,24 +29,35 @@ describe('Protección de Endpoints · reglas de la fase 2', () => {
   });
 
   it('coherencia: total ≥ 1 y con antivirus ≤ total (también sin cerrar)', () => {
-    expect(() => exigirCoherencia({ ...completo, totalActivos: 0 })).toThrow('al menos 1');
-    expect(() => exigirCoherencia({ ...completo, equiposConAntivirus: 27 })).toThrow('no pueden superar el total de activos (26)');
-    expect(() => exigirCoherencia({ ...completo, equiposConAntivirus: 26 })).not.toThrow();
+    expect(() => exigirCoherencia({ ...completo, totalActivos: 0 }, OCTUBRE, AHORA)).toThrow('al menos 1');
+    expect(() => exigirCoherencia({ ...completo, equiposConAntivirus: 27 }, OCTUBRE, AHORA)).toThrow('no pueden superar el total de activos (26)');
+    expect(() => exigirCoherencia({ ...completo, equiposConAntivirus: 26 }, OCTUBRE, AHORA)).not.toThrow();
     // Guardar a medias es válido: solo se compara lo que hay.
-    expect(() => exigirCoherencia({ totalActivos: null, equiposConAntivirus: 30, evidencia: null, repositorioVerificable: null })).not.toThrow();
+    expect(() => exigirCoherencia({ ...vacio, equiposConAntivirus: 30 }, OCTUBRE, AHORA)).not.toThrow();
+  });
+
+  it('fecha real de la medición: no futura (margen 5 min) ni anterior al mes del período (hora de Ecuador)', () => {
+    expect(() => exigirCoherencia({ ...completo, fechaEjecucion: new Date('2026-10-29T17:04:00Z') }, OCTUBRE, AHORA)).not.toThrow();
+    expect(() => exigirCoherencia({ ...completo, fechaEjecucion: new Date('2026-10-30T10:00:00Z') }, OCTUBRE, AHORA)).toThrow('no puede ser futura');
+    // 01/10 00:00 en Quito = 01/10 05:00 UTC: un instante antes es septiembre.
+    expect(inicioDelMes(OCTUBRE, 'America/Guayaquil').toISOString()).toBe('2026-10-01T05:00:00.000Z');
+    expect(() => exigirCoherencia({ ...completo, fechaEjecucion: new Date('2026-10-01T04:59:00Z') }, OCTUBRE, AHORA)).toThrow('anterior al mes del período');
+    // Un mes ya pasado se puede medir después (carga histórica), nunca antes de que empiece.
+    expect(() => exigirCoherencia({ ...completo, fechaEjecucion: new Date('2026-10-05T15:00:00Z') }, { anio: 2026, mes: 9 }, AHORA)).not.toThrow();
   });
 
   it('el repositorio admite carpeta o http(s), no otros esquemas', () => {
-    expect(() => exigirCoherencia({ ...completo, repositorioVerificable: 'https://intranet/antivirus' })).not.toThrow();
-    expect(() => exigirCoherencia({ ...completo, repositorioVerificable: 'javascript:alert(1)' })).toThrow(BadRequestException);
+    expect(() => exigirCoherencia({ ...completo, repositorioVerificable: 'https://intranet/antivirus' }, OCTUBRE, AHORA)).not.toThrow();
+    expect(() => exigirCoherencia({ ...completo, repositorioVerificable: 'javascript:alert(1)' }, OCTUBRE, AHORA)).toThrow(BadRequestException);
   });
 
-  it('cerrar exige los dos totales, el verificable y el repositorio, y dice qué falta', () => {
-    expect(() => exigirCierre(completo)).not.toThrow();
-    expect(() => exigirCierre({ totalActivos: null, equiposConAntivirus: null, evidencia: ' ', repositorioVerificable: null })).toThrow(
-      'Para cerrar el período falta: el total de activos, los equipos con antivirus activo, el verificable (inventario de equipos), el repositorio del verificable.',
+  it('cerrar exige totales, fecha y responsable de la medición, verificable y repositorio, y dice qué falta', () => {
+    expect(() => exigirCierre(completo, OCTUBRE, AHORA)).not.toThrow();
+    expect(() => exigirCierre({ ...vacio, evidencia: ' ' }, OCTUBRE, AHORA)).toThrow(
+      'Para cerrar el período falta: el total de activos, los equipos con antivirus activo, la fecha real de la medición, el responsable de la medición, el verificable (inventario de equipos), el repositorio del verificable.',
     );
-    expect(() => exigirCierre({ ...completo, evidencia: null })).toThrow('falta: el verificable (inventario de equipos).');
-    expect(() => exigirCierre({ ...completo, equiposConAntivirus: 30 })).toThrow('no pueden superar');
+    expect(() => exigirCierre({ ...completo, evidencia: null }, OCTUBRE, AHORA)).toThrow('falta: el verificable (inventario de equipos).');
+    expect(() => exigirCierre({ ...completo, responsableEjecucion: '' }, OCTUBRE, AHORA)).toThrow('falta: el responsable de la medición.');
+    expect(() => exigirCierre({ ...completo, equiposConAntivirus: 30 }, OCTUBRE, AHORA)).toThrow('no pueden superar');
   });
 });

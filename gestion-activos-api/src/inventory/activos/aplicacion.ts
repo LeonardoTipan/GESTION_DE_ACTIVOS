@@ -4,7 +4,7 @@ import type { Prisma } from '../../generated/prisma/client.js';
  * Módulos que filtran sus activos por la categoría (Catálogos > Categorías). El inventario
  * sigue siendo uno solo: la bandera solo decide qué activos ofrece cada módulo.
  */
-export const APLICACIONES = ['MANTENIMIENTO', 'VULNERABILIDAD', 'RENOVACION', 'EVALUACION', 'ENDPOINT'] as const;
+export const APLICACIONES = ['MANTENIMIENTO', 'VULNERABILIDAD', 'RENOVACION', 'EVALUACION', 'ENDPOINT', 'RESPALDO'] as const;
 export type Aplicacion = (typeof APLICACIONES)[number];
 /** Para ParseEnumPipe en los parámetros de consulta sueltos. */
 export const ENUM_APLICACION = Object.fromEntries(APLICACIONES.map((a) => [a, a])) as Record<Aplicacion, Aplicacion>;
@@ -16,6 +16,7 @@ export const CAMPO_APLICA = {
   RENOVACION: 'aplicaRenovacion',
   EVALUACION: 'aplicaEvaluacion',
   ENDPOINT: 'aplicaEndpoint',
+  RESPALDO: 'aplicaRespaldo',
 } as const satisfies Record<Aplicacion, keyof Prisma.CategoriaWhereInput>;
 
 /** Para los mensajes de error. */
@@ -25,6 +26,7 @@ export const NOMBRE_APLICACION: Record<Aplicacion, string> = {
   RENOVACION: 'Renovaciones',
   EVALUACION: 'Evaluación de Sistemas Productivos',
   ENDPOINT: 'Protección de Endpoints',
+  RESPALDO: 'Respaldos',
 };
 
 /** Activos cuya categoría está habilitada para el módulo. */

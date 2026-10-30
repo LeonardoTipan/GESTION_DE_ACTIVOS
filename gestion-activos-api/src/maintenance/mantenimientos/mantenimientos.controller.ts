@@ -100,8 +100,8 @@ export class MantenimientosController {
   })
   @Roles('admin', 'analista')
   @Post()
-  programar(@Body() dto: ProgramarMantenimientoDto): Promise<MantenimientoDto> {
-    return this.mantenimientos.programar(dto);
+  programar(@Body() dto: ProgramarMantenimientoDto, @CurrentUser() usuario: AuthUser): Promise<MantenimientoDto> {
+    return this.mantenimientos.programar(dto, usuario);
   }
 
   @ApiOperation({

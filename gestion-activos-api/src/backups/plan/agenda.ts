@@ -14,8 +14,8 @@ import { TEXTO_VENTANA } from './ventana-horaria.js';
  *   2 Ejecución: ventanas aún pendientes (previsto) y las ejecuciones (real).
  *   3 Restauración: pruebas previstas (ventanas de prueba del plan y pruebas
  *     programadas sobre una copia) y las restauraciones registradas (real).
- * Una ventana se cumple con cualquier ejecución registrada en ella, igual que
- * en el tablero (el resultado se ve en la propia ejecución).
+ * Una ventana se cumple solo con una ejecución EXITOSA (una FALLIDA o PARCIAL no), igual que
+ * en el tablero; la ejecución fallida se ve igualmente como evento REAL.
  */
 
 /** Inicio y fin, en minutos locales, de cada ventana horaria (el fin puede caer al día siguiente). */
@@ -87,7 +87,8 @@ export function agendaRespaldos(d: {
     // vigenteDesde es un día de calendario (guardado a medianoche UTC): se lee tal cual, sin zona.
     const desdePlan = dia(p.vigenteDesde);
     const ejecuciones = d.ejecuciones.filter((e) => e.planId === p.id);
-    const fechasEjec = ejecuciones.map((e) => diaLocal(e.fecha, d.zona));
+    // Solo una ejecución EXITOSA cumple la ventana (una FALLIDA o PARCIAL no); se ve igual como evento REAL.
+    const fechasEjec = ejecuciones.filter((e) => e.resultado === 'EXITOSO').map((e) => diaLocal(e.fecha, d.zona));
     const base = { modulo: 'respaldos' as const, activo: p.activo, responsable: p.responsable, fueraDePlazo: false };
     for (const w of ventanasDe(p.frecuencia as FrecuenciaVentana, desdePlan, periodo, hoy)) {
       const estado = ESTADO_VENTANA[estadoVentana(w, fechasEjec, hoy)];
@@ -104,7 +105,7 @@ export function agendaRespaldos(d: {
     if (quiere(3)) {
       // Igual que el tablero (RES-04): cuentan las pruebas programadas y las verificaciones de integridad.
       const pruebas = d.restauraciones
-        .filter((r) => MOTIVOS_PRUEBA.includes(r.motivo) && ejecuciones.some((e) => e.id === r.ejecucionId))
+        .filter((r) => MOTIVOS_PRUEBA.includes(r.motivo) && r.resultado === 'EXITOSO' && ejecuciones.some((e) => e.id === r.ejecucionId))
         .map((r) => diaLocal(r.fecha, d.zona));
       for (const w of ventanasDe(p.frecuenciaPrueba as FrecuenciaVentana, desdePlan, periodo, hoy)) {
         const estado = ESTADO_VENTANA[estadoVentana(w, pruebas, hoy)];

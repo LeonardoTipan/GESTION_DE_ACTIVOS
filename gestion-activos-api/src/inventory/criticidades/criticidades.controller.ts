@@ -23,6 +23,8 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { Roles } from '../../auth/decorators/roles.decorator.js';
+import { CurrentUser } from '../../auth/decorators/current-user.decorator.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import { CriticidadesService } from './criticidades.service.js';
 import {
@@ -60,8 +62,8 @@ export class CriticidadesController {
   })
   @Roles('admin')
   @Post()
-  create(@Body() dto: CreateCriticidadDto): Promise<CriticidadDto> {
-    return this.criticidades.create(dto);
+  create(@Body() dto: CreateCriticidadDto, @CurrentUser() u: AuthUser): Promise<CriticidadDto> {
+    return this.criticidades.create(dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar nivel de criticidad (admin)' })
@@ -76,8 +78,9 @@ export class CriticidadesController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdateCriticidadDto,
+    @CurrentUser() u: AuthUser,
   ): Promise<CriticidadDto> {
-    return this.criticidades.update(id, dto);
+    return this.criticidades.update(id, dto, u);
   }
 
   @ApiOperation({
@@ -93,7 +96,7 @@ export class CriticidadesController {
   @Roles('admin')
   @HttpCode(HttpStatus.NO_CONTENT)
   @Delete(':id')
-  remove(@Param('id', ParseIntPipe) id: number): Promise<void> {
-    return this.criticidades.remove(id);
+  remove(@Param('id', ParseIntPipe) id: number, @CurrentUser() u: AuthUser): Promise<void> {
+    return this.criticidades.remove(id, u);
   }
 }

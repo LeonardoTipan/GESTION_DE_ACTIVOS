@@ -74,23 +74,28 @@ export class PlanesRespaldoService {
   }
 
   /** Un plan por cada activo: todos operativos y sin plan vigente; o todos, o ninguno. */
-  async crear(dto: CrearPlanesDto): Promise<PlanRespaldoDto[]> {
+  async crear(dto: CrearPlanesDto, u: AuthUser): Promise<PlanRespaldoDto[]> {
     const { activoIds, vigenteDesde, ...parametros } = dto;
     for (const activoId of activoIds) {
       // Validado en el backend: no basta con que la interfaz solo ofrezca activos operativos.
-      await this.activos.exigirOperativo(activoId);
+      await this.activos.exigirOperativo(activoId, 'RESPALDO');
     }
     await this.exigirSinPlanVigente(activoIds);
-    const creados = await this.prisma.$transaction((tx) =>
-      Promise.all(
-        activoIds.map((activoId) =>
-          tx.planRespaldo.create({
-            data: { ...parametros, activoId, vigenteDesde: vigenteDesde ?? hoyUtc() },
-            include: INCLUDE,
-          }),
-        ),
-      ),
-    );
+    // Alta y su traza (quién y con qué valores) en la misma transacción.
+    const creados = await this.prisma.$transaction(async (tx) => {
+      const planes = [];
+      for (const activoId of activoIds) {
+        const p = await tx.planRespaldo.create({
+          data: { ...parametros, activoId, vigenteDesde: vigenteDesde ?? hoyUtc() },
+          include: INCLUDE,
+        });
+        const { activo: _activo, ...valores } = p;
+        void _activo;
+        await this.trazas.registrarAlta(tx, 'PLAN_RESPALDO', p.id, valores, 'Alta del plan de respaldo.', u.username);
+        planes.push(p);
+      }
+      return planes;
+    });
     return creados.map(aDto);
   }
 
@@ -98,7 +103,7 @@ export class PlanesRespaldoService {
     const { motivoCambio, ...datos } = dto;
     const actual = await this.findOne(id);
     if (datos.estado === 'VIGENTE' && actual.estado !== 'VIGENTE') {
-      await this.activos.exigirOperativo(actual.activoId);
+      await this.activos.exigirOperativo(actual.activoId, 'RESPALDO');
       await this.exigirSinPlanVigente([actual.activoId], id);
     }
     await this.trazas.modificar('PLAN_RESPALDO', id, datos, motivoCambio, usuario.username);

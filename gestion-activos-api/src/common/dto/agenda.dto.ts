@@ -21,8 +21,8 @@ export class EventoAgendaDto {
   @ApiProperty({ example: 'mant-ejecucion-12', description: 'Único en la respuesta.' })
   clave: string;
 
-  @ApiProperty({ enum: ['respaldos', 'mantenimientos', 'vulnerabilidades'] })
-  modulo: 'respaldos' | 'mantenimientos' | 'vulnerabilidades';
+  @ApiProperty({ enum: ['respaldos', 'mantenimientos', 'vulnerabilidades', 'renovaciones', 'endpoints', 'evaluaciones'] })
+  modulo: 'respaldos' | 'mantenimientos' | 'vulnerabilidades' | 'renovaciones' | 'endpoints' | 'evaluaciones';
 
   @ApiProperty({ enum: CAPAS, description: '1 planificación · 2 ejecución o tratamiento · 3 verificación o restauración.' })
   capa: Capa;
@@ -48,8 +48,8 @@ export class EventoAgendaDto {
   @ApiProperty({ type: String, nullable: true, example: 'jperez' })
   responsable: string | null;
 
-  @ApiProperty({ type: ActivoBreveDto })
-  activo: ActivoBreveDto;
+  @ApiProperty({ type: ActivoBreveDto, nullable: true, description: 'null = el evento no es de un activo (período mensual de endpoints).' })
+  activo: ActivoBreveDto | null;
 
   @ApiProperty({ example: '/mantenimientos/12', description: 'Ruta del registro en la aplicación.' })
   ruta: string;

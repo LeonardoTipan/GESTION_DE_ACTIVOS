@@ -51,7 +51,7 @@ describe('Respaldos y restauración (e2e)', () => {
     await limpiarBaseDeDatos(prisma);
     tokens = await getTokensDePrueba();
 
-    const categoria = await prisma.categoria.create({ data: { nombre: 'Hardware', descripcion: '' } });
+    const categoria = await prisma.categoria.create({ data: { aplicaRespaldo: true, nombre: 'Hardware', descripcion: '' } });
     const alta = await prisma.criticidad.create({ data: { nivel: 'Alta' } });
     const media = await prisma.criticidad.create({ data: { nivel: 'Media' } });
     const activo = (codigo: string, criticidadId: number, extra: object = {}) =>
@@ -188,7 +188,9 @@ describe('Respaldos y restauración (e2e)', () => {
       const res = await api(tokens.auditor)
         .get(`/api/trazas?entidad=PLAN_RESPALDO&registroId=${planId}`)
         .expect(200);
-      expect(res.body).toEqual([
+      // El alta también queda (quién y con qué valores), sin versión propia.
+      expect(res.body.at(-1)).toMatchObject({ accion: 'REGISTRAR', version: 0, responsable: 'analista.test' });
+      expect(res.body.filter((t: { accion: string }) => t.accion !== 'REGISTRAR')).toEqual([
         expect.objectContaining({
           accion: 'MODIFICAR',
           version: 1,
@@ -356,7 +358,7 @@ describe('Respaldos y restauración (e2e)', () => {
       const trazas = await api(tokens.auditor)
         .get(`/api/trazas?entidad=EJECUCION_RESPALDO&registroId=${ejecucionId}`)
         .expect(200);
-      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['REVERSAR', 'ANULAR']);
+      expect(trazas.body.map((t: { accion: string }) => t.accion)).toEqual(['REVERSAR', 'ANULAR', 'REGISTRAR']);
     }, LENTO);
 
     it('revertir un plan anulado no puede dejar dos planes vigentes para el mismo activo', async () => {
@@ -389,15 +391,19 @@ describe('Respaldos y restauración (e2e)', () => {
     }, LENTO);
 
     it('dar de baja el activo conserva sus planes y ejecuciones, consultables, pero no admite nuevos', async () => {
+      // Con un plan vigente la baja manual se rechaza (409); se suspende el plan (con su traza) y se permite.
+      const rechazo = await api(tokens.admin).delete(`/api/activos/${ids.critico}`).expect(409);
+      expect(rechazo.body.message).toContain('plan(es) de respaldo vigente(s)');
+      const vigentes = await api(tokens.auditor).get(`/api/respaldos/planes?activoId=${ids.critico}`).expect(200);
+      const plan = vigentes.body.data.find((p: { anuladoEn: string | null; estado: string }) => !p.anuladoEn && p.estado === 'VIGENTE');
+      await api(tokens.analista).patch(`/api/respaldos/planes/${plan.id}`, { estado: 'SUSPENDIDO', motivoCambio: MOTIVO }).expect(200);
       await api(tokens.admin).delete(`/api/activos/${ids.critico}`).expect(204);
       const planes = await api(tokens.auditor).get(`/api/respaldos/planes?activoId=${ids.critico}`).expect(200);
       expect(planes.body.meta.total).toBe(2);
       await api(tokens.auditor).get(`/api/respaldos/ejecuciones/${ejecucionId}`).expect(200);
-      const plan = planes.body.data.find((p: { anuladoEn: string | null }) => !p.anuladoEn);
-      const res = await api(tokens.analista)
-        .post('/api/respaldos/ejecuciones', ejecucion({ planId: plan.id }))
-        .expect(400);
-      expect(res.body.message).toContain('fue dado de baja');
+      // Ya no admite ejecuciones nuevas (plan suspendido y activo dado de baja).
+      const res = await api(tokens.analista).post('/api/respaldos/ejecuciones', ejecucion({ planId: plan.id }));
+      expect([400, 409]).toContain(res.status);
       // Y el tablero ya no lo cuenta como crítico operativo.
       const { body } = await api(tokens.auditor).get('/api/respaldos/tablero').expect(200);
       expect(body.calendario).toEqual([]);

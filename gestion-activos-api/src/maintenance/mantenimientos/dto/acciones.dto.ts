@@ -8,6 +8,7 @@ import { MotivoCambioDto } from '../../../audit/dto/traza.dto.js';
 import { Type } from 'class-transformer';
 import {
   IsDate,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -97,6 +98,18 @@ export class ProgramarMantenimientoDto {
   @Type(() => Date)
   @IsDate()
   fechaLimite?: Date;
+
+  @ApiPropertyOptional({ description: 'true = ejecución ADICIONAL: admite otra pendiente del mismo plan; exige la justificación.' })
+  @IsOptional()
+  @IsBoolean()
+  adicional?: boolean;
+
+  @ApiPropertyOptional({ description: 'Justificación de la ejecución adicional (al menos 20 caracteres); queda en la auditoría.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  justificacion?: string;
 }
 
 /** Edición de lo previsto (tipo, actividad, fechas previstas); solo mientras está Pendiente. Exige motivo. */

@@ -124,8 +124,8 @@ export class PlanesRespaldoController {
   @ApiConflictResponse({ type: ApiErrorDto, description: 'Algún activo ya tiene un plan vigente.' })
   @Roles('admin', 'analista')
   @Post()
-  crear(@Body() dto: CrearPlanesDto): Promise<PlanRespaldoDto[]> {
-    return this.planes.crear(dto);
+  crear(@Body() dto: CrearPlanesDto, @CurrentUser() u: AuthUser): Promise<PlanRespaldoDto[]> {
+    return this.planes.crear(dto, u);
   }
 
   @ApiOperation({ summary: 'Modificar un plan con motivo (admin, analista)', description: 'Sube la versión y conserva la anterior. El activo no se cambia.' })

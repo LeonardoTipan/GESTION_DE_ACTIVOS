@@ -7,7 +7,9 @@ import type { PeriodoEndpoint, Prisma } from '../generated/prisma/client.js';
 import type { EstadoPeriodoEndpoint } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AbrirPeriodoDto, DatosRegistroPeriodoDto, PeriodoEndpointDto, QueryPeriodosDto, ReabrirPeriodoDto } from './dto.js';
-import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, type DatosRegistroPeriodo } from './reglas.js';
+import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo } from './reglas.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
+
 
 const NOMBRE_MES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const PENDIENTES: EstadoPeriodoEndpoint[] = ['ABIERTO', 'EN_PROGRESO'];
@@ -42,6 +44,7 @@ export class PeriodosEndpointService {
   async findAll(q: QueryPeriodosDto): Promise<Paginated<PeriodoEndpointDto>> {
     const where: Prisma.PeriodoEndpointWhereInput = {
       anio: q.anio,
+      mes: q.mes,
       estado: q.estado,
       ...(q.incluirAnulados ? {} : { anuladoEn: null }),
     };
@@ -97,7 +100,7 @@ export class PeriodosEndpointService {
     if (actual.estado === 'CERRADO') {
       throw new ConflictException(`El período ${id} está CERRADO: un administrador debe reabrirlo para corregirlo.`);
     }
-    exigirCoherencia(this.combinar(actual, dto));
+    exigirCoherencia(this.combinar(actual, dto), actual);
     await this.trazas.modificar(
       'PERIODO_ENDPOINT',
       id,
@@ -109,11 +112,11 @@ export class PeriodosEndpointService {
     return this.findOne(id);
   }
 
-  /** → CERRADO. Exige los dos totales, el verificable y su repositorio (lo guardado más lo enviado). */
+  /** → CERRADO. Exige los dos totales, la fecha real y el responsable de la medición, el verificable y su repositorio (lo guardado más lo enviado). */
   async cerrar(id: number, dto: DatosRegistroPeriodoDto, usuario: AuthUser): Promise<PeriodoEndpointDto> {
     const actual = await this.exigirVigente(id);
     this.exigirEstado(actual, PENDIENTES, 'CERRADO');
-    exigirCierre(this.combinar(actual, dto));
+    exigirCierre(this.combinar(actual, dto), actual);
     await this.trazas.modificar(
       'PERIODO_ENDPOINT',
       id,
@@ -140,6 +143,38 @@ export class PeriodosEndpointService {
     return this.findOne(id);
   }
 
+  // ── Agenda (calendario general) ───────────────────────────────────────────
+
+  /**
+   * Eventos del calendario: capa 1 · el MES del período (control mensual: del primer al último
+   * día del mes, no es una fecha de ejecución); capa 2 · la medición real (fecha de ejecución).
+   * Un período no tiene activo (es de todos los equipos sujetos al control).
+   */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const ahora = new Date();
+    const filas = await this.prisma.periodoEndpoint.findMany({
+      where: { anuladoEn: null, ...(q.responsable ? { responsable: { contains: q.responsable } } : {}) },
+      orderBy: [{ anio: 'asc' }, { mes: 'asc' }],
+    });
+    const eventos: EventoAgendaDto[] = [];
+    const quiere = (c: number) => !q.capa || q.capa === c;
+    for (const p of filas) {
+      const inicio = inicioDelMes(p);
+      const fin = new Date(inicioDelMes(p.mes === 12 ? { anio: p.anio + 1, mes: 1 } : { anio: p.anio, mes: p.mes + 1 }).getTime() - 60_000);
+      const base = { modulo: 'endpoints' as const, activo: null, fueraDePlazo: false, ruta: `/proteccion-endpoints/${p.id}` };
+      const nombre = `${NOMBRE_MES[p.mes - 1]} de ${p.anio}`;
+      if (quiere(1) && inicio <= q.hasta && fin >= q.desde) {
+        const estado = p.estado === 'CERRADO' ? 'COMPLETADO' : p.estado === 'EN_PROGRESO' ? 'EN_CURSO' : fin < ahora ? 'VENCIDO' : 'EN_CURSO';
+        eventos.push({ ...base, clave: `ep1-${p.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Período de endpoints · ${nombre}`, inicio, fin, estado, responsable: p.responsable, detalle: `Estado ${p.estado.toLowerCase().replace('_', ' ')}` });
+      }
+      if (quiere(2) && p.fechaEjecucion && p.fechaEjecucion >= q.desde && p.fechaEjecucion <= q.hasta) {
+        const cob = cobertura(p.totalActivos, p.equiposConAntivirus);
+        eventos.push({ ...base, clave: `ep2-${p.id}`, capa: 2, tipo: 'REAL', titulo: `Medición de antivirus · ${nombre}`, inicio: p.fechaEjecucion, fin: null, estado: p.estado === 'CERRADO' ? 'COMPLETADO' : 'EN_CURSO', responsable: p.responsableEjecucion, detalle: cob === null ? null : `Cobertura ${cob} %` });
+      }
+    }
+    return (q.estado ? eventos.filter((e) => e.estado === q.estado) : eventos).sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
+  }
+
   // ── Auxiliares ────────────────────────────────────────────────────────────
 
   private async exigirVigente(id: number): Promise<PeriodoEndpointDto> {
@@ -159,6 +194,8 @@ export class PeriodosEndpointService {
     return {
       totalActivos: d.totalActivos ?? actual.totalActivos,
       equiposConAntivirus: d.equiposConAntivirus ?? actual.equiposConAntivirus,
+      fechaEjecucion: d.fechaEjecucion ?? actual.fechaEjecucion,
+      responsableEjecucion: d.responsableEjecucion ?? actual.responsableEjecucion,
       evidencia: d.evidencia ?? actual.evidencia,
       repositorioVerificable: d.repositorioVerificable ?? actual.repositorioVerificable,
     };
@@ -168,6 +205,8 @@ export class PeriodosEndpointService {
     return definidos({
       totalActivos: d.totalActivos,
       equiposConAntivirus: d.equiposConAntivirus,
+      fechaEjecucion: d.fechaEjecucion,
+      responsableEjecucion: d.responsableEjecucion,
       evidencia: d.evidencia,
       repositorioVerificable: d.repositorioVerificable,
       observacion: d.observacion,

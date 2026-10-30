@@ -13,6 +13,7 @@ import { activoBreve, SELECT_ACTIVO } from '../common/dto/registro.dto.js';
 import type { Prisma } from '../generated/prisma/client.js';
 import type { EstadoRenovacion } from '../generated/prisma/enums.js';
 import { ActivosService } from '../inventory/activos/activos.service.js';
+import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
   ActualizarEjecucionDto,
@@ -310,6 +311,45 @@ export class RenovacionesService {
     await this.findOne(id);
     await this.trazas.reversar('RENOVACION', id, motivo, usuario.username);
     return this.findOne(id);
+  }
+
+  // ── Agenda (calendario general) ───────────────────────────────────────────
+
+  /**
+   * Eventos del calendario, separando lo PREVISTO de lo REAL (nunca la fecha de registro):
+   * capa 1 · renovación planificada (fecha planificada; pendiente y pasada → vencida);
+   * capa 1 · caducidad del elemento que rige hoy (renovaciones por vencer / caducadas);
+   * capa 2 · renovación ejecutada (fecha real).
+   */
+  async agenda(q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    const ahora = new Date();
+    const enRango = { gte: q.desde, lte: q.hasta };
+    const filas = await this.prisma.renovacion.findMany({
+      where: {
+        anuladoEn: null,
+        ...(q.categoriaId ? { activo: { categoriaId: q.categoriaId } } : {}),
+        ...(q.responsable ? { responsable: { contains: q.responsable } } : {}),
+        OR: [{ fechaPlanificada: enRango }, { fechaRenovacion: enRango }, { fechaCaducidadActual: enRango }, { nuevaFechaCaducidad: enRango }],
+      },
+      include: INCLUDE,
+      take: 2000,
+    });
+    const eventos: EventoAgendaDto[] = [];
+    const quiere = (c: number) => !q.capa || q.capa === c;
+    for (const r of filas.map((f) => aDto(f, ahora))) {
+      const base = { modulo: 'renovaciones' as const, activo: r.activo, responsable: r.responsable, fueraDePlazo: false, ruta: `/renovaciones/${r.id}` };
+      const pendiente = r.estado !== 'CERRADO';
+      if (quiere(1) && pendiente && r.fechaPlanificada >= q.desde && r.fechaPlanificada <= q.hasta) {
+        eventos.push({ ...base, clave: `rn1-${r.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Renovar ${r.tipo.toLowerCase().replace(/_/g, ' ')} · ${r.activo.codigo}`, inicio: r.fechaPlanificada, fin: null, estado: r.fechaPlanificada < ahora ? 'VENCIDO' : r.estado === 'EN_PROGRESO' ? 'EN_CURSO' : 'PROGRAMADO', detalle: `Renovación #${r.id} planificada` });
+      }
+      if (quiere(1) && r.venceEl && r.vigencia !== 'SUSTITUIDA' && r.venceEl >= q.desde && r.venceEl <= q.hasta) {
+        eventos.push({ ...base, clave: `rnc-${r.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Caduca: ${r.tipo.toLowerCase().replace(/_/g, ' ')} · ${r.activo.codigo}`, inicio: r.venceEl, fin: null, estado: r.vigencia === 'CADUCADA' ? 'VENCIDO' : 'PROGRAMADO', detalle: r.vigencia === 'PROXIMA' ? 'Próxima a vencer' : r.vigencia === 'CADUCADA' ? 'Caducada' : 'Vigente' });
+      }
+      if (quiere(2) && r.fechaRenovacion && r.fechaRenovacion >= q.desde && r.fechaRenovacion <= q.hasta) {
+        eventos.push({ ...base, clave: `rn2-${r.id}`, capa: 2, tipo: 'REAL', titulo: `Renovado: ${r.tipo.toLowerCase().replace(/_/g, ' ')} · ${r.activo.codigo}`, inicio: r.fechaRenovacion, fin: null, estado: r.estado === 'CERRADO' ? 'COMPLETADO' : 'EN_CURSO', detalle: `Renovación #${r.id}` });
+      }
+    }
+    return (q.estado ? eventos.filter((e) => e.estado === q.estado) : eventos).sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
   }
 
   // ── Auxiliares ────────────────────────────────────────────────────────────

@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { TrazasService } from '../../audit/trazas.service.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   CreateCriticidadDto,
@@ -12,7 +14,10 @@ import type {
 
 @Injectable()
 export class CriticidadesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly trazas: TrazasService,
+  ) {}
 
   findAll(): Promise<CriticidadDto[]> {
     return this.prisma.criticidad.findMany({ orderBy: { id: 'asc' } });
@@ -28,17 +33,25 @@ export class CriticidadesService {
     return criticidad;
   }
 
-  create(dto: CreateCriticidadDto): Promise<CriticidadDto> {
-    return this.prisma.criticidad.create({ data: dto });
+  create(dto: CreateCriticidadDto, u: AuthUser): Promise<CriticidadDto> {
+    return this.prisma.$transaction(async (tx) => {
+      const creado = await tx.criticidad.create({ data: dto });
+      await this.trazas.registrarCatalogo(tx, 'CRITICIDAD', creado.id, 'REGISTRAR', {}, creado, u.username);
+      return creado;
+    });
   }
 
-  async update(id: number, dto: UpdateCriticidadDto): Promise<CriticidadDto> {
-    await this.findOne(id);
-    return this.prisma.criticidad.update({ where: { id }, data: dto });
+  async update(id: number, dto: UpdateCriticidadDto, u: AuthUser): Promise<CriticidadDto> {
+    const actual = await this.findOne(id);
+    return this.prisma.$transaction(async (tx) => {
+      const nuevo = await tx.criticidad.update({ where: { id }, data: dto });
+      await this.trazas.registrarCatalogo(tx, 'CRITICIDAD', id, 'MODIFICAR', actual, dto, u.username);
+      return nuevo;
+    });
   }
 
-  async remove(id: number): Promise<void> {
-    await this.findOne(id);
+  async remove(id: number, u: AuthUser): Promise<void> {
+    const actual = await this.findOne(id);
     // Cuenta también los activos dados de baja: siguen referenciando la criticidad.
     const enUso = await this.prisma.activo.count({
       where: { criticidadId: id },
@@ -48,6 +61,9 @@ export class CriticidadesService {
         `La criticidad ${id} está asignada a ${enUso} activo(s); reasígnalos antes de eliminarla.`,
       );
     }
-    await this.prisma.criticidad.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.criticidad.delete({ where: { id } });
+      await this.trazas.registrarCatalogo(tx, 'CRITICIDAD', id, 'ELIMINAR', actual, {}, u.username);
+    });
   }
 }

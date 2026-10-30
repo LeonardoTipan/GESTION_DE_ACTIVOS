@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -219,7 +220,7 @@ export class ActivosService {
         inactivoDesde: true,
         motivoInactivo: true,
         categoria: {
-          select: { nombre: true, aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: true },
+          select: { nombre: true, aplicaMantenimiento: true, aplicaVulnerabilidad: true, aplicaRenovacion: true, aplicaEvaluacion: true, aplicaEndpoint: true, aplicaRespaldo: true },
         },
       },
     });
@@ -309,6 +310,7 @@ export class ActivosService {
           `El activo ${id} no existe o fue dado de baja.`,
         );
       }
+      await this.exigirSinProcesosAbiertos(tx, actual.codigo, id);
       const deletedAt = new Date();
       await tx.activo.update({ where: { id }, data: { deletedAt } });
       await this.bitacora.registrar(tx, {
@@ -318,6 +320,39 @@ export class ActivosService {
         cambios: calcularCambios(actual, { deletedAt }),
       });
     });
+  }
+
+  /**
+   * Baja MANUAL: no se permite con procesos abiertos sobre el activo (se cierran, cancelan o
+   * suspenden antes, con su propia trazabilidad). Solo LEE los registros de los módulos; no los
+   * modifica. La baja que informa GLPI (papelera) va por la sincronización y no pasa por aquí:
+   * conserva el activo con sus registros, como siempre.
+   */
+  private async exigirSinProcesosAbiertos(tx: Prisma.TransactionClient, codigo: string, activoId: number): Promise<void> {
+    const sinAnular = { activoId, anuladoEn: null } as const;
+    const [mant, planesMant, planesResp, vuln, renov, accesos, evaluaciones] = await Promise.all([
+      tx.mantenimiento.count({ where: { ...sinAnular, fase: { in: ['PROGRAMADO', 'EN_EJECUCION'] } } }),
+      tx.planMantenimiento.count({ where: { ...sinAnular, estado: 'VIGENTE' } }),
+      tx.planRespaldo.count({ where: { ...sinAnular, estado: 'VIGENTE' } }),
+      tx.vulnerabilidad.count({ where: { ...sinAnular, estado: { in: ['ABIERTO', 'EN_PROGRESO'] } } }),
+      tx.renovacion.count({ where: { ...sinAnular, estado: { in: ['ABIERTO', 'EN_PROGRESO'] } } }),
+      tx.controlAcceso.count({ where: { activoId, estado: { in: ['ABIERTO', 'PENDIENTE'] } } }),
+      tx.evaluacionSistema.count({ where: { ...sinAnular, estado: { in: ['ABIERTO', 'EN_PROGRESO'] } } }),
+    ]);
+    const abiertos = [
+      [mant, 'mantenimiento(s) pendiente(s)'],
+      [planesMant, 'planificación(es) de mantenimiento vigente(s)'],
+      [planesResp, 'plan(es) de respaldo vigente(s)'],
+      [vuln, 'vulnerabilidad(es) sin remediar'],
+      [renov, 'renovación(es) pendiente(s)'],
+      [accesos, 'solicitud(es) de acceso sin cerrar'],
+      [evaluaciones, 'evaluación(es) de seguridad pendiente(s)'],
+    ].filter(([n]) => (n as number) > 0).map(([n, que]) => `${n} ${que}`);
+    if (abiertos.length) {
+      throw new ConflictException(
+        `No se puede dar de baja el activo ${codigo}: tiene ${abiertos.join(', ')}. Ciérrelos, cancélelos o suspenda los planes antes de darlo de baja.`,
+      );
+    }
   }
 
   /** El historial se puede consultar también de activos dados de baja. */

@@ -3,6 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { TrazasService } from '../../audit/trazas.service.js';
+import type { AuthUser } from '../../auth/interfaces/auth-user.interface.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import type {
   CategoriaDto,
@@ -12,7 +14,10 @@ import type {
 
 @Injectable()
 export class CategoriasService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly trazas: TrazasService,
+  ) {}
 
   findAll(): Promise<CategoriaDto[]> {
     return this.prisma.categoria.findMany({ orderBy: { nombre: 'asc' } });
@@ -26,17 +31,25 @@ export class CategoriasService {
     return categoria;
   }
 
-  create(dto: CreateCategoriaDto): Promise<CategoriaDto> {
-    return this.prisma.categoria.create({ data: dto });
+  create(dto: CreateCategoriaDto, u: AuthUser): Promise<CategoriaDto> {
+    return this.prisma.$transaction(async (tx) => {
+      const creado = await tx.categoria.create({ data: dto });
+      await this.trazas.registrarCatalogo(tx, 'CATEGORIA', creado.id, 'REGISTRAR', {}, creado, u.username);
+      return creado;
+    });
   }
 
-  async update(id: number, dto: UpdateCategoriaDto): Promise<CategoriaDto> {
-    await this.findOne(id);
-    return this.prisma.categoria.update({ where: { id }, data: dto });
+  async update(id: number, dto: UpdateCategoriaDto, u: AuthUser): Promise<CategoriaDto> {
+    const actual = await this.findOne(id);
+    return this.prisma.$transaction(async (tx) => {
+      const nuevo = await tx.categoria.update({ where: { id }, data: dto });
+      await this.trazas.registrarCatalogo(tx, 'CATEGORIA', id, 'MODIFICAR', actual, dto, u.username);
+      return nuevo;
+    });
   }
 
-  async remove(id: number): Promise<void> {
-    await this.findOne(id);
+  async remove(id: number, u: AuthUser): Promise<void> {
+    const actual = await this.findOne(id);
     // Cuenta también los activos dados de baja: siguen referenciando la categoría.
     const enUso = await this.prisma.activo.count({
       where: { categoriaId: id },
@@ -46,6 +59,9 @@ export class CategoriasService {
         `La categoría ${id} está asignada a ${enUso} activo(s); reasígnalos antes de eliminarla.`,
       );
     }
-    await this.prisma.categoria.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.categoria.delete({ where: { id } });
+      await this.trazas.registrarCatalogo(tx, 'CATEGORIA', id, 'ELIMINAR', actual, {}, u.username);
+    });
   }
 }

@@ -47,7 +47,13 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
     return { anio: Math.floor(t / 12), mes: (t % 12) + 1 };
   };
   const enDias = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
-  const EVIDENCIA = { evidencia: 'Inventario de equipos.xlsx', repositorioVerificable: 'Carpeta Compartida TICs/Antivirus' };
+  // Medición del mes: fecha REAL (hace una hora: dentro de cualquier mes ya abierto, no futura) y responsable.
+  const EVIDENCIA = {
+    fechaEjecucion: new Date(Date.now() - 3_600_000).toISOString(),
+    responsableEjecucion: 'Soporte TIC · J. Pérez',
+    evidencia: 'Inventario de equipos.xlsx',
+    repositorioVerificable: 'Carpeta Compartida TICs/Antivirus',
+  };
   const INFORME = { evidencia: 'Informe de pruebas de seguridad.pdf', repositorioVerificable: 'https://intranet.local/seguridad/informes' };
 
   const abrirPeriodo = async (n: number) =>
@@ -116,13 +122,22 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
       await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/registro`, { equiposConAntivirus: -1 }).expect(400);
       await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/registro`, { repositorioVerificable: 'javascript:alert(1)' }).expect(400);
       await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/registro`, { cobertura: 99 }).expect(400); // calculada: no se escribe
+      // Fecha real de la medición: ni futura ni anterior al mes del período.
+      await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/registro`, { fechaEjecucion: enDias(2) }).expect(400);
+      const { anio, mes } = mesAtras(2);
+      const antesDelMes = new Date(Date.UTC(anio, mes - 1, 1, 4, 0)).toISOString(); // 23:00 del día anterior en Quito
+      const r = await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/registro`, { fechaEjecucion: antesDelMes }).expect(400);
+      expect(r.body.message).toContain('anterior al mes del período');
+      // Filtro por mes.
+      const porMes = await api(tokens.auditor).get(`/api/proteccion-endpoints/periodos?anio=${anio}&mes=${mes}`).expect(200);
+      expect(porMes.body.data.map((p: { id: number }) => p.id)).toEqual([id]);
     }, LENTO);
 
     it('cerrar exige los dos totales, el verificable y el repositorio; dice qué falta; el total digitado no tiene que coincidir con la aplicación', async () => {
       const id = await abrirPeriodo(3);
       const falta = await api(tokens.analista).patch(`/api/proteccion-endpoints/periodos/${id}/cerrar`, { totalActivos: 27 }).expect(400);
       expect(falta.body.message).toBe(
-        'Para cerrar el período falta: los equipos con antivirus activo, el verificable (inventario de equipos), el repositorio del verificable.',
+        'Para cerrar el período falta: los equipos con antivirus activo, la fecha real de la medición, el responsable de la medición, el verificable (inventario de equipos), el repositorio del verificable.',
       );
       // Nada cambió con el intento fallido.
       expect((await api(tokens.auditor).get(`/api/proteccion-endpoints/periodos/${id}`).expect(200)).body).toMatchObject({ estado: 'ABIERTO', totalActivos: null });
@@ -264,6 +279,23 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
       await api(tokens.auditor).get('/api/evaluaciones-sistemas/bitacora/especifica?situacion=OTRA').expect(400);
     }, LENTO);
   });
+
+  it('agendas del calendario: lo PREVISTO y lo REAL por separado, con la ruta al registro', async () => {
+    const desde = new Date(Date.now() - 400 * 86_400_000).toISOString();
+    const hasta = new Date(Date.now() + 400 * 86_400_000).toISOString();
+    const ep = (await api(tokens.auditor).get(`/api/proteccion-endpoints/periodos/agenda?desde=${desde}&hasta=${hasta}`).expect(200)).body as Array<{
+      clave: string; capa: number; tipo: string; activo: unknown; ruta: string; estado: string; inicio: string;
+    }>;
+    const cerrado = (await api(tokens.auditor).get('/api/proteccion-endpoints/periodos?estado=CERRADO&limit=1').expect(200)).body.data[0];
+    const mes = ep.find((e) => e.clave === `ep1-${cerrado.id}`)!;
+    expect(mes).toMatchObject({ capa: 1, tipo: 'PREVISTO', activo: null, ruta: `/proteccion-endpoints/${cerrado.id}`, estado: 'COMPLETADO' });
+    const medicion = ep.find((e) => e.clave === `ep2-${cerrado.id}`)!;
+    expect(medicion).toMatchObject({ capa: 2, tipo: 'REAL', inicio: cerrado.fechaEjecucion });
+    const ev = (await api(tokens.auditor).get(`/api/evaluaciones-sistemas/agenda?desde=${desde}&hasta=${hasta}&capa=2`).expect(200)).body as Array<{ capa: number; tipo: string; ruta: string }>;
+    expect(ev.length).toBeGreaterThan(0);
+    expect(ev.every((e) => e.capa === 2 && e.tipo === 'REAL' && e.ruta.startsWith('/evaluacion-sistemas-productivos/'))).toBe(true);
+    await api(tokens.auditor).get('/api/evaluaciones-sistemas/agenda').expect(400); // el rango es obligatorio
+  }, LENTO);
 
   it('Swagger documenta las rutas de la fase 2 y la bitácora', async () => {
     const res = await request(app.getHttpServer()).get('/api/docs-json').expect(200);

@@ -68,12 +68,6 @@ export class ParametrosPlanMantenimientoDto {
   @IsDate()
   fechaInicio: Date;
 
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Próxima intervención prevista; al crear, la fecha de inicio.' })
-  @IsOptional()
-  @Type(() => Date)
-  @IsDate()
-  proximaFecha?: Date;
-
   @ApiProperty({ example: 'Mesa de Servicios', description: 'Asignado: quién debe realizarlo.' })
   @Trim()
   @IsString()
@@ -160,8 +154,18 @@ export class PlanMantenimientoDto extends IntersectionType(
   @ApiProperty() activoId: number;
   @ApiProperty({ type: ActivoBreveDto }) activo: ActivoBreveDto;
   @ApiProperty({ enum: EstadoPlan }) estado: EstadoPlan;
-  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'null = sin más intervenciones previstas.' })
-  declare proximaFecha: Date;
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description:
+      'Próxima intervención, CALCULADA (no se escribe): fin real de la última ejecución finalizada + período; sin ninguna, la fecha de inicio. null = sin más intervenciones (ÚNICA ya ejecutada).',
+  })
+  proximaFecha: Date;
+  @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Fin REAL de la última ejecución finalizada (no anulada).' })
+  ultimaFinalizacion: Date | null;
+  @ApiProperty({ type: Number, nullable: true, description: 'Ejecución pendiente (programada o en ejecución) del plan, si la hay.' })
+  ejecucionPendienteId: number | null;
   @ApiProperty({ type: () => SemestreDto, description: 'Semestre y año PLANIFICADOS (de la fecha de inicio).' })
   semestrePlanificado: SemestreDto;
   @ApiProperty({ description: 'Ejecuciones COMPLETADAS (finalizadas, no anuladas).' }) ejecucionesCompletadas: number;
@@ -172,22 +176,34 @@ export class PlanMantenimientoDto extends IntersectionType(
 export class PaginatedPlanMantenimientoDto extends PaginatedResponseDto(PlanMantenimientoDto) {}
 
 /**
- * Crea una EJECUCIÓN (situación Pendiente) de la planificación. Normal: la de la
- * próxima fecha, y el período adelanta la siguiente. Adicional (intervención
- * parcial, trabajo extra o reprogramación): no mueve la próxima fecha y vale
- * también para una planificación de período único ya programada.
+ * Crea una EJECUCIÓN (situación Pendiente) de la planificación. Nunca mueve la próxima
+ * intervención: se recalcula al FINALIZAR, desde el fin real. Una sola ejecución pendiente
+ * por plan; una ADICIONAL (trabajo extra, intervención parcial) exige fecha y justificación.
  */
 export class ProgramarDesdePlanDto {
-  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Fecha prevista de esta ejecución; por defecto, la próxima fecha del plan. Obligatoria si es adicional.' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Inicio previsto; por defecto, la próxima intervención del plan. Obligatorio si es adicional.' })
   @IsOptional()
   @Type(() => Date)
   @IsDate()
   fecha?: Date;
 
-  @ApiPropertyOptional({ description: 'true = ejecución adicional: no adelanta la próxima fecha del período.' })
+  @ApiPropertyOptional({ type: String, format: 'date-time', description: 'Límite previsto; por defecto, inicio + plazo del plan.' })
+  @IsOptional()
+  @Type(() => Date)
+  @IsDate()
+  fechaLimite?: Date;
+
+  @ApiPropertyOptional({ description: 'true = ejecución adicional (admite otra pendiente del mismo plan): exige fecha y justificación.' })
   @IsOptional()
   @IsBoolean()
   adicional?: boolean;
+
+  @ApiPropertyOptional({ description: 'Justificación de la ejecución adicional (al menos 20 caracteres); queda en la auditoría.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(2000)
+  justificacion?: string;
 }
 
 /** Resultado de programar desde el plan. */
@@ -195,7 +211,7 @@ export class ProgramacionDesdePlanDto {
   @ApiProperty({ description: 'Mantenimiento creado (fase PROGRAMADO).' })
   mantenimientoId: number;
 
-  @ApiProperty({ type: () => PlanMantenimientoDto, description: 'El plan, con la próxima fecha ya adelantada.' })
+  @ApiProperty({ type: () => PlanMantenimientoDto, description: 'El plan (su próxima intervención no cambia al programar).' })
   plan: PlanMantenimientoDto;
 }
 

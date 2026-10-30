@@ -14,6 +14,7 @@ import { MotivoDto } from '../audit/dto/traza.dto.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
 import {
@@ -65,6 +66,13 @@ export class RenovacionesController {
   @Get('caducidades')
   caducidades(@Query() q: QueryCaducidadesDto): Promise<RenovacionDto[]> {
     return this.renovaciones.caducidades(q);
+  }
+
+  @ApiOperation({ summary: 'Agenda del calendario', description: 'Renovación planificada y caducidades que rigen (previsto) y renovaciones ejecutadas (real), en un rango.' })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get('agenda')
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.renovaciones.agenda(q);
   }
 
   @ApiOperation({ summary: 'Detalle de una renovación' })

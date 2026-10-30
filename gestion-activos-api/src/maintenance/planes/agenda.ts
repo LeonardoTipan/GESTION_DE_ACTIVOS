@@ -1,7 +1,6 @@
 import type { Capa, EstadoEvento, EventoAgendaDto } from '../../common/dto/agenda.dto.js';
 import type { ActivoBreveDto } from '../../common/dto/registro.dto.js';
 import { estaVencido, limiteEfectivo } from '../mantenimientos/transiciones.js';
-import { siguienteFecha } from './frecuencia.js';
 
 /**
  * Agenda de mantenimientos, en sus DOS fases, a partir de lo que hay en la
@@ -14,7 +13,6 @@ import { siguienteFecha } from './frecuencia.js';
  */
 
 const DIA = 86_400_000;
-const TOPE_POR_PLAN = 60;
 
 export interface MantenimientoAgenda {
   id: number;
@@ -84,16 +82,15 @@ export function agendaMantenimientos(d: {
     }
   }
 
-  // Capa 1: próximas intervenciones de los planes vigentes (aún sin programar).
+  // Capa 1: la PRÓXIMA intervención de cada plan vigente sin ejecución pendiente. Solo la
+  // siguiente: las posteriores dependen del fin real de esa (no se proyectan fechas ficticias).
   if (quiere(1)) {
     for (const p of d.planes) {
-      let fecha = p.proximaFecha;
-      for (let n = 0; fecha && fecha <= d.hasta && n < TOPE_POR_PLAN; n++) {
-        const fin = new Date(fecha.getTime() + p.plazoDias * DIA);
-        if (fin >= d.desde) {
-          eventos.push({ modulo: 'mantenimientos', clave: `p1-${p.id}-${n}`, capa: 1, tipo: 'PREVISTO', titulo: `Planificación ${folio(p.id)}: ${TIPO(p.tipo)} por ejecutar`, inicio: fecha, fin, estado: previsto(fecha, fin), fueraDePlazo: false, responsable: p.responsable, activo: p.activo, ruta: '/mantenimientos?capa=planificacion', detalle: `Período ${p.frecuencia.toLowerCase()}` });
-        }
-        fecha = siguienteFecha(fecha, p.frecuencia);
+      const fecha = p.proximaFecha;
+      if (!fecha || fecha > d.hasta) continue;
+      const fin = new Date(fecha.getTime() + p.plazoDias * DIA);
+      if (fin >= d.desde) {
+        eventos.push({ modulo: 'mantenimientos', clave: `p1-${p.id}-0`, capa: 1, tipo: 'PREVISTO', titulo: `Planificación ${folio(p.id)}: ${TIPO(p.tipo)} por ejecutar`, inicio: fecha, fin, estado: previsto(fecha, fin), fueraDePlazo: false, responsable: p.responsable, activo: p.activo, ruta: '/mantenimientos?capa=planificacion', detalle: `Período ${p.frecuencia.toLowerCase()} · próxima intervención (desde el último fin real)` });
       }
     }
   }

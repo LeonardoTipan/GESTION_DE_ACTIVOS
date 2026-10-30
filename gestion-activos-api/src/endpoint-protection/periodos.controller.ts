@@ -13,6 +13,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
 import {
@@ -33,7 +34,7 @@ import { PeriodosEndpointService } from './periodos.service.js';
 export class PeriodosEndpointController {
   constructor(private readonly periodos: PeriodosEndpointService) {}
 
-  @ApiOperation({ summary: 'Listar los períodos mensuales', description: 'Paginado, del más reciente al más antiguo. Filtros por año y estado.' })
+  @ApiOperation({ summary: 'Listar los períodos mensuales', description: 'Paginado, del más reciente al más antiguo. Filtros por año, mes y estado.' })
   @ApiOkResponse({ type: PaginatedPeriodoEndpointDto })
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @Get()
@@ -51,6 +52,13 @@ export class PeriodosEndpointController {
     return this.periodos.abrir(dto, usuario);
   }
 
+  @ApiOperation({ summary: 'Agenda del calendario', description: 'El mes de cada período (previsto) y la medición real (fecha de ejecución), en un rango.' })
+  @ApiOkResponse({ type: [EventoAgendaDto] })
+  @Get('agenda')
+  agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
+    return this.periodos.agenda(q);
+  }
+
   @ApiOperation({ summary: 'Consultar un período' })
   @ApiOkResponse({ type: PeriodoEndpointDto })
   @ApiNotFoundResponse({ type: ApiErrorDto })
@@ -63,7 +71,7 @@ export class PeriodosEndpointController {
 
   @ApiOperation({
     summary: 'Guardar avance del registro (admin, analista)',
-    description: 'Totales, verificable, repositorio y observación. Deja el período EN_PROGRESO; no lo cierra. Un período CERRADO hay que reabrirlo antes.',
+    description: 'Totales, fecha real y responsable de la medición, verificable, repositorio y observación. Deja el período EN_PROGRESO; no lo cierra. Un período CERRADO hay que reabrirlo antes.',
   })
   @ApiOkResponse({ type: PeriodoEndpointDto })
   @ApiBadRequestResponse({ type: ApiErrorDto, description: 'Datos incoherentes (p. ej. más equipos con antivirus que el total).' })
@@ -76,7 +84,7 @@ export class PeriodosEndpointController {
 
   @ApiOperation({
     summary: 'Cerrar el período (admin, analista)',
-    description: 'ABIERTO o EN_PROGRESO → CERRADO. Exige total de activos (≥ 1), equipos con antivirus (≤ total), verificable y repositorio. El mensaje dice qué falta.',
+    description: 'ABIERTO o EN_PROGRESO → CERRADO. Exige total de activos (≥ 1), equipos con antivirus (≤ total), fecha real y responsable de la medición, verificable y repositorio. El mensaje dice qué falta.',
   })
   @ApiOkResponse({ type: PeriodoEndpointDto })
   @ApiBadRequestResponse({ type: ApiErrorDto, description: 'Falta algún dato o no es coherente.' })

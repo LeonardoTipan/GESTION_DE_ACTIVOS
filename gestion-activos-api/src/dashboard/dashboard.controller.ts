@@ -9,6 +9,8 @@ import {
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import { DashboardService } from './dashboard.service.js';
 import { PendientesTableroDto } from './dto.js';
+import { IndicadoresTableroDto } from './indicadores.dto.js';
+import { IndicadoresTableroService } from './indicadores.service.js';
 
 // Sin @Roles: como los listados de los seis módulos, lo consultan admin, analista
 // y auditor (los guards globales exigen sesión válida). No hay alcance por departamento.
@@ -16,7 +18,10 @@ import { PendientesTableroDto } from './dto.js';
 @ApiUnauthorizedResponse({ type: ApiErrorDto, description: 'Falta el token o no es válido' })
 @Controller('dashboard')
 export class DashboardController {
-  constructor(private readonly dashboard: DashboardService) {}
+  constructor(
+    private readonly dashboard: DashboardService,
+    private readonly indicadoresTablero: IndicadoresTableroService,
+  ) {}
 
   @Get('pendientes')
   @ApiOperation({
@@ -28,5 +33,17 @@ export class DashboardController {
   @ApiInternalServerErrorResponse({ type: ApiErrorDto, description: 'Algún conteo falló' })
   pendientes(): Promise<PendientesTableroDto> {
     return this.dashboard.pendientes();
+  }
+
+  @Get('indicadores')
+  @ApiOperation({
+    summary: 'Indicadores de todos los módulos',
+    description:
+      'Conteos reales en la base: inventario, control de acceso, respaldos (fallidos y parciales de 30 días), mantenimientos (en curso, próximos 30 días, vencidos), vulnerabilidades, renovaciones (próximas y caducadas), períodos de endpoints y evaluaciones. Si un conteo falla responde 500; nunca devuelve 0 en su lugar.',
+  })
+  @ApiOkResponse({ type: IndicadoresTableroDto })
+  @ApiInternalServerErrorResponse({ type: ApiErrorDto, description: 'Algún conteo falló' })
+  indicadores(): Promise<IndicadoresTableroDto> {
+    return this.indicadoresTablero.indicadores();
   }
 }

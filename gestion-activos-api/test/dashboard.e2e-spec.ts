@@ -220,6 +220,48 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
     await pendientes(tamper(tokens.admin)).expect(401);
   }, LENTO);
 
+  it('indicadores: conteos reales que coinciden con los listados de cada módulo (sin anulados)', async () => {
+    const get = (ruta: string) => request(app.getHttpServer()).get(ruta).set('Authorization', `Bearer ${tokens.auditor}`).expect(200);
+    const total = async (ruta: string) => (await get(ruta)).body.meta.total as number;
+    const res = await get('/api/dashboard/indicadores');
+    const i = res.body;
+    expect(i.inventario).toEqual({ total: 1, operativos: 1 });
+    expect(i.accesos).toEqual({
+      abiertas: await total('/api/control-acceso?estado=ABIERTO'),
+      enGestion: await total('/api/control-acceso?estado=PENDIENTE'),
+      cerradas: await total('/api/control-acceso?estado=CERRADO'),
+    });
+    expect(i.mantenimientos).toMatchObject({
+      programados: await total('/api/mantenimientos?fase=PROGRAMADO&incluirAnulados=false'),
+      enEjecucion: await total('/api/mantenimientos?fase=EN_EJECUCION&incluirAnulados=false'),
+      finalizados: await total('/api/mantenimientos?fase=FINALIZADO&incluirAnulados=false'),
+    });
+    expect(i.vulnerabilidades).toMatchObject({
+      abiertas: await total('/api/vulnerabilidades?estado=ABIERTO&incluirAnulados=false'),
+      enProgreso: await total('/api/vulnerabilidades?estado=EN_PROGRESO&incluirAnulados=false'),
+      remediadas: await total('/api/vulnerabilidades?estado=REMEDIADO&incluirAnulados=false'),
+    });
+    expect(i.renovaciones.pendientes).toBe(await total('/api/renovaciones?pendientes=true&incluirAnulados=false'));
+    expect(i.endpoints).toEqual({
+      abiertos: await total('/api/proteccion-endpoints/periodos?estado=ABIERTO'),
+      enProgreso: await total('/api/proteccion-endpoints/periodos?estado=EN_PROGRESO'),
+      cerrados: await total('/api/proteccion-endpoints/periodos?estado=CERRADO'),
+    });
+    expect(i.evaluaciones).toMatchObject({ vencidas: await total('/api/evaluaciones-sistemas?vencidas=true') });
+    // Un pendiente nunca se cuenta dos veces: abiertos + en progreso = pendientes del módulo.
+    const pendientes = (await get('/api/dashboard/pendientes')).body;
+    expect(i.endpoints.abiertos + i.endpoints.enProgreso).toBe(pendientes.endpoints);
+    expect(i.evaluaciones.abiertos + i.evaluaciones.enProgreso).toBe(pendientes.evaluaciones);
+  }, LENTO);
+
+  it('indicadores: si un conteo falla, 500 genérico (nunca ceros)', async () => {
+    const espia = vi.spyOn(app.get(RenovacionesService), 'resumen').mockRejectedValueOnce(new Error("Can't reach database server at db:3306"));
+    const res = await request(app.getHttpServer()).get('/api/dashboard/indicadores').set('Authorization', `Bearer ${tokens.admin}`).expect(500);
+    expect(res.body.message).toBe('No se pudieron calcular los indicadores. Inténtelo de nuevo.');
+    expect(JSON.stringify(res.body)).not.toMatch(/3306|database/);
+    espia.mockRestore();
+  });
+
   it('si un conteo falla responde 500 genérico; nunca ceros ni detalles internos', async () => {
     const espia = vi
       .spyOn(app.get(RenovacionesService), 'contarPendientes')
