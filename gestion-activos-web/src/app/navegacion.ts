@@ -92,7 +92,7 @@ export const MENU: readonly ItemMenu[] = [
     etiqueta: 'Calendario',
     ruta: '/calendario',
     icono: IconCalendarMonth,
-    descripcion: 'Lo planificado, lo ejecutado y lo verificado de los tres módulos.',
+    descripcion: 'Lo previsto y lo real de todos los módulos con fechas, sin mezclarlos con las fechas de registro.',
     roles: [],
   },
   {

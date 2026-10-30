@@ -12,3 +12,13 @@ export function usePendientes() {
     queryFn: () => ejecutar(api.GET('/api/dashboard/pendientes')),
   })
 }
+
+export type Indicadores = components['schemas']['IndicadoresTableroDto']
+
+/** Indicadores de todos los módulos (GET /api/dashboard/indicadores): conteos reales del backend. */
+export function useIndicadores() {
+  return useQuery({
+    queryKey: ['dashboard', 'indicadores'],
+    queryFn: () => ejecutar(api.GET('/api/dashboard/indicadores')),
+  })
+}

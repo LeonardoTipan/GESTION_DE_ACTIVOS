@@ -100,11 +100,11 @@ export function ProteccionEndpointsPage() {
   const puedeOperar = usePuedeOperar()
   const [anioHoy, mesHoy] = hoyLocal().split('-').map(Number)
   const hoy = { anio: anioHoy, mes: mesHoy }
-  const [filtros, setFiltros] = useState<{ page: number; anio?: number; estado?: EstadoPeriodo }>({ page: 1 })
-  const consulta = usePeriodos({ page: filtros.page, limit: 20, anio: filtros.anio, estado: filtros.estado })
+  const [filtros, setFiltros] = useState<{ page: number; anio?: number; mes?: number; estado?: EstadoPeriodo }>({ page: 1 })
+  const consulta = usePeriodos({ page: filtros.page, limit: 20, anio: filtros.anio, mes: filtros.mes, estado: filtros.estado })
   const [modalAbierto, modal] = useDisclosure()
   const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
-  const hayFiltros = filtros.anio !== undefined || filtros.estado !== undefined
+  const hayFiltros = filtros.anio !== undefined || filtros.mes !== undefined || filtros.estado !== undefined
 
   return (
     <Stack gap="md">
@@ -151,6 +151,15 @@ export function ProteccionEndpointsPage() {
           w={{ base: '100%', sm: 130 }}
         />
         <Select
+          label="Mes"
+          placeholder="Todos"
+          clearable
+          data={MESES.map((m, i) => ({ value: String(i + 1), label: m }))}
+          value={filtros.mes ? String(filtros.mes) : null}
+          onChange={(v) => cambiar({ mes: v ? Number(v) : undefined })}
+          w={{ base: '100%', sm: 150 }}
+        />
+        <Select
           label="Estado"
           placeholder="Todos"
           clearable
@@ -178,13 +187,15 @@ export function ProteccionEndpointsPage() {
         }
       >
         {(periodos) => (
-          <Table.ScrollContainer minWidth={760}>
+          <Table.ScrollContainer minWidth={1100}>
             <Table striped verticalSpacing="xs" fz="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Período</Table.Th>
                   <Table.Th>Estado</Table.Th>
                   <Table.Th>Asignado</Table.Th>
+                  <Table.Th>Cobertura</Table.Th>
+                  <Table.Th>Medición real</Table.Th>
                   <Table.Th>Observación</Table.Th>
                   <Table.Th>Abierto el</Table.Th>
                   <Table.Th>Reg.</Table.Th>
@@ -193,13 +204,25 @@ export function ProteccionEndpointsPage() {
               <Table.Tbody>
                 {periodos.map((p) => (
                   <Table.Tr key={p.id}>
-                    <Table.Td fw={600}>{nombrePeriodo(p.anio, p.mes)}</Table.Td>
+                    <Table.Td>
+                      <Anchor component={Link} to={`/proteccion-endpoints/${p.id}`} fw={600} size="sm">
+                        {nombrePeriodo(p.anio, p.mes)}
+                      </Anchor>
+                    </Table.Td>
                     <Table.Td>
                       <Badge size="sm" variant="light" color={INFO_ESTADO[p.estado].color}>
                         {INFO_ESTADO[p.estado].etiqueta}
                       </Badge>
                     </Table.Td>
                     <Table.Td>{p.responsable}</Table.Td>
+                    <Table.Td>
+                      {p.cobertura === null ? '—' : (
+                        <Badge variant="light" color={p.cobertura >= 95 ? 'green' : p.cobertura >= 80 ? 'yellow' : 'red'}>
+                          {p.cobertura} % · {p.equiposConAntivirus}/{p.totalActivos}
+                        </Badge>
+                      )}
+                    </Table.Td>
+                    <Table.Td>{p.fechaEjecucion ? formatearFechaHora(p.fechaEjecucion) : '—'}</Table.Td>
                     <Table.Td maw={320}>
                       <Text size="sm" lineClamp={2}>
                         {p.observacion ?? '—'}

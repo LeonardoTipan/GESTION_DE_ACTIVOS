@@ -1,4 +1,4 @@
-import type { EstadoEvaluacion } from './api.ts'
+import type { EstadoEvaluacion, SituacionEvaluacion } from './api.ts'
 
 type Info = { etiqueta: string; color: string }
 
@@ -11,3 +11,12 @@ export const ESTADOS = Object.keys(INFO_ESTADO) as EstadoEvaluacion[]
 
 /** Días del tablero (como el de Planificación de Mantenimientos). */
 export const DIAS_TABLERO = 60
+
+/** Situación para la bitácora (la calcula el backend): pendiente o vencida sin cerrar; cumplida a tiempo o tarde. */
+export const INFO_SITUACION: Record<SituacionEvaluacion, Info> = {
+  PENDIENTE: { etiqueta: 'Pendiente', color: 'blue' },
+  VENCIDA: { etiqueta: 'Vencida', color: 'red' },
+  CUMPLIDA: { etiqueta: 'Cumplida', color: 'green' },
+  CUMPLIDA_TARDE: { etiqueta: 'Cumplida tarde', color: 'orange' },
+}
+export const SITUACIONES = Object.keys(INFO_SITUACION) as SituacionEvaluacion[]

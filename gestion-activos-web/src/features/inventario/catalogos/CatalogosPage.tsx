@@ -23,6 +23,7 @@ type DatosCategoria = {
   aplicaRenovacion: boolean
   aplicaEvaluacion: boolean
   aplicaEndpoint: boolean
+  aplicaRespaldo: boolean
 }
 
 const CATEGORIAS = {
@@ -81,17 +82,24 @@ const CATEGORIAS = {
     },
     {
       clave: 'aplicaEvaluacion',
-      etiqueta: 'Evaluación de sistemas (próximamente)',
+      etiqueta: 'Evaluación de sistemas',
       requerido: false,
       tipo: 'interruptor',
-      descripcion: 'Preparada para Evaluación de Sistemas Productivos; el módulo aún no está disponible.',
+      descripcion: 'Sus activos operativos son sistemas elegibles en Evaluación de Sistemas Productivos.',
     },
     {
       clave: 'aplicaEndpoint',
-      etiqueta: 'Protección de endpoints (próximamente)',
+      etiqueta: 'Protección de endpoints',
       requerido: false,
       tipo: 'interruptor',
-      descripcion: 'Preparada para Protección de Endpoints; el módulo aún no está disponible.',
+      descripcion: 'Sus activos operativos son los equipos sujetos al control mensual de antivirus/EDR.',
+    },
+    {
+      clave: 'aplicaRespaldo',
+      etiqueta: 'Respaldos',
+      requerido: false,
+      tipo: 'interruptor',
+      descripcion: 'Sus activos operativos admiten planes de respaldo (los planes existentes se conservan).',
     },
   ],
   useLista: useCategorias,

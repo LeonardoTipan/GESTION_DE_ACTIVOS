@@ -234,6 +234,26 @@ export interface paths {
         patch: operations["CriticidadesController_update"];
         trace?: never;
     };
+    "/api/trazas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Trazas de un registro
+         * @description Versiones anteriores, anulaciones y reversiones de un registro de respaldos, mantenimientos o vulnerabilidades, del más reciente al más antiguo.
+         */
+        get: operations["TrazasController_listar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/respaldos/agenda": {
         parameters: {
             query?: never;
@@ -568,26 +588,6 @@ export interface paths {
         };
         /** Detalle de un registro anterior de respaldo */
         get: operations["RespaldosController_findOne"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/trazas": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Trazas de un registro
-         * @description Versiones anteriores, anulaciones y reversiones de un registro de respaldos, mantenimientos o vulnerabilidades, del más reciente al más antiguo.
-         */
-        get: operations["TrazasController_listar"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1499,6 +1499,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/renovaciones/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda del calendario
+         * @description Renovación planificada y caducidades que rigen (previsto) y renovaciones ejecutadas (real), en un rango.
+         */
+        get: operations["RenovacionesController_agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/renovaciones/{id}": {
         parameters: {
             query?: never;
@@ -1654,6 +1674,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/dashboard/indicadores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Indicadores de todos los módulos
+         * @description Conteos reales en la base: inventario, control de acceso, respaldos (fallidos y parciales de 30 días), mantenimientos (en curso, próximos 30 días, vencidos), vulnerabilidades, renovaciones (próximas y caducadas), períodos de endpoints y evaluaciones. Si un conteo falla responde 500; nunca devuelve 0 en su lugar.
+         */
+        get: operations["DashboardController_indicadores"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/proteccion-endpoints/periodos": {
         parameters: {
             query?: never;
@@ -1663,7 +1703,7 @@ export interface paths {
         };
         /**
          * Listar los períodos mensuales
-         * @description Paginado, del más reciente al más antiguo. Filtros por año y estado.
+         * @description Paginado, del más reciente al más antiguo. Filtros por año, mes y estado.
          */
         get: operations["PeriodosEndpointController_findAll"];
         put?: never;
@@ -1676,6 +1716,103 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/proteccion-endpoints/periodos/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda del calendario
+         * @description El mes de cada período (previsto) y la medición real (fecha de ejecución), en un rango.
+         */
+        get: operations["PeriodosEndpointController_agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proteccion-endpoints/periodos/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar un período */
+        get: operations["PeriodosEndpointController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/proteccion-endpoints/periodos/{id}/registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Guardar avance del registro (admin, analista)
+         * @description Totales, fecha real y responsable de la medición, verificable, repositorio y observación. Deja el período EN_PROGRESO; no lo cierra. Un período CERRADO hay que reabrirlo antes.
+         */
+        patch: operations["PeriodosEndpointController_registrar"];
+        trace?: never;
+    };
+    "/api/proteccion-endpoints/periodos/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cerrar el período (admin, analista)
+         * @description ABIERTO o EN_PROGRESO → CERRADO. Exige total de activos (≥ 1), equipos con antivirus (≤ total), fecha real y responsable de la medición, verificable y repositorio. El mensaje dice qué falta.
+         */
+        patch: operations["PeriodosEndpointController_cerrar"];
+        trace?: never;
+    };
+    "/api/proteccion-endpoints/periodos/{id}/reabrir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reabrir (solo admin)
+         * @description CERRADO → EN_PROGRESO, con motivo. Los datos se conservan para corregirlos.
+         */
+        patch: operations["PeriodosEndpointController_reabrir"];
         trace?: never;
     };
     "/api/evaluaciones-sistemas": {
@@ -1700,6 +1837,143 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/bitacora/general": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bitácora General por semestres
+         * @description Por semestre (S1 ene–jun, S2 jul–dic): planificadas en su semestre PLANIFICADO (fecha programada), cumplidas a tiempo y tarde, pendientes, vencidas, cerradas por semestre REAL (fecha de las pruebas) y % de cumplimiento. Las anuladas no cuentan.
+         */
+        get: operations["EvaluacionesController_bitacoraGeneral"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/bitacora/especifica": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Bitácora Específica
+         * @description Una fila por evaluación (sin anuladas), con su semestre planificado y real y su situación. Filtros: año y semestre planificados, sistema, asignado y situación. Paginada.
+         */
+        get: operations["EvaluacionesController_bitacoraEspecifica"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/agenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Agenda del calendario
+         * @description Paso a producción programado (previsto) y pruebas de seguridad reales, en un rango.
+         */
+        get: operations["EvaluacionesController_agenda"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Consultar una evaluación */
+        get: operations["EvaluacionesController_findOne"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/{id}/ejecucion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Guardar avance de la ejecución (admin, analista)
+         * @description Fecha real de las pruebas, informe, repositorio y observación. Deja la evaluación EN_PROGRESO; no la cierra. Una CERRADA hay que reabrirla antes.
+         */
+        patch: operations["EvaluacionesController_registrarEjecucion"];
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/{id}/cerrar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cerrar la evaluación (admin, analista)
+         * @description ABIERTO o EN_PROGRESO → CERRADO. Exige la fecha REAL de las pruebas (no futura), el informe (verificable) y su repositorio. Si las pruebas fueron posteriores a la fecha programada, también la observación (≥ 20 caracteres). El mensaje dice qué falta.
+         */
+        patch: operations["EvaluacionesController_cerrar"];
+        trace?: never;
+    };
+    "/api/evaluaciones-sistemas/{id}/reabrir": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reabrir (solo admin)
+         * @description CERRADO → EN_PROGRESO, con motivo. Los datos se conservan para corregirlos.
+         */
+        patch: operations["EvaluacionesController_reabrir"];
         trace?: never;
     };
 }
@@ -1764,6 +2038,8 @@ export interface components {
             aplicaEvaluacion: boolean;
             /** @description Elegible en Protección de Endpoints. */
             aplicaEndpoint: boolean;
+            /** @description Elegible en Respaldos. */
+            aplicaRespaldo: boolean;
         };
         CriticidadDto: {
             /** @example 3 */
@@ -2175,6 +2451,8 @@ export interface components {
             aplicaEvaluacion?: boolean;
             /** @description Sus activos (operativos) son equipos sujetos a Protección de Endpoints. Falso si se omite. */
             aplicaEndpoint?: boolean;
+            /** @description Sus activos (operativos) admiten planes de respaldo. Falso si se omite. */
+            aplicaRespaldo?: boolean;
         };
         UpdateCategoriaDto: {
             /** @example Hardware */
@@ -2200,6 +2478,8 @@ export interface components {
             aplicaEvaluacion?: boolean;
             /** @description Sus activos (operativos) son equipos sujetos a Protección de Endpoints. Falso si se omite. */
             aplicaEndpoint?: boolean;
+            /** @description Sus activos (operativos) admiten planes de respaldo. Falso si se omite. */
+            aplicaRespaldo?: boolean;
         };
         CreateCriticidadDto: {
             /** @example Alta */
@@ -2208,6 +2488,33 @@ export interface components {
         UpdateCriticidadDto: {
             /** @example Alta */
             nivel?: string;
+        };
+        CambioCampoDto: {
+            /**
+             * @description "__estado_registro" en anulaciones y reversiones.
+             * @example medio
+             */
+            campo: string;
+            /** @example CINTA_LTO8 */
+            antes: Record<string, never>;
+            /** @example NUBE_INMUTABLE */
+            despues: Record<string, never>;
+        };
+        TrazaDto: {
+            id: number;
+            /** @enum {string} */
+            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PERIODO_ENDPOINT" | "EVALUACION_SISTEMA" | "PLAN_MANTENIMIENTO" | "CATEGORIA" | "CRITICIDAD";
+            registroId: number;
+            /** @description Versión del registro ANTES del cambio. */
+            version: number;
+            /** @enum {string} */
+            accion: "REGISTRAR" | "MODIFICAR" | "ANULAR" | "REVERSAR";
+            motivo: string;
+            cambios: components["schemas"]["CambioCampoDto"][];
+            /** @example admin.test */
+            responsable: string;
+            /** Format: date-time */
+            fecha: string;
         };
         ActivoBreveDto: {
             id: number;
@@ -2234,7 +2541,7 @@ export interface components {
              */
             clave: string;
             /** @enum {string} */
-            modulo: "respaldos" | "mantenimientos" | "vulnerabilidades";
+            modulo: "respaldos" | "mantenimientos" | "vulnerabilidades" | "renovaciones" | "endpoints" | "evaluaciones";
             /**
              * @description 1 planificación · 2 ejecución o tratamiento · 3 verificación o restauración.
              * @enum {number}
@@ -2260,7 +2567,8 @@ export interface components {
             fueraDePlazo: boolean;
             /** @example jperez */
             responsable: string | null;
-            activo: components["schemas"]["ActivoBreveDto"];
+            /** @description null = el evento no es de un activo (período mensual de endpoints). */
+            activo: components["schemas"]["ActivoBreveDto"] | null;
             /**
              * @description Ruta del registro en la aplicación.
              * @example /mantenimientos/12
@@ -2828,33 +3136,6 @@ export interface components {
             data: components["schemas"]["RespaldoDto"][];
             meta: components["schemas"]["PaginationMetaDto"];
         };
-        CambioCampoDto: {
-            /**
-             * @description "__estado_registro" en anulaciones y reversiones.
-             * @example medio
-             */
-            campo: string;
-            /** @example CINTA_LTO8 */
-            antes: Record<string, never>;
-            /** @example NUBE_INMUTABLE */
-            despues: Record<string, never>;
-        };
-        TrazaDto: {
-            id: number;
-            /** @enum {string} */
-            entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PERIODO_ENDPOINT" | "EVALUACION_SISTEMA" | "PLAN_MANTENIMIENTO";
-            registroId: number;
-            /** @description Versión del registro ANTES del cambio. */
-            version: number;
-            /** @enum {string} */
-            accion: "REGISTRAR" | "MODIFICAR" | "ANULAR" | "REVERSAR";
-            motivo: string;
-            cambios: components["schemas"]["CambioCampoDto"][];
-            /** @example admin.test */
-            responsable: string;
-            /** Format: date-time */
-            fecha: string;
-        };
         ProximaIntervencionDto: {
             /** @enum {string} */
             origen: "PLAN" | "PROGRAMADO";
@@ -2900,11 +3181,6 @@ export interface components {
              */
             fechaInicio: string;
             /**
-             * Format: date-time
-             * @description null = sin más intervenciones previstas.
-             */
-            proximaFecha?: string | null;
-            /**
              * @description Asignado: quién debe realizarlo.
              * @example Mesa de Servicios
              */
@@ -2937,6 +3213,18 @@ export interface components {
             activo: components["schemas"]["ActivoBreveDto"];
             /** @enum {string} */
             estado: "VIGENTE" | "SUSPENDIDO";
+            /**
+             * Format: date-time
+             * @description Próxima intervención, CALCULADA (no se escribe): fin real de la última ejecución finalizada + período; sin ninguna, la fecha de inicio. null = sin más intervenciones (ÚNICA ya ejecutada).
+             */
+            proximaFecha: string | null;
+            /**
+             * Format: date-time
+             * @description Fin REAL de la última ejecución finalizada (no anulada).
+             */
+            ultimaFinalizacion: string | null;
+            /** @description Ejecución pendiente (programada o en ejecución) del plan, si la hay. */
+            ejecucionPendienteId: number | null;
             /** @description Semestre y año PLANIFICADOS (de la fecha de inicio). */
             semestrePlanificado: components["schemas"]["SemestreDto"];
             /** @description Ejecuciones COMPLETADAS (finalizadas, no anuladas). */
@@ -2966,11 +3254,6 @@ export interface components {
              * @description Fecha de inicio PLANIFICADA (fija). De ella salen el semestre (S1 ene–jun, S2 jul–dic) y el año planificados.
              */
             fechaInicio: string;
-            /**
-             * Format: date-time
-             * @description Próxima intervención prevista; al crear, la fecha de inicio.
-             */
-            proximaFecha?: string;
             /**
              * @description Asignado: quién debe realizarlo.
              * @example Mesa de Servicios
@@ -3009,11 +3292,6 @@ export interface components {
              */
             fechaInicio?: string;
             /**
-             * Format: date-time
-             * @description Próxima intervención prevista; al crear, la fecha de inicio.
-             */
-            proximaFecha?: string;
-            /**
              * @description Asignado: quién debe realizarlo.
              * @example Mesa de Servicios
              */
@@ -3033,16 +3311,23 @@ export interface components {
         ProgramarDesdePlanDto: {
             /**
              * Format: date-time
-             * @description Fecha prevista de esta ejecución; por defecto, la próxima fecha del plan. Obligatoria si es adicional.
+             * @description Inicio previsto; por defecto, la próxima intervención del plan. Obligatorio si es adicional.
              */
             fecha?: string;
-            /** @description true = ejecución adicional: no adelanta la próxima fecha del período. */
+            /**
+             * Format: date-time
+             * @description Límite previsto; por defecto, inicio + plazo del plan.
+             */
+            fechaLimite?: string;
+            /** @description true = ejecución adicional (admite otra pendiente del mismo plan): exige fecha y justificación. */
             adicional?: boolean;
+            /** @description Justificación de la ejecución adicional (al menos 20 caracteres); queda en la auditoría. */
+            justificacion?: string;
         };
         ProgramacionDesdePlanDto: {
             /** @description Mantenimiento creado (fase PROGRAMADO). */
             mantenimientoId: number;
-            /** @description El plan, con la próxima fecha ya adelantada. */
+            /** @description El plan (su próxima intervención no cambia al programar). */
             plan: components["schemas"]["PlanMantenimientoDto"];
         };
         PeriodoBitacoraDto: {
@@ -3304,6 +3589,10 @@ export interface components {
              * @description Límite previsto; por defecto, inicio + plazo de la planificación.
              */
             fechaLimite?: string;
+            /** @description true = ejecución ADICIONAL: admite otra pendiente del mismo plan; exige la justificación. */
+            adicional?: boolean;
+            /** @description Justificación de la ejecución adicional (al menos 20 caracteres); queda en la auditoría. */
+            justificacion?: string;
         };
         IniciarMantenimientoDto: {
             /**
@@ -4282,6 +4571,81 @@ export interface components {
              */
             total: number;
         };
+        IndicadoresInventarioDto: {
+            /** @description Activos registrados que no están dados de baja. */
+            total: number;
+            /** @description De ellos, operativos (sin los estados no operativos configurados). */
+            operativos: number;
+        };
+        IndicadoresAccesosDto: {
+            abiertas: number;
+            /** @description PENDIENTE (en gestión). */
+            enGestion: number;
+            cerradas: number;
+        };
+        IndicadoresRespaldosDto: {
+            /** @description Planes vigentes, no anulados. */
+            planesVigentes: number;
+            /** @description Ejecuciones FALLIDAS (no anuladas) de los últimos 30 días. */
+            fallidas30Dias: number;
+            /** @description Ejecuciones PARCIALES (no anuladas) de los últimos 30 días. */
+            parciales30Dias: number;
+        };
+        IndicadoresMantenimientosDto: {
+            /** @description Ejecuciones PROGRAMADAS (pendientes de iniciar), no anuladas. */
+            programados: number;
+            enEjecucion: number;
+            finalizados: number;
+            /** @description Planes vigentes sin ejecución pendiente con la próxima intervención en los próximos 30 días. */
+            proximos30Dias: number;
+            /** @description Planes vigentes sin ejecución pendiente con la próxima intervención ya pasada. */
+            planesVencidos: number;
+            /** @description Ejecuciones pendientes con el plazo (fecha límite) vencido. */
+            ejecucionesVencidas: number;
+        };
+        IndicadoresVulnerabilidadesDto: {
+            abiertas: number;
+            enProgreso: number;
+            remediadas: number;
+            /** @description Pendientes con la fecha límite vencida. */
+            vencidas: number;
+            /** @description Pendientes de riesgo CRÍTICO. */
+            criticasPendientes: number;
+        };
+        IndicadoresRenovacionesDto: {
+            /** @description Pendientes (ABIERTO + EN_PROGRESO), no anuladas. */
+            pendientes: number;
+            cerradas: number;
+            /** @description Elementos próximos a caducar (umbral de aviso). */
+            proximasAVencer: number;
+            /** @description Elementos ya caducados (lo que rige hoy, no sustituido). */
+            caducadas: number;
+            /** @description Umbral de aviso en días. */
+            diasAviso: number;
+        };
+        IndicadoresProcesoDto: {
+            abiertos: number;
+            enProgreso: number;
+            cerrados: number;
+        };
+        IndicadoresEvaluacionesDto: {
+            abiertos: number;
+            enProgreso: number;
+            cerrados: number;
+            /** @description Pendientes con la fecha programada de paso a producción ya pasada. */
+            vencidas: number;
+        };
+        IndicadoresTableroDto: {
+            inventario: components["schemas"]["IndicadoresInventarioDto"];
+            accesos: components["schemas"]["IndicadoresAccesosDto"];
+            respaldos: components["schemas"]["IndicadoresRespaldosDto"];
+            mantenimientos: components["schemas"]["IndicadoresMantenimientosDto"];
+            vulnerabilidades: components["schemas"]["IndicadoresVulnerabilidadesDto"];
+            renovaciones: components["schemas"]["IndicadoresRenovacionesDto"];
+            /** @description Períodos mensuales de Protección de Endpoints. */
+            endpoints: components["schemas"]["IndicadoresProcesoDto"];
+            evaluaciones: components["schemas"]["IndicadoresEvaluacionesDto"];
+        };
         PeriodoEndpointDto: {
             /**
              * @description Sube con cada modificación.
@@ -4307,6 +4671,24 @@ export interface components {
             observacion: string | null;
             /** @enum {string} */
             estado: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
+            totalActivos: number | null;
+            equiposConAntivirus: number | null;
+            /**
+             * Format: date-time
+             * @description Fecha real de la medición.
+             */
+            fechaEjecucion: string | null;
+            /** @description Quién realizó la medición. */
+            responsableEjecucion: string | null;
+            /** @description «Verificable». */
+            evidencia: string | null;
+            /** @description «Repositorio Verificable». */
+            repositorioVerificable: string | null;
+            cerradoPor: string | null;
+            /** @description Calculada (no se guarda): equipos con antivirus ÷ total × 100, con 1 decimal. */
+            cobertura: number | null;
+            /** @description Calculado: total − con antivirus. */
+            equiposSinAntivirus: number | null;
         };
         PaginatedPeriodoEndpointDto: {
             data: components["schemas"]["PeriodoEndpointDto"][];
@@ -4327,6 +4709,47 @@ export interface components {
             responsable: string;
             /** @example Corte con el inventario de GLPI del último día hábil. */
             observacion?: string;
+        };
+        DatosRegistroPeriodoDto: {
+            /**
+             * @description Total de equipos sujetos al control según el inventario del mes.
+             * @example 26
+             */
+            totalActivos?: number;
+            /**
+             * @description Equipos con antivirus/EDR activo; no puede superar el total.
+             * @example 25
+             */
+            equiposConAntivirus?: number;
+            /**
+             * Format: date-time
+             * @description Fecha REAL en que se hizo la medición: la indica el usuario (no futura, no anterior al mes del período).
+             */
+            fechaEjecucion?: string;
+            /**
+             * @description Quién realizó la medición del mes.
+             * @example Soporte TIC · J. Pérez
+             */
+            responsableEjecucion?: string;
+            /**
+             * @description «Verificable»: nombre del archivo Excel del inventario de equipos del mes (la aplicación no guarda archivos).
+             * @example Inventario de equipos octubre 2026.xlsx
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta o URL http(s).
+             * @example Carpeta Compartida TICs/Antivirus
+             */
+            repositorioVerificable?: string;
+            /**
+             * @description Observación del período (la de la apertura, ampliada).
+             * @example Un equipo en reparación sin antivirus.
+             */
+            observacion?: string;
+        };
+        ReabrirPeriodoDto: {
+            /** @example El inventario del mes tenía equipos duplicados: hay que corregir el total. */
+            motivo: string;
         };
         EvaluacionSistemaDto: {
             /**
@@ -4356,10 +4779,72 @@ export interface components {
             estado: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
             /** @description Pendiente y con la fecha programada ya pasada. */
             vencida: boolean;
+            /**
+             * Format: date-time
+             * @description Fecha real de las pruebas de seguridad.
+             */
+            fechaPruebas: string | null;
+            /** @description «Verificable»: informe de las pruebas. */
+            evidencia: string | null;
+            /** @description «Repositorio Verificable». */
+            repositorioVerificable: string | null;
+            observacion: string | null;
+            cerradoPor: string | null;
+            /** @description Las pruebas fueron posteriores a la fecha programada de paso a producción. */
+            tardia: boolean;
+            /**
+             * @description PENDIENTE / VENCIDA (sin cerrar) · CUMPLIDA / CUMPLIDA_TARDE (cerrada).
+             * @enum {string}
+             */
+            situacion: "PENDIENTE" | "VENCIDA" | "CUMPLIDA" | "CUMPLIDA_TARDE";
+            /**
+             * @description Semestre planificado (fecha programada).
+             * @example S2-2026
+             */
+            semestrePlanificado: string;
+            /**
+             * @description Semestre real (fecha de las pruebas).
+             * @example S2-2026
+             */
+            semestreReal: string | null;
         };
         PaginatedEvaluacionSistemaDto: {
             data: components["schemas"]["EvaluacionSistemaDto"][];
             meta: components["schemas"]["PaginationMetaDto"];
+        };
+        PeriodoBitacoraEvaluacionDto: {
+            anio: number;
+            /**
+             * @description null = el año entero.
+             * @enum {number|null}
+             */
+            semestre: 1 | 2 | null;
+            /** @example S1-2026 */
+            etiqueta: string;
+        };
+        ResumenBitacoraEvaluacionDto: {
+            periodo: components["schemas"]["PeriodoBitacoraEvaluacionDto"];
+            /** @description Planificadas en el semestre (fecha programada de paso a producción), no anuladas. */
+            planificadas: number;
+            /** @description De ellas, cerradas. */
+            cumplidas: number;
+            /** @description Cumplidas con las pruebas en o antes de la fecha programada. */
+            cumplidasATiempo: number;
+            /** @description Cumplidas con las pruebas después de la fecha programada (justificadas). */
+            cumplidasTarde: number;
+            /** @description planificadas − cumplidas. */
+            pendientes: number;
+            /** @description De las pendientes, con la fecha programada ya pasada. */
+            vencidas: number;
+            /** @description Cerradas cuyas pruebas fueron en este semestre REAL. */
+            cerradasEnElSemestre: number;
+            /** @description cumplidas / planificadas × 100, 1 decimal; null sin planificadas. */
+            cumplimiento: number | null;
+        };
+        BitacoraEvaluacionDto: {
+            semestres: components["schemas"]["ResumenBitacoraEvaluacionDto"][];
+            /** @description Los semestres pedidos en conjunto. */
+            total: components["schemas"]["ResumenBitacoraEvaluacionDto"];
         };
         PlanificarEvaluacionDto: {
             /** @description Sistema: activo operativo de una categoría con aplicaEvaluacion. */
@@ -4379,6 +4864,32 @@ export interface components {
              * @example Módulo de nómina v2.1: pruebas de autenticación, autorización e inyección.
              */
             descripcion: string;
+        };
+        DatosEjecucionEvaluacionDto: {
+            /**
+             * Format: date-time
+             * @description Fecha y hora REALES de las pruebas de seguridad: las indica el usuario (pueden ser históricas; no futuras).
+             */
+            fechaPruebas?: string;
+            /**
+             * @description «Verificable»: informe de las pruebas.
+             * @example Informe de pruebas de seguridad nómina v2.1.pdf
+             */
+            evidencia?: string;
+            /**
+             * @description «Repositorio Verificable»: carpeta o URL http(s).
+             * @example Carpeta Compartida TICs/Seguridad
+             */
+            repositorioVerificable?: string;
+            /**
+             * @description Observaciones. Obligatoria (≥ 20 caracteres) al cerrar si las pruebas fueron posteriores a la fecha programada.
+             * @example Aprobado con observaciones menores; el proveedor entregó la versión dos días tarde.
+             */
+            observacion?: string;
+        };
+        ReabrirEvaluacionDto: {
+            /** @example El informe adjunto correspondía a otra versión del sistema. */
+            motivo: string;
         };
     };
     responses: never;
@@ -4456,7 +4967,7 @@ export interface operations {
                 /** @description true = solo equipos OPERATIVOS: ni dados de baja ni en un estado de la lista ESTADOS_NO_OPERATIVOS. Es lo que usan los selectores de respaldos, mantenimientos y vulnerabilidades. */
                 operativos?: boolean;
                 /** @description Solo activos cuya categoría está habilitada para ese módulo (Catálogos > Categorías). Lo usan los selectores de Mantenimientos, Vulnerabilidades y Renovaciones, junto con operativos=true. */
-                aplica?: "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "EVALUACION" | "ENDPOINT";
+                aplica?: "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "EVALUACION" | "ENDPOINT" | "RESPALDO";
             };
             header?: never;
             path?: never;
@@ -4603,7 +5114,7 @@ export interface operations {
                 /** @description true = cuenta solo los activos operativos (los que admiten operaciones nuevas). */
                 operativos?: boolean;
                 /** @description Solo categorías habilitadas para ese módulo (Catálogos > Categorías). */
-                aplica?: "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "EVALUACION" | "ENDPOINT";
+                aplica?: "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "EVALUACION" | "ENDPOINT" | "RESPALDO";
             };
             header?: never;
             path?: never;
@@ -5258,6 +5769,46 @@ export interface operations {
             };
             /** @description El nivel ya existe. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    TrazasController_listar: {
+        parameters: {
+            query: {
+                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PERIODO_ENDPOINT" | "EVALUACION_SISTEMA" | "PLAN_MANTENIMIENTO" | "CATEGORIA" | "CRITICIDAD";
+                registroId: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrazaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6387,46 +6938,6 @@ export interface operations {
                 };
             };
             404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-        };
-    };
-    TrazasController_listar: {
-        parameters: {
-            query: {
-                entidad: "PLAN_RESPALDO" | "EJECUCION_RESPALDO" | "RESTAURACION" | "MANTENIMIENTO" | "VULNERABILIDAD" | "RENOVACION" | "PERIODO_ENDPOINT" | "EVALUACION_SISTEMA" | "PLAN_MANTENIMIENTO";
-                registroId: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TrazaDto"][];
-                };
-            };
-            /** @description Token ausente o inválido. */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorDto"];
-                };
-            };
-            /** @description Rol insuficiente. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -9255,6 +9766,52 @@ export interface operations {
             };
         };
     };
+    RenovacionesController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     RenovacionesController_findOne: {
         parameters: {
             query?: never;
@@ -9687,12 +10244,50 @@ export interface operations {
             };
         };
     };
+    DashboardController_indicadores: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IndicadoresTableroDto"];
+                };
+            };
+            /** @description Falta el token o no es válido */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Algún conteo falló */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     PeriodosEndpointController_findAll: {
         parameters: {
             query?: {
                 page?: number;
                 limit?: number;
                 anio?: number;
+                mes?: number;
                 estado?: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
                 /** @description true = incluye los anulados (por defecto se ocultan). */
                 incluirAnulados?: boolean;
@@ -9797,6 +10392,273 @@ export interface operations {
             };
         };
     };
+    PeriodosEndpointController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PeriodosEndpointController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodoEndpointDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PeriodosEndpointController_registrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatosRegistroPeriodoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodoEndpointDto"];
+                };
+            };
+            /** @description Datos incoherentes (p. ej. más equipos con antivirus que el total). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Período cerrado o anulado, o modificado entretanto. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PeriodosEndpointController_cerrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatosRegistroPeriodoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodoEndpointDto"];
+                };
+            };
+            /** @description Falta algún dato o no es coherente. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    PeriodosEndpointController_reabrir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReabrirPeriodoDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeriodoEndpointDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description El período no está cerrado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
     EvaluacionesController_findAll: {
         parameters: {
             query?: {
@@ -9806,6 +10668,8 @@ export interface operations {
                 q?: string;
                 /** @description «Sistema». */
                 activoId?: number;
+                /** @description «Asignado» (contiene el texto). */
+                responsable?: string;
                 estado?: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
                 /** @description true = solo pendientes (ABIERTO o EN_PROGRESO). */
                 pendientes?: boolean;
@@ -9909,6 +10773,379 @@ export interface operations {
                 };
             };
             /** @description El sistema ya tiene una evaluación pendiente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_bitacoraGeneral: {
+        parameters: {
+            query: {
+                anio: number;
+                /** @description S1 (ene–jun) o S2 (jul–dic); sin él, los dos y el total del año. */
+                semestre?: 1 | 2;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BitacoraEvaluacionDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_bitacoraEspecifica: {
+        parameters: {
+            query?: {
+                page?: number;
+                limit?: number;
+                /** @description Año planificado. */
+                anio?: number;
+                /** @description Semestre planificado (exige el año). */
+                semestre?: 1 | 2;
+                /** @description «Sistema». */
+                activoId?: number;
+                /** @description «Asignado» (contiene el texto). */
+                responsable?: string;
+                situacion?: "PENDIENTE" | "VENCIDA" | "CUMPLIDA" | "CUMPLIDA_TARDE";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaginatedEvaluacionSistemaDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_agenda: {
+        parameters: {
+            query: {
+                desde: string;
+                hasta: string;
+                /** @description Sin capa: las tres. */
+                capa?: 1 | 2 | 3;
+                categoriaId?: number;
+                /** @description Contiene (responsable o técnico). */
+                responsable?: string;
+                estado?: "PROGRAMADO" | "VENCIDO" | "EN_CURSO" | "COMPLETADO" | "FALLIDO" | "CANCELADO";
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EventoAgendaDto"][];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_findOne: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluacionSistemaDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_registrarEjecucion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatosEjecucionEvaluacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluacionSistemaDto"];
+                };
+            };
+            /** @description Fecha futura o repositorio no válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Evaluación cerrada o anulada, o modificada entretanto. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_cerrar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatosEjecucionEvaluacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluacionSistemaDto"];
+                };
+            };
+            /** @description Falta algún dato o no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Estado no permitido. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+        };
+    };
+    EvaluacionesController_reabrir: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReabrirEvaluacionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvaluacionSistemaDto"];
+                };
+            };
+            /** @description Token ausente o inválido. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description Rol insuficiente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorDto"];
+                };
+            };
+            /** @description La evaluación no está cerrada. */
             409: {
                 headers: {
                     [name: string]: unknown;

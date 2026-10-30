@@ -4,11 +4,12 @@ import { menuPara } from '../../app/navegacion.ts'
 import { ETIQUETA_ROL } from '../auth/roles.ts'
 import { useUsuarioActual } from '../auth/use-usuario-actual.ts'
 import { usePendientes } from './api.ts'
+import { PanelIndicadores } from './PanelIndicadores.tsx'
 import { pendientesDe, textoPendientes } from './pendientes.ts'
 
 /**
  * Bienvenida y accesos a los módulos; las tarjetas de los módulos con trámites muestran
- * cuántos hay pendientes. Los indicadores completos llegan en la Fase 4.
+ * cuántos hay pendientes; debajo, los indicadores reales de todos los módulos.
  */
 export function DashboardPage() {
   const { data: usuario } = useUsuarioActual()
@@ -63,6 +64,7 @@ export function DashboardPage() {
           )
         })}
       </SimpleGrid>
+      <PanelIndicadores />
     </Stack>
   )
 }

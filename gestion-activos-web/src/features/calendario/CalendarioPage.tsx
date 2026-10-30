@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { NOMBRE_MODULO, type Modulo } from '../../shared/calendario/agenda.ts'
 import { Calendario } from '../../shared/calendario/Calendario.tsx'
 
-const MODULOS: Modulo[] = ['respaldos', 'mantenimientos', 'vulnerabilidades']
+const MODULOS: Modulo[] = ['respaldos', 'mantenimientos', 'vulnerabilidades', 'renovaciones', 'endpoints', 'evaluaciones']
 
 /**
  * Calendario general del proyecto: lo planificado, lo ejecutado realmente y

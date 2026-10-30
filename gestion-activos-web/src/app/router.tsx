@@ -2,6 +2,7 @@ import { createBrowserRouter } from 'react-router'
 import { AuthGate } from '../features/auth/AuthGate.tsx'
 import { RequireRole } from '../features/auth/RequireRole.tsx'
 import { DashboardPage } from '../features/dashboard/DashboardPage.tsx'
+import { EvaluacionPage } from '../features/evaluacion-sistemas/EvaluacionPage.tsx'
 import { EvaluacionSistemasPage } from '../features/evaluacion-sistemas/EvaluacionSistemasPage.tsx'
 import { ActivosPage } from '../features/inventario/activos/ActivosPage.tsx'
 import { CatalogosPage } from '../features/inventario/catalogos/CatalogosPage.tsx'
@@ -13,6 +14,7 @@ import { ControlAccesoDetallePage } from '../features/control-acceso/ControlAcce
 import { ControlAccesoPage } from '../features/control-acceso/ControlAccesoPage.tsx'
 import { MantenimientoPage } from '../features/mantenimientos/MantenimientoPage.tsx'
 import { MantenimientosPage } from '../features/mantenimientos/MantenimientosPage.tsx'
+import { PeriodoPage } from '../features/proteccion-endpoints/PeriodoPage.tsx'
 import { ProteccionEndpointsPage } from '../features/proteccion-endpoints/ProteccionEndpointsPage.tsx'
 import { RespaldosPage } from '../features/respaldos/RespaldosPage.tsx'
 import { VulnerabilidadPage } from '../features/vulnerabilidades/VulnerabilidadPage.tsx'
@@ -42,9 +44,11 @@ export const router = createBrowserRouter([
       { path: 'control-acceso/:id', element: <ControlAccesoDetallePage /> },
       { path: 'renovaciones', element: <RenovacionesPage /> },
       { path: 'renovaciones/:id', element: <RenovacionPage /> },
-      // Fase 1 (planificación) de los dos módulos nuevos; la fase 2 se añadirá después.
+      // Los dos módulos nuevos: lista (fase 1) y ficha con la fase 2 (ejecución y cierre).
       { path: 'proteccion-endpoints', element: <ProteccionEndpointsPage /> },
+      { path: 'proteccion-endpoints/:id', element: <PeriodoPage /> },
       { path: 'evaluacion-sistemas-productivos', element: <EvaluacionSistemasPage /> },
+      { path: 'evaluacion-sistemas-productivos/:id', element: <EvaluacionPage /> },
       { path: 'calendario', element: <CalendarioPage /> },
       {
         path: 'catalogos',

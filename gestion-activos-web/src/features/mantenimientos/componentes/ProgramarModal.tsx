@@ -1,4 +1,4 @@
-import { Alert, Button, Card, Group, Modal, Select, Stack, Text } from '@mantine/core'
+import { Alert, Button, Card, Group, Modal, Select, Stack, Text, Textarea } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDebouncedValue } from '@mantine/hooks'
@@ -59,11 +59,13 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
     planId: string | null
     fecha: string | null
     fechaLimite: string | null
+    justificacion: string
   }>({
     initialValues: {
       planId: null,
       fecha: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 08:00:00` : null,
       fechaLimite: diaInicial ? `${diaInicial.format('YYYY-MM-DD')} 18:00:00` : null,
+      justificacion: '',
     },
     validate: {
       planId: (v) => (v ? null : 'Elige la planificación'),
@@ -72,9 +74,15 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
         v && valores.fecha && instante(v).isBefore(instante(valores.fecha))
           ? 'La fecha límite no puede ser anterior al inicio previsto'
           : null,
+      // Ya hay una ejecución pendiente del plan: solo una ADICIONAL justificada (regla del backend).
+      justificacion: (v, valores) => {
+        const elegido = planes.data?.data.find((p) => String(p.id) === valores.planId)
+        return elegido?.ejecucionPendienteId != null && v.trim().length < 20 ? 'Justifique la ejecución adicional (mínimo 20 caracteres)' : null
+      },
     },
   })
   const plan = planes.data?.data.find((p) => String(p.id) === form.values.planId)
+  const conPendiente = plan?.ejecucionPendienteId != null
 
   const enviar = form.onSubmit((v) =>
     programar.mutate(
@@ -82,6 +90,7 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
         planId: Number(v.planId),
         fecha: fechaHoraLocalAIso(v.fecha!),
         ...(v.fechaLimite ? { fechaLimite: fechaHoraLocalAIso(v.fechaLimite) } : {}),
+        ...(conPendiente ? { adicional: true, justificacion: v.justificacion.trim() } : {}),
       },
       {
         onSuccess: (m) => {
@@ -133,6 +142,15 @@ function FormProgramar({ onClose, activoInicial, diaInicial, onProgramado }: Omi
               {plan.actividades}
             </Text>
           </Card>
+        )}
+        {conPendiente && (
+          <>
+            <Alert color="orange" title={`La planificación ya tiene la ejecución #${plan?.ejecucionPendienteId} pendiente`}>
+              Solo se admite una ejecución pendiente por planificación. Si hace falta otra a la vez, se registra como
+              ejecución ADICIONAL con su justificación (queda en la auditoría). La próxima intervención no cambia.
+            </Alert>
+            <Textarea label="Justificación de la ejecución adicional" withAsterisk autosize minRows={2} {...form.getInputProps("justificacion")} />
+          </>
         )}
         {planes.data && planes.data.meta.total === 0 && !q && (
           <Alert color="yellow">

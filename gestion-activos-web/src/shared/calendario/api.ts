@@ -23,6 +23,12 @@ function agendaDe(modulo: Modulo, query: FiltrosAgenda): Promise<EventoAgenda[]>
       return ejecutar(api.GET('/api/mantenimientos/agenda', { params: { query } }))
     case 'vulnerabilidades':
       return ejecutar(api.GET('/api/vulnerabilidades/agenda', { params: { query } }))
+    case 'renovaciones':
+      return ejecutar(api.GET('/api/renovaciones/agenda', { params: { query } }))
+    case 'endpoints':
+      return ejecutar(api.GET('/api/proteccion-endpoints/periodos/agenda', { params: { query } }))
+    case 'evaluaciones':
+      return ejecutar(api.GET('/api/evaluaciones-sistemas/agenda', { params: { query } }))
   }
 }
 

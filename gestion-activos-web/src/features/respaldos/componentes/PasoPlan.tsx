@@ -314,12 +314,13 @@ export function PasoPlan({ planes, listado, tablero }: { planes: Plan[]; listado
                   />
                 ) : (
                   <SeleccionActivos
+                    aplica="RESPALDO"
                     etiqueta="Activos a respaldar"
                     value={seleccion}
                     onChange={setSeleccion}
                     // Regla del módulo: un activo tiene como mucho un plan vigente.
                     noElegible={(a) => (conPlan.has(a.id) ? 'Ya tiene un plan de respaldo vigente.' : null)}
-                    ayuda="Solo se ofrecen activos operativos; los que ya tienen plan aparecen deshabilitados. Los parámetros siguientes se aplican a todos los seleccionados."
+                    ayuda="Solo se ofrecen activos operativos de categorías habilitadas para Respaldos (Catálogos > Categorías); los que ya tienen plan aparecen deshabilitados. Los parámetros siguientes se aplican a todos los seleccionados."
                   />
                 )}
                 <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">

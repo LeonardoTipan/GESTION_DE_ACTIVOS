@@ -1,6 +1,6 @@
 import { Alert, Anchor, Badge, Button, Center, Group, Loader, ScrollArea, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
-import { IconCalendarStats, IconPlus, IconSearch } from '@tabler/icons-react'
+import { IconBook, IconCalendarStats, IconPlus, IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
 import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
@@ -11,6 +11,7 @@ import { BadgeRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useActivos } from '../inventario/api/activos.ts'
 import { useEvaluaciones, useProximasEvaluaciones, type EstadoEvaluacion } from './api.ts'
+import { BitacoraEvaluacion } from './BitacoraEvaluacion.tsx'
 import { PlanificacionEvaluacionModal } from './PlanificacionEvaluacionModal.tsx'
 import { DIAS_TABLERO, ESTADOS, INFO_ESTADO } from './textos.ts'
 
@@ -102,12 +103,14 @@ function Tablero() {
  */
 export function EvaluacionSistemasPage() {
   const puedeOperar = usePuedeOperar()
-  const [filtros, setFiltros] = useState<{ page: number; q: string; estado?: EstadoEvaluacion; vencidas?: boolean }>({ page: 1, q: '' })
+  const [pestana, setPestana] = useState<string | null>('planificacion')
+  const [filtros, setFiltros] = useState<{ page: number; q: string; responsable: string; estado?: EstadoEvaluacion; vencidas?: boolean }>({ page: 1, q: '', responsable: '' })
   const [q] = useDebouncedValue(filtros.q.trim(), 300)
-  const consulta = useEvaluaciones({ page: filtros.page, limit: 20, q: q || undefined, estado: filtros.estado, vencidas: filtros.vencidas })
+  const [responsable] = useDebouncedValue(filtros.responsable.trim(), 300)
+  const consulta = useEvaluaciones({ page: filtros.page, limit: 20, q: q || undefined, responsable: responsable || undefined, estado: filtros.estado, vencidas: filtros.vencidas })
   const [modalAbierto, modal] = useDisclosure()
   const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
-  const hayFiltros = Boolean(filtros.q || filtros.estado || filtros.vencidas)
+  const hayFiltros = Boolean(filtros.q || filtros.responsable || filtros.estado || filtros.vencidas)
 
   return (
     <Stack gap="md">
@@ -123,13 +126,21 @@ export function EvaluacionSistemasPage() {
         </div>
       </Group>
 
-      <Tabs value="planificacion">
+      <Tabs value={pestana} onChange={setPestana}>
         <Tabs.List>
           <Tabs.Tab value="planificacion" leftSection={<IconCalendarStats size={16} />}>
             1 · Planificación
           </Tabs.Tab>
+          <Tabs.Tab value="bitacora" leftSection={<IconBook size={16} />}>
+            Bitácora
+          </Tabs.Tab>
         </Tabs.List>
       </Tabs>
+
+      {pestana === 'bitacora' ? (
+        <BitacoraEvaluacion />
+      ) : (
+      <>
 
       <Tablero />
 
@@ -152,6 +163,13 @@ export function EvaluacionSistemasPage() {
           onChange={(e) => cambiar({ q: e.currentTarget.value })}
           w={{ base: '100%', sm: 240 }}
         />
+        <TextInput
+          label="Asignado"
+          placeholder="Responsable"
+          value={filtros.responsable}
+          onChange={(e) => cambiar({ responsable: e.currentTarget.value })}
+          w={{ base: '100%', sm: 180 }}
+        />
         <Select
           label="Estado"
           placeholder="Todos"
@@ -173,7 +191,7 @@ export function EvaluacionSistemasPage() {
           <>
             <Text c="dimmed">{hayFiltros ? 'Ninguna evaluación coincide con los filtros.' : 'Todavía no hay evaluaciones planificadas.'}</Text>
             {hayFiltros && (
-              <Button variant="subtle" onClick={() => setFiltros({ page: 1, q: '' })}>
+              <Button variant="subtle" onClick={() => setFiltros({ page: 1, q: '', responsable: '' })}>
                 Quitar filtros
               </Button>
             )}
@@ -181,13 +199,14 @@ export function EvaluacionSistemasPage() {
         }
       >
         {(evaluaciones) => (
-          <Table.ScrollContainer minWidth={1000}>
+          <Table.ScrollContainer minWidth={1150}>
             <Table striped verticalSpacing="xs" fz="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>N.º</Table.Th>
                   <Table.Th>Sistema</Table.Th>
                   <Table.Th>Paso a producción programado</Table.Th>
+                  <Table.Th>Pruebas reales</Table.Th>
                   <Table.Th>Asignado</Table.Th>
                   <Table.Th>Descripción planificada</Table.Th>
                   <Table.Th>Estado</Table.Th>
@@ -197,7 +216,11 @@ export function EvaluacionSistemasPage() {
               <Table.Tbody>
                 {evaluaciones.map((e) => (
                   <Table.Tr key={e.id} style={{ opacity: e.anuladoEn ? 0.55 : 1 }}>
-                    <Table.Td ff="monospace">#{e.id}</Table.Td>
+                    <Table.Td>
+                      <Anchor component={Link} to={`/evaluacion-sistemas-productivos/${e.id}`} ff="monospace" size="sm" fw={600}>
+                        #{e.id}
+                      </Anchor>
+                    </Table.Td>
                     <Table.Td>
                       <Anchor component={Link} to={`/activos/${e.activoId}`} size="sm" fw={600}>
                         {e.activo.codigo}
@@ -211,6 +234,14 @@ export function EvaluacionSistemasPage() {
                       {e.vencida && (
                         <Badge size="xs" color="red" variant="light" ml={6}>
                           Vencida
+                        </Badge>
+                      )}
+                    </Table.Td>
+                    <Table.Td>
+                      {e.fechaPruebas ? formatearFechaHora(e.fechaPruebas) : '—'}
+                      {e.tardia && (
+                        <Badge size="xs" color="orange" variant="light" ml={6}>
+                          Tarde
                         </Badge>
                       )}
                     </Table.Td>
@@ -235,6 +266,8 @@ export function EvaluacionSistemasPage() {
           </Table.ScrollContainer>
         )}
       </TarjetaListado>
+      </>
+      )}
 
       {puedeOperar && <PlanificacionEvaluacionModal opened={modalAbierto} onClose={modal.close} />}
     </Stack>

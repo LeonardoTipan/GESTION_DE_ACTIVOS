@@ -355,7 +355,8 @@ function ListaDia({ dia, eventos, onEvento, onCrear, textoCrear }: { dia: Dayjs;
                 {m.evento.titulo}
               </Text>
               <Text size="xs" c="dimmed">
-                {textoRol(m.evento, m.rol)} · {NOMBRE_MODULO[m.evento.modulo]} · {NOMBRE_CAPA[m.evento.modulo][m.evento.capa]} · {m.evento.activo.codigo} ({m.evento.activo.categoria})
+                {textoRol(m.evento, m.rol)} · {NOMBRE_MODULO[m.evento.modulo]} · {NOMBRE_CAPA[m.evento.modulo][m.evento.capa]}
+                {m.evento.activo ? ` · ${m.evento.activo.codigo} (${m.evento.activo.categoria})` : ''}
               </Text>
             </div>
             <Badge size="sm" variant="light" color={ASPECTO_ESTADO[m.evento.estado].color}>
@@ -405,14 +406,16 @@ function DetalleEvento({ evento: e, acciones }: { evento: EventoAgenda; acciones
       )}
       <Dato etiqueta={previsto ? 'Inicio previsto' : 'Fecha real'}>{f(e.inicio)}</Dato>
       {(e.fin || previsto) && <Dato etiqueta={previsto ? 'Límite' : 'Fin real'}>{f(e.fin)}</Dato>}
-      <Dato etiqueta="Activo">
-        <Anchor component={Link} to={`/activos/${e.activo.id}`}>
-          {e.activo.codigo} · {e.activo.nombre}
-        </Anchor>{' '}
-        <Text span size="xs" c="dimmed">
-          ({e.activo.categoria})
-        </Text>
-      </Dato>
+      {e.activo && (
+        <Dato etiqueta="Activo">
+          <Anchor component={Link} to={`/activos/${e.activo.id}`}>
+            {e.activo.codigo} · {e.activo.nombre}
+          </Anchor>{' '}
+          <Text span size="xs" c="dimmed">
+            ({e.activo.categoria})
+          </Text>
+        </Dato>
+      )}
       <Dato etiqueta="Responsable">{e.responsable ?? '—'}</Dato>
       {e.detalle && <Dato etiqueta="Detalle">{e.detalle}</Dato>}
       <Group gap="xs" mt="sm">

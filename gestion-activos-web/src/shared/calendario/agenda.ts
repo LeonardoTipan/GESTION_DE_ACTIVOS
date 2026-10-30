@@ -28,6 +28,9 @@ export const NOMBRE_MODULO: Record<Modulo, string> = {
   respaldos: 'Respaldos',
   mantenimientos: 'Mantenimientos',
   vulnerabilidades: 'Vulnerabilidades',
+  renovaciones: 'Renovaciones',
+  endpoints: 'Protección de Endpoints',
+  evaluaciones: 'Evaluación de Sistemas',
 }
 
 /**
@@ -38,6 +41,9 @@ export const NOMBRE_CAPA: Record<Modulo, Record<Capa, string>> = {
   respaldos: { 1: 'Planificación', 2: 'Ejecución', 3: 'Restauración' },
   mantenimientos: { 1: 'Planificación', 2: 'Ejecución', 3: '—' },
   vulnerabilidades: { 1: 'Detección', 2: 'Remediación', 3: '—' },
+  renovaciones: { 1: 'Planificación y caducidad', 2: 'Renovación real', 3: '—' },
+  endpoints: { 1: 'Período mensual', 2: 'Medición real', 3: '—' },
+  evaluaciones: { 1: 'Paso a producción programado', 2: 'Pruebas reales', 3: '—' },
 }
 
 /** La semana empieza el lunes. */

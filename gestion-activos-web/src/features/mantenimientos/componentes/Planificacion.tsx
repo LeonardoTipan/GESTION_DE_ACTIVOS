@@ -166,7 +166,6 @@ interface ValoresPlan {
   tipo: TipoMantenimiento
   frecuencia: FrecuenciaMantenimiento
   fechaInicio: string | null
-  proximaFecha: string | null
   plazoDias: number | string
   responsable: string
   actividades: string
@@ -200,14 +199,13 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
           tipo: plan.tipo,
           frecuencia: plan.frecuencia,
           fechaInicio: isoAFechaHoraLocal(plan.fechaInicio),
-          proximaFecha: plan.proximaFecha ? isoAFechaHoraLocal(plan.proximaFecha) : null,
           plazoDias: plan.plazoDias ?? 7,
           responsable: plan.responsable,
           actividades: plan.actividades,
           estado: plan.estado,
           motivoCambio: '',
         }
-      : { tipo: 'PREVENTIVO', frecuencia: 'SEMESTRAL', fechaInicio: null, proximaFecha: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
+      : { tipo: 'PREVENTIVO', frecuencia: 'SEMESTRAL', fechaInicio: null, plazoDias: 7, responsable: '', actividades: '', estado: 'VIGENTE', motivoCambio: '' },
     validate: {
       tipo: (v) => (clase !== undefined && !tiposPermitidos(clase).includes(v) ? 'Este tipo no corresponde a la clase del activo' : null),
       fechaInicio: (v) => (v ? null : 'Indica la fecha de inicio planificada'),
@@ -224,8 +222,6 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
       tipo: v.tipo,
       frecuencia: v.frecuencia,
       fechaInicio: fechaHoraLocalAIso(v.fechaInicio!),
-      // Al crear, la primera intervención es la fecha de inicio; al modificar se puede mover.
-      ...(plan && v.proximaFecha ? { proximaFecha: fechaHoraLocalAIso(v.proximaFecha) } : {}),
       plazoDias: Number(v.plazoDias),
       responsable: v.responsable.trim(),
       actividades: v.actividades.trim(),
@@ -384,12 +380,11 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
             {...form.getInputProps('fechaInicio')}
           />
           {plan && (
-            <DateTimePicker
-              label="Próxima intervención"
-              description="La que se generará al pulsar «Nueva ejecución»"
-              valueFormat="DD MMM YYYY HH:mm"
-              clearable
-              {...form.getInputProps('proximaFecha')}
+            <TextInput
+              label="Próxima intervención (calculada)"
+              description="Fin real de la última ejecución completada + período; sin ninguna, la fecha de inicio. Se recalcula al completar."
+              readOnly
+              value={plan.proximaFecha ? formatearFechaHora(plan.proximaFecha) : '— (sin más intervenciones)'}
             />
           )}
           <NumberInput
@@ -443,10 +438,13 @@ function FormPlan({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar
 function EjecucionAdicionalModal({ plan, onCerrar }: { plan: PlanMantenimiento | null; onCerrar: () => void }) {
   const programar = useProgramarDesdePlan()
   const [fecha, setFecha] = useState<string | null>(null)
+  const [justificacion, setJustificacion] = useState('')
   const cerrar = () => {
     setFecha(null)
+    setJustificacion('')
     onCerrar()
   }
+  const justificada = justificacion.trim().length >= 20
   return (
     <Modal opened={plan !== null} onClose={cerrar} title={plan ? `Ejecución adicional · ${folio(plan.id)}` : ''}>
       {plan && (
@@ -456,23 +454,33 @@ function EjecucionAdicionalModal({ plan, onCerrar }: { plan: PlanMantenimiento |
           </Text>
           <DateTimePicker
             label="Inicio previsto de la ejecución"
-            description={`Plazo: ${plan.plazoDias} día(s). No cambia la próxima fecha del período.`}
+            description={`Plazo: ${plan.plazoDias} día(s). No cambia la próxima intervención del período.`}
             valueFormat="DD MMM YYYY HH:mm"
             withAsterisk
             value={fecha}
             onChange={setFecha}
+          />
+          <Textarea
+            label="Justificación"
+            description="Por qué hace falta otra ejecución además de la del período (queda en la auditoría)."
+            withAsterisk
+            autosize
+            minRows={2}
+            value={justificacion}
+            onChange={(e) => setJustificacion(e.currentTarget.value)}
+            error={justificacion && !justificada ? 'Mínimo 20 caracteres' : undefined}
           />
           <Group justify="flex-end">
             <Button variant="default" onClick={cerrar}>
               Cancelar
             </Button>
             <Button
-              disabled={!fecha}
+              disabled={!fecha || !justificada}
               loading={programar.isPending}
               onClick={() =>
                 fecha &&
                 programar.mutate(
-                  { id: plan.id, datos: { adicional: true, fecha: fechaHoraLocalAIso(fecha) } },
+                  { id: plan.id, datos: { adicional: true, fecha: fechaHoraLocalAIso(fecha), justificacion: justificacion.trim() } },
                   {
                     onSuccess: (r) => {
                       notifications.show({ color: 'green', title: `Ejecución #${r.mantenimientoId} creada (pendiente)`, message: 'Ejecución adicional de la planificación.' })
@@ -532,9 +540,7 @@ export function Planificacion() {
         notifications.show({
           color: 'green',
           title: `Ejecución #${r.mantenimientoId} creada (pendiente)`,
-          message: r.plan.proximaFecha
-            ? `Siguiente intervención del período: ${formatearDia(r.plan.proximaFecha)}.`
-            : 'Era una planificación de una sola vez: no quedan intervenciones del período.',
+          message: 'La próxima intervención del período se calculará al completarla, desde su fecha real de fin.',
         }),
       onError: (e) => notifications.show({ color: 'red', title: 'No se pudo programar', message: e.message }),
     })
@@ -628,7 +634,7 @@ export function Planificacion() {
               : 'Todavía no hay planificaciones de mantenimiento.'}
           </Text>
         ) : (
-          <Table.ScrollContainer minWidth={1450}>
+          <Table.ScrollContainer minWidth={1650}>
             <Table striped verticalSpacing="xs" fz="sm">
               <Table.Thead>
                 <Table.Tr>
@@ -636,8 +642,10 @@ export function Planificacion() {
                   <Table.Th>Activo</Table.Th>
                   <Table.Th>Tipo</Table.Th>
                   <Table.Th>Período</Table.Th>
+                  <Table.Th>Registrada</Table.Th>
                   <Table.Th>Inicio planificado</Table.Th>
-                  <Table.Th>Próxima</Table.Th>
+                  <Table.Th>Último fin real</Table.Th>
+                  <Table.Th>Próxima intervención</Table.Th>
                   <Table.Th>Asignado</Table.Th>
                   <Table.Th>Ejecuciones</Table.Th>
                   <Table.Th>Estado</Table.Th>
@@ -648,7 +656,7 @@ export function Planificacion() {
               <Table.Tbody>
                 {planes.data?.data.map((p) => {
                   const vigente = puedeOperar && !p.anuladoEn && p.estado === 'VIGENTE'
-                  const programable = vigente && p.proximaFecha !== null
+                  const programable = vigente && p.proximaFecha !== null && p.ejecucionPendienteId === null
                   return (
                     <Table.Tr key={p.id} style={{ opacity: p.anuladoEn ? 0.55 : 1 }}>
                       <Table.Td ff="monospace">{folio(p.id)}</Table.Td>
@@ -665,14 +673,21 @@ export function Planificacion() {
                         <BadgeTipo tipo={p.tipo} />
                       </Table.Td>
                       <Table.Td>{INFO_FRECUENCIA[p.frecuencia]}</Table.Td>
+                      <Table.Td>{formatearDia(p.createdAt)}</Table.Td>
                       <Table.Td>
                         {formatearDia(p.fechaInicio)}
                         <Badge size="xs" variant="outline" ml={6}>
                           {p.semestrePlanificado.etiqueta}
                         </Badge>
                       </Table.Td>
+                      <Table.Td>{p.ultimaFinalizacion ? formatearFechaHora(p.ultimaFinalizacion) : '—'}</Table.Td>
                       <Table.Td c={p.vencido ? 'red' : undefined} fw={p.vencido ? 600 : undefined}>
                         {p.proximaFecha ? formatearFechaHora(p.proximaFecha) : '— (concluido)'}
+                        {p.ejecucionPendienteId !== null && (
+                          <Anchor component={Link} to={`/mantenimientos/${p.ejecucionPendienteId}`} size="xs" display="block">
+                            Ejecución #{p.ejecucionPendienteId} pendiente
+                          </Anchor>
+                        )}
                       </Table.Td>
                       <Table.Td>{p.responsable}</Table.Td>
                       <Table.Td>
@@ -697,13 +712,13 @@ export function Planificacion() {
                               leftSection={<IconCalendarPlus size={12} />}
                               loading={programar.isPending && programar.variables?.id === p.id}
                               onClick={() => programarPlan(p)}
-                              title="Crea la ejecución de la próxima fecha y adelanta el período"
+                              title="Crea la ejecución de la próxima intervención (una sola pendiente por plan)"
                             >
                               Nueva ejecución
                             </Button>
                           )}
                           {vigente && (
-                            <Button size="compact-xs" variant="light" color="teal" onClick={() => setAdicional(p)} title="Otra ejecución en la fecha que elija; no mueve la próxima fecha">
+                            <Button size="compact-xs" variant="light" color="teal" onClick={() => setAdicional(p)} title="Otra ejecución justificada en la fecha que elija; no mueve la próxima intervención">
                               Adicional
                             </Button>
                           )}
