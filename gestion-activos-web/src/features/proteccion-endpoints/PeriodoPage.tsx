@@ -1,4 +1,5 @@
 import { Alert, Anchor, Badge, Breadcrumbs, Button, Card, Center, Group, Loader, NumberInput, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
+import { useState } from 'react'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
@@ -7,31 +8,16 @@ import { IconHistory, IconRotateClockwise } from '@tabler/icons-react'
 import { Link, useParams } from 'react-router'
 import { BloqueEjecucionCierre } from '../../shared/cierre/BloqueEjecucionCierre.tsx'
 import { avisoExito as aviso, avisoFallo as fallo } from '../../shared/cierre/avisos.ts'
-import { Dato, EnlaceRepositorio as Repositorio, ModalReabrir } from '../../shared/cierre/componentes.tsx'
+import { Dato, ModalReabrir } from '../../shared/cierre/componentes.tsx'
 import { errorRepositorio } from '../../shared/evidencia.ts'
-import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../shared/formato.ts'
+import { ahoraLocal, fechaHoraLocalAIso, isoAFechaHoraLocal } from '../../shared/formato.ts'
 import { BadgeRegistro, TrazasModal } from '../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../shared/registro/registro.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import { useActivos } from '../inventario/api/activos.ts'
 import { useCerrarPeriodo, usePeriodo, useReabrirPeriodo, useRegistrarPeriodo, type PeriodoEndpoint } from './api.ts'
-import { INFO_ESTADO, nombrePeriodo } from './textos.ts'
-
-/** Nombres legibles de los campos, para el historial (trazas). */
-const ETIQUETAS: Record<string, string> = {
-  anio: 'Año',
-  mes: 'Mes',
-  responsable: 'Asignado',
-  observacion: 'Observación',
-  estado: 'Estado',
-  totalActivos: 'Total de activos',
-  equiposConAntivirus: 'Equipos con antivirus',
-  fechaEjecucion: 'Fecha real de la medición',
-  responsableEjecucion: 'Responsable de la medición',
-  evidencia: 'Verificable (inventario)',
-  repositorioVerificable: 'Repositorio verificable',
-  cerradoPor: 'Cerrado por',
-}
+import { ConfirmarCierreModal, DatosEjecucion, DatosPlanificacion, type ResumenCierre } from './componentes.tsx'
+import { ETIQUETAS_TRAZA, INFO_ESTADO, nombrePeriodo } from './textos.ts'
 
 /** Cobertura calculada en el momento (la misma fórmula que el backend: 1 decimal). */
 const coberturaDe = (total: number | '', con: number | '') =>
@@ -56,6 +42,7 @@ function FormRegistro({ p }: { p: PeriodoEndpoint }) {
   const cerrar = useCerrarPeriodo()
   // Referencia, NO un límite: los equipos sujetos a control que ve la aplicación hoy.
   const sujetos = useActivos({ operativos: true, aplica: 'ENDPOINT', page: 1, limit: 1 })
+  const [porCerrar, setPorCerrar] = useState<ResumenCierre | null>(null)
   const form = useForm<Valores>({
     initialValues: {
       totalActivos: p.totalActivos ?? '',
@@ -114,14 +101,35 @@ function FormRegistro({ p }: { p: PeriodoEndpoint }) {
       notifications.show({ color: 'orange', title: 'No se puede cerrar todavía', message: 'Complete los campos marcados.' })
       return
     }
-    cerrar.mutate({ id: p.id, datos: datos(x) }, { onSuccess: () => aviso('Período cerrado', `Cobertura ${cobertura ?? '—'} %.`), onError: fallo('No se pudo cerrar') })
+    // Se confirma lo que quedará registrado; nada se envía hasta entonces.
+    setPorCerrar({
+      anio: p.anio,
+      mes: p.mes,
+      totalActivos: Number(x.totalActivos),
+      equiposConAntivirus: Number(x.equiposConAntivirus),
+      fechaEjecucion: fechaHoraLocalAIso(x.fechaEjecucion!),
+      responsableEjecucion: x.responsableEjecucion.trim(),
+      evidencia: x.evidencia.trim(),
+      repositorioVerificable: x.repositorioVerificable.trim(),
+    })
   }
+  const confirmarCierre = () =>
+    cerrar.mutate(
+      { id: p.id, datos: datos(form.getValues()) },
+      {
+        onSuccess: () => {
+          aviso('Período cerrado', `Cobertura ${cobertura ?? '—'} %.`)
+          setPorCerrar(null)
+        },
+        onError: fallo('No se pudo cerrar'),
+      },
+    )
   return (
     <form onSubmit={enviar} noValidate>
       <BloqueEjecucionCierre
-        verificable={{ label: 'Verificable (inventario de equipos)', description: 'Nombre del archivo Excel del inventario del mes (la aplicación no guarda archivos)', placeholder: 'Inventario de equipos octubre 2026.xlsx', ...form.getInputProps('evidencia') }}
-        repositorio={{ description: 'Carpeta compartida o URL http(s) donde está el Excel', placeholder: 'Carpeta Compartida TICs/Antivirus', ...form.getInputProps('repositorioVerificable') }}
-        observacion={form.getInputProps('observacion')}
+        verificable={{ label: 'Evidencia verificable (inventario de equipos)', withAsterisk: true, description: 'Nombre del archivo Excel del inventario del mes (la aplicación no guarda archivos)', placeholder: 'Inventario de equipos octubre 2026.xlsx', ...form.getInputProps('evidencia') }}
+        repositorio={{ withAsterisk: true, description: 'Carpeta compartida o URL http(s) donde está el Excel', placeholder: 'Carpeta Compartida TICs/Antivirus', ...form.getInputProps('repositorioVerificable') }}
+        observacion={{ label: 'Observaciones', ...form.getInputProps('observacion') }}
         guardar={{ etiqueta: 'Guardar avance', cargando: registrar.isPending, deshabilitado: !form.isDirty() }}
         cerrar={{ etiqueta: 'Cerrar período', cargando: cerrar.isPending, onClick: cerrarPeriodo }}
       >
@@ -130,18 +138,23 @@ function FormRegistro({ p }: { p: PeriodoEndpoint }) {
             ? `El sistema detecta ${sujetos.data.meta.total} equipo(s) sujetos a control (categorías con Protección de endpoints). Es una referencia: registre el total REAL del inventario del mes.`
             : 'Cargando los equipos sujetos a control…'}
         </Alert>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <NumberInput label="Total de activos" description="Del inventario del mes" min={1} allowDecimal={false} allowNegative={false} {...form.getInputProps('totalActivos')} />
-          <NumberInput label="Equipos con antivirus activo" min={0} allowDecimal={false} allowNegative={false} {...form.getInputProps('equiposConAntivirus')} />
-          <Dato etiqueta="Sin antivirus · cobertura (calculados)">
-            {typeof v.totalActivos === 'number' && typeof v.equiposConAntivirus === 'number' && v.equiposConAntivirus <= v.totalActivos
-              ? `${v.totalActivos - v.equiposConAntivirus} equipo(s) · ${cobertura} %`
-              : '—'}
+        <Text size="xs" c="dimmed">
+          Los campos con * son obligatorios para cerrar. Puede guardar avances sin ellos.
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <NumberInput label="Total de activos sujetos a control" withAsterisk description="Del inventario del mes" min={1} allowDecimal={false} allowNegative={false} {...form.getInputProps('totalActivos')} />
+          <NumberInput label="Equipos que cuentan con antivirus" withAsterisk min={0} allowDecimal={false} allowNegative={false} {...form.getInputProps('equiposConAntivirus')} />
+          <Dato etiqueta="Equipos que no cuentan con antivirus (calculado)">
+            {typeof v.totalActivos === 'number' && typeof v.equiposConAntivirus === 'number' && v.equiposConAntivirus <= v.totalActivos ? v.totalActivos - v.equiposConAntivirus : '—'}
+          </Dato>
+          <Dato etiqueta="Porcentaje de cobertura (calculado)">
+            {typeof v.equiposConAntivirus === 'number' && typeof v.totalActivos === 'number' && v.equiposConAntivirus <= v.totalActivos && cobertura !== null ? `${cobertura} %` : '—'}
           </Dato>
         </SimpleGrid>
         <SimpleGrid cols={{ base: 1, sm: 2 }}>
           <DateTimePicker
-            label="Fecha real de la medición"
+            label="Fecha real de ejecución"
+            withAsterisk
             description="Cuándo se hizo REALMENTE (no futura; dentro o después del mes del período)"
             placeholder="Elija fecha y hora"
             valueFormat="DD MMM YYYY HH:mm"
@@ -150,9 +163,10 @@ function FormRegistro({ p }: { p: PeriodoEndpoint }) {
             maxDate={ahoraLocal()}
             {...form.getInputProps('fechaEjecucion')}
           />
-          <TextInput label="Responsable de la medición" placeholder="Soporte TIC · J. Pérez" {...form.getInputProps('responsableEjecucion')} />
+          <TextInput label="Responsable de la ejecución" withAsterisk placeholder="Soporte TIC · J. Pérez" {...form.getInputProps('responsableEjecucion')} />
         </SimpleGrid>
       </BloqueEjecucionCierre>
+      <ConfirmarCierreModal abierto={porCerrar !== null} resumen={porCerrar} enviando={cerrar.isPending} onConfirmar={confirmarCierre} onCerrar={() => setPorCerrar(null)} />
     </form>
   )
 }
@@ -174,7 +188,7 @@ function ReabrirModal({ p, opened, onClose }: { p: PeriodoEndpoint; opened: bool
   )
 }
 
-/** Ficha de un período mensual: fase 1 (apertura), fase 2 (registro y cierre) e historial. */
+/** Ficha de un período mensual: planificación, ejecución y cierre, e historial. */
 export function PeriodoPage() {
   const id = Number(useParams().id)
   const consulta = usePeriodo(id)
@@ -189,7 +203,7 @@ export function PeriodoPage() {
   return (
     <Stack gap="md">
       <Breadcrumbs>
-        <Anchor component={Link} to="/proteccion-endpoints">Protección de Endpoints</Anchor>
+        <Anchor component={Link} to={`/proteccion-endpoints?pestana=${cerrado ? 'bitacora' : 'ejecucion'}`}>Protección de Endpoints</Anchor>
         <Text>{nombrePeriodo(p.anio, p.mes)}</Text>
       </Breadcrumbs>
       <Group justify="space-between" align="flex-end">
@@ -209,41 +223,20 @@ export function PeriodoPage() {
       </Group>
 
       <Card withBorder padding="lg">
-        <Title order={4} mb="sm">1 · Apertura del período</Title>
-        <SimpleGrid cols={{ base: 1, sm: 3 }}>
-          <Dato etiqueta="Período">{nombrePeriodo(p.anio, p.mes)}</Dato>
-          <Dato etiqueta="Asignado">{p.responsable}</Dato>
-          <Dato etiqueta="Abierto el (registro)">{formatearFechaHora(p.createdAt)}</Dato>
-        </SimpleGrid>
+        <Title order={4} mb="sm">1 · Planificación</Title>
+        <DatosPlanificacion p={p} />
       </Card>
 
       <Card withBorder padding="lg">
-        <Title order={4} mb="sm">2 · Registro y cierre</Title>
+        <Title order={4} mb="sm">2 · Ejecución y cierre</Title>
         {cerrado || !puedeOperar || p.anuladoEn ? (
-          <Stack gap="sm">
-            <SimpleGrid cols={{ base: 1, sm: 4 }}>
-              <Dato etiqueta="Total de activos">{p.totalActivos ?? '—'}</Dato>
-              <Dato etiqueta="Con antivirus">{p.equiposConAntivirus ?? '—'}</Dato>
-              <Dato etiqueta="Sin antivirus">{p.equiposSinAntivirus ?? '—'}</Dato>
-              <Dato etiqueta="Cobertura">{p.cobertura === null ? '—' : `${p.cobertura} %`}</Dato>
-            </SimpleGrid>
-            <SimpleGrid cols={{ base: 1, sm: 3 }}>
-              <Dato etiqueta="Fecha real de la medición">{formatearFechaHora(p.fechaEjecucion)}</Dato>
-              <Dato etiqueta="Responsable de la medición">{p.responsableEjecucion ?? '—'}</Dato>
-              <Dato etiqueta="Cerrado por">{p.cerradoPor ?? '—'}</Dato>
-            </SimpleGrid>
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <Dato etiqueta="Verificable (inventario)">{p.evidencia ?? '—'}</Dato>
-              <Dato etiqueta="Repositorio verificable"><Repositorio valor={p.repositorioVerificable} /></Dato>
-            </SimpleGrid>
-            {p.observacion && <Dato etiqueta="Observación">{p.observacion}</Dato>}
-          </Stack>
+          <DatosEjecucion p={p} />
         ) : (
           <FormRegistro key={p.version} p={p} />
         )}
       </Card>
 
-      <TrazasModal abierto={historial} entidad="PERIODO_ENDPOINT" registroId={p.id} titulo={`Historial · ${nombrePeriodo(p.anio, p.mes)}`} etiquetas={ETIQUETAS} onCerrar={verHistorial.close} />
+      <TrazasModal abierto={historial} entidad="PERIODO_ENDPOINT" registroId={p.id} titulo={`Historial · ${nombrePeriodo(p.anio, p.mes)}`} etiquetas={ETIQUETAS_TRAZA} onCerrar={verHistorial.close} />
       {esAdmin && <ReabrirModal p={p} opened={reabriendo} onClose={reapertura.close} />}
     </Stack>
   )

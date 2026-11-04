@@ -17,7 +17,7 @@ import { BloqueEjecucionCierre } from '../../../shared/cierre/BloqueEjecucionCie
 import { CampoExcepcion } from '../../../shared/plazos/componentes.tsx'
 import { avisoFueraDePlazo, errorExcepcion } from '../../../shared/plazos/plazos.ts'
 import { useFinalizarMantenimiento, type EstadoEquipo, type Mantenimiento } from '../api/mantenimientos.ts'
-import { errorRepositorio, ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
+import { errorRepositorioObligatorio, errorVerificableObligatorio, ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO } from '../fases.ts'
 
 import { instante } from '../../../shared/zona.ts'
 interface Props {
@@ -75,8 +75,9 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       costo: '',
       repuestos: '',
       observaciones: '',
-      evidencia: '',
-      repositorioVerificable: '',
+      // Lo ya guardado durante la ejecución no se pierde.
+      evidencia: m.evidencia ?? '',
+      repositorioVerificable: m.repositorioVerificable ?? '',
       motivoExcepcion: '',
     },
     validate: {
@@ -94,8 +95,8 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       costo: (v) => (v !== '' && (typeof v !== 'number' || v < 0) ? 'No puede ser negativo' : null),
       repuestos: maximo(2000),
       observaciones: maximo(2000),
-      evidencia: maximo(191),
-      repositorioVerificable: errorRepositorio,
+      evidencia: errorVerificableObligatorio,
+      repositorioVerificable: errorRepositorioObligatorio,
       motivoExcepcion: (v, valores) => errorExcepcion(finFueraDePlazo(m, valores.fechaFin), v),
     },
   })
@@ -116,8 +117,8 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           costo: v.costo === '' ? undefined : Number(v.costo),
           repuestos: opcional(v.repuestos),
           observaciones: opcional(v.observaciones),
-          evidencia: opcional(v.evidencia),
-          repositorioVerificable: opcional(v.repositorioVerificable),
+          evidencia: v.evidencia.trim(),
+          repositorioVerificable: v.repositorioVerificable.trim(),
           motivoExcepcion: fuera ? v.motivoExcepcion.trim() : undefined,
         },
       },
@@ -196,14 +197,16 @@ function FormFinalizar({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
         <Divider label="Cierre de la ejecución" labelPosition="left" mt="xs" />
         <BloqueEjecucionCierre
           verificable={{
+            withAsterisk: true,
             placeholder: 'Informe MT-2026-031',
-            description: 'Nombre del informe o acta que prueba la ejecución (no se almacenan archivos).',
+            description: 'Obligatorio. Nombre del informe o acta que prueba la ejecución (no se almacenan archivos).',
             ...form.getInputProps('evidencia'),
           }}
           repositorio={{
             label: 'Repositorio del verificable',
+            withAsterisk: true,
             placeholder: 'Carpeta Compartida TICs/Interno o https://…',
-            description: 'Carpeta compartida o URL http(s) donde está guardado.',
+            description: 'Obligatorio. Carpeta compartida o URL http(s) donde está guardado.',
             ...form.getInputProps('repositorioVerificable'),
           }}
           observacion={form.getInputProps('observaciones')}

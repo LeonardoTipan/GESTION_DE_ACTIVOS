@@ -1,5 +1,50 @@
 import { describe, expect, it } from 'vitest'
-import { mesesDelAnio, mesesSinAbrir, nombrePeriodo } from './textos.ts'
+import { mesesDelAnio, mesesSinAbrir, nombrePeriodo, pestanaDe, resumenParaCerrar, ultimoCierre } from './textos.ts'
+
+describe('Protección de Endpoints · pestañas y cierre', () => {
+  it('la pestaña sale de la URL; un valor desconocido es Planificación', () => {
+    expect(pestanaDe('ejecucion')).toBe('ejecucion')
+    expect(pestanaDe('bitacora')).toBe('bitacora')
+    expect(pestanaDe(null)).toBe('planificacion')
+    expect(pestanaDe('otra')).toBe('planificacion')
+  })
+
+  const completo = {
+    anio: 2026,
+    mes: 10,
+    totalActivos: 26,
+    equiposConAntivirus: 25,
+    fechaEjecucion: '2026-10-30T15:00:00.000Z',
+    responsableEjecucion: 'Soporte TIC',
+    evidencia: 'Inventario.xlsx',
+    repositorioVerificable: 'Carpeta Compartida TICs',
+  }
+
+  it('«Cerrar» se ofrece solo con todos los datos guardados y coherentes', () => {
+    expect(resumenParaCerrar(completo)).toMatchObject({ totalActivos: 26, equiposConAntivirus: 25 })
+    expect(resumenParaCerrar({ ...completo, totalActivos: null })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, equiposConAntivirus: null })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, equiposConAntivirus: 27 })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, fechaEjecucion: null })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, responsableEjecucion: '  ' })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, evidencia: '' })).toBeNull()
+    expect(resumenParaCerrar({ ...completo, repositorioVerificable: null })).toBeNull()
+  })
+
+  it('un período con cero equipos con antivirus también se puede cerrar', () => {
+    expect(resumenParaCerrar({ ...completo, equiposConAntivirus: 0 })).not.toBeNull()
+  })
+
+  it('la fecha de cierre es la del cierre más reciente de la auditoría', () => {
+    const trazas = [
+      { fecha: '2026-11-03T10:00:00Z', cambios: [{ campo: 'estado', antes: 'EN_PROGRESO', despues: 'CERRADO' }] },
+      { fecha: '2026-11-02T10:00:00Z', cambios: [{ campo: 'estado', antes: 'CERRADO', despues: 'EN_PROGRESO' }] },
+      { fecha: '2026-11-01T10:00:00Z', cambios: [{ campo: 'estado', antes: 'ABIERTO', despues: 'CERRADO' }] },
+    ]
+    expect(ultimoCierre(trazas)).toBe('2026-11-03T10:00:00Z')
+    expect(ultimoCierre([])).toBeNull()
+  })
+})
 
 describe('Protección de Endpoints · calendario de períodos', () => {
   const hoy = { anio: 2026, mes: 10 }

@@ -12,8 +12,8 @@ interface Props {
 }
 
 /**
- * Nueva planificación · fase 1: apertura del período mensual. Solo los datos de la apertura;
- * los de la fase 2 (totales, equipos con antivirus, Excel del inventario) llegarán después.
+ * Nueva planificación: apertura del período mensual. Solo los datos de la apertura; los totales,
+ * los equipos con antivirus y el inventario se registran en la pestaña Ejecución y cierre.
  * Mismo lenguaje visual que «Nueva planificación de mantenimiento».
  */
 export function PlanificacionPeriodoModal({ opened, onClose, hoy }: Props) {
@@ -59,8 +59,8 @@ function Formulario({ onClose, hoy }: Omit<Props, 'opened'>) {
     <form onSubmit={enviar} noValidate>
       <Stack gap="sm">
         <Alert color="blue" variant="light">
-          Fase 1: se abre el período del mes. El total de activos, los equipos con antivirus y el Excel del inventario se
-          registrarán en la fase 2 (aún no disponible).
+          Se abre el período del mes. El total de activos, los equipos con antivirus y el inventario se registran
+          después, en la pestaña Ejecución y cierre.
         </Alert>
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <Select
@@ -82,7 +82,7 @@ function Formulario({ onClose, hoy }: Omit<Props, 'opened'>) {
             data={meses}
             {...form.getInputProps('mes')}
           />
-          <TextInput label="Asignado" description="Quién se encarga de la medición del mes" withAsterisk placeholder="Soporte TIC" {...form.getInputProps('responsable')} />
+          <TextInput label="Responsable asignado" description="Quién se encarga de la medición del mes" withAsterisk placeholder="Soporte TIC" {...form.getInputProps('responsable')} />
         </SimpleGrid>
         <Textarea
           label="Observación"

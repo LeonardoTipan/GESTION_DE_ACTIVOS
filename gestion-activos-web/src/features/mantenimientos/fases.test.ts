@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { accionesPermitidas, estadoPasos, pasoActivo } from './fases.ts'
+import { accionesPermitidas, errorRepositorioObligatorio, errorVerificableObligatorio, estadoPasos, pasoActivo } from './fases.ts'
 
 describe('acciones por fase', () => {
   it('programado: iniciar o cancelar', () => {
@@ -61,5 +61,22 @@ describe('tipos por clase, semestre y repositorio', () => {
     expect(errorRepositorio('C:\\Informes')).toBeNull()
     expect(errorRepositorio('https://intranet/informe.pdf')).toBeNull()
     expect(errorRepositorio('javascript:alert(1)')).toMatch(/http o https/)
+  })
+})
+
+describe('evidencia obligatoria al completar', () => {
+  it('el verificable es obligatorio; solo espacios cuenta como vacío', () => {
+    expect(errorVerificableObligatorio('')).toMatch(/Indique el informe/)
+    expect(errorVerificableObligatorio('   ')).toMatch(/Indique el informe/)
+    expect(errorVerificableObligatorio('x'.repeat(192))).toMatch(/Máximo 191/)
+    expect(errorVerificableObligatorio('Informe MT-2026-031')).toBeNull()
+  })
+
+  it('el repositorio es obligatorio y debe tener un formato válido', () => {
+    expect(errorRepositorioObligatorio('')).toMatch(/Indique dónde/)
+    expect(errorRepositorioObligatorio('   ')).toMatch(/Indique dónde/)
+    expect(errorRepositorioObligatorio('javascript:alert(1)')).not.toBeNull()
+    expect(errorRepositorioObligatorio('Carpeta Compartida TICs/Interno')).toBeNull()
+    expect(errorRepositorioObligatorio('https://intranet.example/informe.pdf')).toBeNull()
   })
 })

@@ -3653,12 +3653,12 @@ export interface components {
             repuestos?: string;
             observaciones?: string;
             /**
-             * @description VERIFICABLE: nombre del informe o documento que prueba la ejecución.
+             * @description VERIFICABLE: nombre del informe o documento que prueba la ejecución. Obligatorio al completar (salvo que ya se guardara durante la ejecución).
              * @example Informe de Mantenimiento a Servidores y Servicios 01
              */
             evidencia?: string;
             /**
-             * @description REPOSITORIO del verificable: carpeta compartida o URL http(s).
+             * @description REPOSITORIO del verificable: carpeta compartida o URL http(s). Obligatorio al completar (salvo que ya se guardara durante la ejecución).
              * @example Carpeta Compartida TICs/Interno
              */
             repositorioVerificable?: string;
@@ -10289,6 +10289,12 @@ export interface operations {
                 anio?: number;
                 mes?: number;
                 estado?: "ABIERTO" | "EN_PROGRESO" | "CERRADO";
+                /** @description Búsqueda por año y/o mes: «2026», «oct», «octubre 2026», «10». */
+                q?: string;
+                /** @description Responsable asignado o responsable de la ejecución (contiene el texto). */
+                responsable?: string;
+                /** @description true = solo pendientes de ejecutar o cerrar (ABIERTO o EN_PROGRESO). */
+                pendientes?: boolean;
                 /** @description true = incluye los anulados (por defecto se ocultan). */
                 incluirAnulados?: boolean;
             };

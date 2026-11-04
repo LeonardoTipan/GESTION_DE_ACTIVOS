@@ -1,3 +1,4 @@
+import { errorRepositorio as errorRepositorioValido } from '../../shared/evidencia.ts'
 import type {
   ClaseMantenimiento,
   EstadoEquipo,
@@ -115,3 +116,13 @@ export function pasoActivo(pasos: readonly EstadoPaso[]): number {
 
 /** Compartida con Vulnerabilidades: vive en shared/evidencia. */
 export { errorRepositorio } from '../../shared/evidencia.ts'
+
+/** Evidencia obligatoria para completar (la misma regla que el backend; solo espacios = vacío). */
+export function errorVerificableObligatorio(valor: string): string | null {
+  const v = valor.trim()
+  return !v ? 'Indique el informe o la evidencia de la ejecución' : v.length > 191 ? 'Máximo 191 caracteres' : null
+}
+
+export function errorRepositorioObligatorio(valor: string): string | null {
+  return !valor.trim() ? 'Indique dónde está guardada la evidencia' : errorRepositorioValido(valor)
+}

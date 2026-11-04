@@ -17,12 +17,9 @@ import {
   Timeline,
   Tooltip,
 } from '@mantine/core'
-import { useQuery } from '@tanstack/react-query'
 import { IconArchive, IconArrowBackUp, IconHistory, IconPencil } from '@tabler/icons-react'
 import { useState } from 'react'
-import { api } from '../../api/client.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../../features/auth/use-puede.ts'
-import { ejecutar } from '../api/errores.ts'
 import { formatearFechaHora } from '../formato.ts'
 import {
   ASPECTO_INDICADOR,
@@ -36,6 +33,7 @@ import {
   type Periodo,
   type Registro,
 } from './registro.ts'
+import { useTrazas } from './trazas.ts'
 
 // ── Indicadores (franja de tarjetas del prototipo) ──────────────────────────
 
@@ -392,13 +390,18 @@ export function TrazasModal({
   etiquetas: Record<string, string>
   onCerrar: () => void
 }) {
-  const trazas = useQuery({
-    queryKey: ['trazas', entidad, registroId],
-    queryFn: () => ejecutar(api.GET('/api/trazas', { params: { query: { entidad, registroId } } })),
-    enabled: abierto && registroId > 0,
-  })
   return (
     <Modal opened={abierto} onClose={onCerrar} title={titulo} size="lg">
+      {abierto && <HistorialTrazas entidad={entidad} registroId={registroId} etiquetas={etiquetas} />}
+    </Modal>
+  )
+}
+
+/** El historial de un registro (versión, responsable, motivo y cambios), para mostrarlo dentro de otra vista. */
+export function HistorialTrazas({ entidad, registroId, etiquetas }: { entidad: EntidadTraza; registroId: number; etiquetas: Record<string, string> }) {
+  const trazas = useTrazas(entidad, registroId)
+  return (
+    <>
       {trazas.isPending && (
         <Center py="md">
           <Loader size="sm" />
@@ -441,6 +444,6 @@ export function TrazasModal({
           })}
         </Timeline>
       )}
-    </Modal>
+    </>
   )
 }

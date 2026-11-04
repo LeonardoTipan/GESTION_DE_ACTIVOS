@@ -8,7 +8,7 @@ import { errorMotivo } from '../../../shared/registro/registro.ts'
 import { instante } from '../../../shared/zona.ts'
 import { useCategorias } from '../../inventario/api/catalogos.ts'
 import { useCorregirEjecucion, type EstadoEquipo, type Mantenimiento, type TipoMantenimiento } from '../api/mantenimientos.ts'
-import { errorRepositorio, ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO, INFO_TIPO, tiposPermitidos } from '../fases.ts'
+import { errorRepositorio, errorRepositorioObligatorio, errorVerificableObligatorio, ESTADOS_EQUIPO, INFO_ESTADO_EQUIPO, INFO_TIPO, tiposPermitidos } from '../fases.ts'
 
 interface Props {
   opened: boolean
@@ -73,8 +73,9 @@ function Formulario({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
       tecnico: maximo(191),
       resultado: (v) => (completada && !v.trim() ? 'Obligatoria en una ejecución completada' : maximo(191)(v)),
       observaciones: maximo(2000),
-      evidencia: maximo(191),
-      repositorioVerificable: errorRepositorio,
+      // Una completada sigue cerrada: debe quedar con su evidencia (también las anteriores a la regla).
+      evidencia: completada ? errorVerificableObligatorio : maximo(191),
+      repositorioVerificable: completada ? errorRepositorioObligatorio : errorRepositorio,
       motivoCambio: errorMotivo,
     },
   })
@@ -117,8 +118,8 @@ function Formulario({ onClose, mantenimiento: m }: Omit<Props, 'opened'>) {
           Corrige lo realmente ejecutado. Lo planificado no cambia. {completada ? 'Al estar completada, solo un administrador puede hacerlo.' : ''}
         </Text>
         <BloqueEjecucionCierre
-          verificable={form.getInputProps('evidencia')}
-          repositorio={{ label: 'Repositorio del verificable', placeholder: 'Carpeta compartida o https://…', ...form.getInputProps('repositorioVerificable') }}
+          verificable={{ withAsterisk: completada, ...form.getInputProps('evidencia') }}
+          repositorio={{ label: 'Repositorio del verificable', withAsterisk: completada, placeholder: 'Carpeta compartida o https://…', ...form.getInputProps('repositorioVerificable') }}
           detalle={completada && <Textarea label="Descripción de la ejecución" autosize minRows={2} {...form.getInputProps('resultado')} />}
           observacion={form.getInputProps('observaciones')}
           motivoCambio={form.getInputProps('motivoCambio')}
