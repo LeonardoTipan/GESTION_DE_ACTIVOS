@@ -134,6 +134,26 @@ export class QueryPeriodosDto extends PaginationQueryDto {
   @IsEnum(EstadoPeriodoEndpoint)
   estado?: EstadoPeriodoEndpoint;
 
+  @ApiPropertyOptional({ example: 'octubre 2026', description: 'Búsqueda por año y/o mes: «2026», «oct», «octubre 2026», «10».' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(100)
+  q?: string;
+
+  @ApiPropertyOptional({ description: 'Responsable asignado o responsable de la ejecución (contiene el texto).' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MaxLength(191)
+  responsable?: string;
+
+  @ApiPropertyOptional({ description: 'true = solo pendientes de ejecutar o cerrar (ABIERTO o EN_PROGRESO).' })
+  @IsOptional()
+  @aBooleano()
+  @IsBoolean()
+  pendientes?: boolean;
+
   @ApiPropertyOptional({ default: false, description: 'true = incluye los anulados (por defecto se ocultan).' })
   @IsOptional()
   @aBooleano()

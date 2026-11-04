@@ -291,14 +291,14 @@ export class FinalizarMantenimientoDto {
   @MaxLength(2000)
   observaciones?: string;
 
-  @ApiPropertyOptional({ example: 'Informe de Mantenimiento a Servidores y Servicios 01', description: 'VERIFICABLE: nombre del informe o documento que prueba la ejecución.' })
+  @ApiPropertyOptional({ example: 'Informe de Mantenimiento a Servidores y Servicios 01', description: 'VERIFICABLE: nombre del informe o documento que prueba la ejecución. Obligatorio al completar (salvo que ya se guardara durante la ejecución).' })
   @IsOptional()
   @Trim()
   @IsString()
   @MaxLength(191)
   evidencia?: string;
 
-  @ApiPropertyOptional({ example: 'Carpeta Compartida TICs/Interno', description: 'REPOSITORIO del verificable: carpeta compartida o URL http(s).' })
+  @ApiPropertyOptional({ example: 'Carpeta Compartida TICs/Interno', description: 'REPOSITORIO del verificable: carpeta compartida o URL http(s). Obligatorio al completar (salvo que ya se guardara durante la ejecución).' })
   @IsOptional()
   @Trim()
   @IsString()

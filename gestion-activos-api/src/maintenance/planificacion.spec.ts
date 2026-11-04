@@ -1,5 +1,6 @@
 import {
   cumplimiento,
+  exigirEvidenciaDeCierre,
   exigirFechasReales,
   exigirRepositorioValido,
   exigirTipoPermitido,
@@ -58,5 +59,24 @@ describe('mantenimiento: planificación', () => {
     expect(() => exigirFechasReales(new Date('2026-10-01T10:00:00Z'), new Date('2026-10-02T10:00:00Z'), ahora)).not.toThrow();
     expect(() => exigirFechasReales(new Date('2026-10-23T10:00:00Z'), null, ahora)).toThrow(/futura/);
     expect(() => exigirFechasReales(new Date('2026-10-02T10:00:00Z'), new Date('2026-10-01T10:00:00Z'), ahora)).toThrow(/anterior/);
+  });
+});
+
+describe('evidencia obligatoria al completar', () => {
+  const INFORME = 'Informe MT-2026-031';
+  const CARPETA = 'Carpeta Compartida TICs/Interno';
+  it('sin verificable, sin repositorio o sin ninguno: dice qué falta', () => {
+    expect(() => exigirEvidenciaDeCierre(null, CARPETA)).toThrow('falta: el verificable (informe o evidencia de la ejecución).');
+    expect(() => exigirEvidenciaDeCierre(INFORME, undefined)).toThrow('falta: el repositorio del verificable.');
+    expect(() => exigirEvidenciaDeCierre('', '')).toThrow('falta: el verificable (informe o evidencia de la ejecución), el repositorio del verificable.');
+  });
+  it('solo espacios cuenta como vacío', () => {
+    expect(() => exigirEvidenciaDeCierre('   ', CARPETA)).toThrow('el verificable');
+    expect(() => exigirEvidenciaDeCierre(INFORME, '   ')).toThrow('el repositorio');
+  });
+  it('el repositorio debe tener un formato válido; con ambos válidos, pasa', () => {
+    expect(() => exigirEvidenciaDeCierre(INFORME, 'javascript:alert(1)')).toThrow(/http o https/);
+    expect(() => exigirEvidenciaDeCierre(INFORME, CARPETA)).not.toThrow();
+    expect(() => exigirEvidenciaDeCierre(INFORME, 'https://intranet.example/informe.pdf')).not.toThrow();
   });
 });

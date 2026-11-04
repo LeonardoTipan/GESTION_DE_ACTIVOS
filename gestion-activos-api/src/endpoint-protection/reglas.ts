@@ -39,6 +39,28 @@ export function equiposSinAntivirus(totalActivos: number | null, equiposConAntiv
   return totalActivos === null || equiposConAntivirus === null ? null : totalActivos - equiposConAntivirus;
 }
 
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/**
+ * Búsqueda libre por año y/o mes: «2026», «oct», «octubre de 2026», «10». Devuelve null si algún
+ * término no es un año ni un mes (ningún período coincide). «a» son abril y agosto.
+ */
+export function interpretarBusqueda(q: string): { anio?: number; meses?: number[] } | null {
+  const resultado: { anio?: number; meses?: number[] } = {};
+  for (const termino of q.toLowerCase().split(/\s+/).filter((t) => t && t !== 'de')) {
+    if (/^\d{4}$/.test(termino)) {
+      resultado.anio = Number(termino);
+    } else if (/^\d{1,2}$/.test(termino) && Number(termino) >= 1 && Number(termino) <= 12) {
+      resultado.meses = [Number(termino)];
+    } else {
+      const meses = MESES.flatMap((m, i) => (m.startsWith(termino) ? [i + 1] : []));
+      if (!meses.length) return null;
+      resultado.meses = meses;
+    }
+  }
+  return resultado;
+}
+
 /** Primer instante del mes del período en la hora de la institución. */
 export const inicioDelMes = (p: MesPeriodo, zona = zonaHoraria()): Date =>
   instanteLocal(`${p.anio}-${String(p.mes).padStart(2, '0')}-01`, 0, zona);

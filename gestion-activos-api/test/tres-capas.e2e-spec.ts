@@ -211,6 +211,7 @@ describe('Planificación y ejecución de mantenimientos, vulnerabilidades en lot
           duracionMin: 90,
           costo: 45.5,
           repuestos: 'Fuente ATX 500 W',
+          evidencia: 'Informe de prueba', repositorioVerificable: 'Carpeta Compartida TICs/Pruebas',
         })
         .expect(200);
       const m = await prisma.mantenimiento.findUniqueOrThrow({ where: { id } });

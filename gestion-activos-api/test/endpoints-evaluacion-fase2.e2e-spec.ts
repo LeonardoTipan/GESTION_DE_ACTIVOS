@@ -280,6 +280,52 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
     }, LENTO);
   });
 
+  describe('Protección de Endpoints · listados de Ejecución y Bitácora', () => {
+    const RUTA = '/api/proteccion-endpoints/periodos';
+    const listar = async (qs: string) =>
+      (await api(tokens.auditor).get(`${RUTA}?limit=100&${qs}`).expect(200)).body as { data: Array<{ id: number; anio: number; mes: number; estado: string }>; meta: { total: number } };
+
+    it('pendientes = solo abiertos y en progreso; sin el filtro aparecen también los cerrados', async () => {
+      const id = await abrirPeriodo(20);
+      const pendientes = await listar('pendientes=true');
+      expect(pendientes.data.map((p) => p.id)).toContain(id);
+      expect(pendientes.data.every((p) => p.estado !== 'CERRADO')).toBe(true);
+      const todos = await listar('');
+      expect(todos.data.some((p) => p.estado === 'CERRADO')).toBe(true);
+      expect(todos.meta.total).toBeGreaterThan(pendientes.meta.total);
+    }, LENTO);
+
+    it('q busca por año y/o mes; un texto que no es ninguno no devuelve nada', async () => {
+      const { anio, mes } = mesAtras(21);
+      const id = (await api(tokens.analista).post(RUTA, { anio, mes, responsable: 'Responsable Búsqueda' }).expect(201)).body.id as number;
+      expect((await listar(`q=${anio}`)).data.every((p) => p.anio === anio)).toBe(true);
+      const porAmbos = await listar(`q=${mes}%20${anio}`);
+      expect(porAmbos.data.map((p) => p.id)).toEqual([id]);
+      expect((await listar('q=sinsentido')).meta.total).toBe(0);
+    }, LENTO);
+
+    it('responsable encuentra al asignado y al de la ejecución, sin distinguir mayúsculas', async () => {
+      const id = await abrirPeriodo(22);
+      await api(tokens.analista).patch(`${RUTA}/${id}/registro`, { responsableEjecucion: 'Técnica Medición Única' }).expect(200);
+      expect((await listar('responsable=medición%20única')).data.map((p) => p.id)).toEqual([id]);
+      expect((await listar('responsable=responsable%20búsqueda')).meta.total).toBe(1);
+      expect((await listar('responsable=nadie-con-este-nombre')).meta.total).toBe(0);
+    }, LENTO);
+
+    it('la agenda distingue abierto (programado) de en progreso (en curso) y de un abierto vencido', async () => {
+      const abierto = (await listar(`pendientes=true&anio=${anioHoy}&mes=${mesHoy}`)).data[0];
+      const id = abierto?.id ?? (await api(tokens.analista).post(RUTA, { anio: anioHoy, mes: mesHoy, responsable: 'Soporte' }).expect(201)).body.id;
+      const vencido = await abrirPeriodo(23);
+      const enProgreso = await abrirPeriodo(24);
+      await api(tokens.analista).patch(`${RUTA}/${enProgreso}/registro`, { totalActivos: 5 }).expect(200);
+      const eventos = (await api(tokens.auditor).get(`${RUTA}/agenda?desde=${enDias(-1000)}&hasta=${enDias(40)}&capa=1`).expect(200)).body as Array<{ clave: string; estado: string }>;
+      const de = (i: number) => eventos.find((e) => e.clave === `ep1-${i}`)!.estado;
+      expect(de(id)).toBe(abierto?.estado === 'EN_PROGRESO' ? 'EN_CURSO' : 'PROGRAMADO');
+      expect(de(vencido)).toBe('VENCIDO');
+      expect(de(enProgreso)).toBe('EN_CURSO');
+    }, LENTO);
+  });
+
   it('agendas del calendario: lo PREVISTO y lo REAL por separado, con la ruta al registro', async () => {
     const desde = new Date(Date.now() - 400 * 86_400_000).toISOString();
     const hasta = new Date(Date.now() + 400 * 86_400_000).toISOString();

@@ -124,6 +124,7 @@ describe('Mantenimientos (e2e)', () => {
     tecnico: 'jperez',
     diagnostico: 'Firmware desactualizado.',
     duracionMin: 45,
+    evidencia: 'Informe de prueba', repositorioVerificable: 'Carpeta Compartida TICs/Pruebas',
   };
 
   describe('ciclo completo: programar → iniciar → finalizar', () => {

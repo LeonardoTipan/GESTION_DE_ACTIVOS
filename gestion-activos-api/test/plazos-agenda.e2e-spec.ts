@@ -116,7 +116,7 @@ describe('Plazos previstos, fechas reales y agenda (e2e)', () => {
     it('solo dos fases: completar cierra; la API ya no ofrece la antigua verificación ni su plazo', async () => {
       const { id } = (await programar(ahora - 3 * DIA, ahora - 2 * DIA).expect(201)).body;
       await api(tokens.analista).patch(`/api/mantenimientos/${id}/iniciar`, { fechaInicio: iso(ahora - 3 * DIA + HORA), tecnico: 'jperez' }).expect(200);
-      const fin = { fechaFin: iso(ahora - 3 * DIA + 3 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'OPERATIVO', diagnostico: 'Fuente quemada.', duracionMin: 120 };
+      const fin = { evidencia: 'Informe de prueba', repositorioVerificable: 'Carpeta Compartida TICs/Pruebas', fechaFin: iso(ahora - 3 * DIA + 3 * HORA), resultado: 'Fuente cambiada.', estadoEquipo: 'OPERATIVO', diagnostico: 'Fuente quemada.', duracionMin: 120 };
       // La ventana de verificación ya no es un campo de la API (whitelist estricta → 400).
       await api(tokens.analista)
         .patch(`/api/mantenimientos/${id}/finalizar`, { ...fin, verificacionPrevista: iso(ahora - DIA), verificacionLimite: iso(ahora + DIA) })

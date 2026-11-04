@@ -40,7 +40,7 @@ import { activoBreve, SELECT_ACTIVO } from '../../common/dto/registro.dto.js';
 import { BitacoraService } from '../../inventory/bitacora/bitacora.service.js';
 import { PlanesMantenimientoService } from '../planes/planes-mantenimiento.service.js';
 import { calcularCambios } from '../../inventory/bitacora/cambios.js';
-import { exigirFechasReales, exigirRepositorioValido, exigirTipoPermitido, semestreDe } from '../planificacion.js';
+import { exigirEvidenciaDeCierre, exigirFechasReales, exigirRepositorioValido, exigirTipoPermitido, semestreDe } from '../planificacion.js';
 
 const INCLUDE = {
   activo: SELECT_ACTIVO,
@@ -226,7 +226,8 @@ export class MantenimientosService {
     // Fecha REAL de finalización, indicada por el usuario (nunca la hora del servidor).
     const fechaFin = dto.fechaFin;
     exigirFechasReales(actual.fechaInicio, fechaFin);
-    exigirRepositorioValido(dto.repositorioVerificable);
+    // Evidencia obligatoria al cerrar: lo enviado o lo ya guardado durante la ejecución.
+    exigirEvidenciaDeCierre(dto.evidencia ?? actual.evidencia, dto.repositorioVerificable ?? actual.repositorioVerificable);
     const tecnico = dto.tecnico ?? actual.tecnico;
     if (!tecnico) {
       throw new BadRequestException('Indique el técnico que realizó el mantenimiento.');
@@ -323,6 +324,10 @@ export class MantenimientosService {
     }
     exigirFechasReales(datos.fechaInicio ?? actual.fechaInicio, datos.fechaFin ?? actual.fechaFin);
     exigirRepositorioValido(datos.repositorioVerificable);
+    // Una completada corregida sigue cerrada: debe quedar con su evidencia (también las anteriores a la regla).
+    if (actual.fase === 'FINALIZADO') {
+      exigirEvidenciaDeCierre(datos.evidencia ?? actual.evidencia, datos.repositorioVerificable ?? actual.repositorioVerificable);
+    }
     if (datos.tipo && datos.tipo !== actual.tipo) await this.exigirTipoDelActivo(actual.activoId, datos.tipo);
     await this.trazas.modificar('MANTENIMIENTO', id, datos, motivoCambio, usuario.username, { fase: actual.fase });
     // Corregir el fin real de una completada cambia la próxima intervención del plan.

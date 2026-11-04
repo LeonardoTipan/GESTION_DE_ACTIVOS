@@ -7,7 +7,7 @@ import type { PeriodoEndpoint, Prisma } from '../generated/prisma/client.js';
 import type { EstadoPeriodoEndpoint } from '../generated/prisma/enums.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { AbrirPeriodoDto, DatosRegistroPeriodoDto, PeriodoEndpointDto, QueryPeriodosDto, ReabrirPeriodoDto } from './dto.js';
-import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo } from './reglas.js';
+import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, interpretarBusqueda, type DatosRegistroPeriodo } from './reglas.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 
 
@@ -42,12 +42,15 @@ export class PeriodosEndpointService {
   }
 
   async findAll(q: QueryPeriodosDto): Promise<Paginated<PeriodoEndpointDto>> {
-    const where: Prisma.PeriodoEndpointWhereInput = {
-      anio: q.anio,
-      mes: q.mes,
-      estado: q.estado,
-      ...(q.incluirAnulados ? {} : { anuladoEn: null }),
-    };
+    const filtros: Prisma.PeriodoEndpointWhereInput[] = [{ anio: q.anio, mes: q.mes, estado: q.estado }];
+    if (!q.incluirAnulados) filtros.push({ anuladoEn: null });
+    if (q.pendientes) filtros.push({ estado: { in: PENDIENTES } });
+    if (q.responsable) filtros.push({ OR: [{ responsable: { contains: q.responsable } }, { responsableEjecucion: { contains: q.responsable } }] });
+    if (q.q) {
+      const busqueda = interpretarBusqueda(q.q);
+      filtros.push(busqueda ? { anio: busqueda.anio, mes: busqueda.meses && { in: busqueda.meses } } : { id: { in: [] } });
+    }
+    const where: Prisma.PeriodoEndpointWhereInput = { AND: filtros };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.periodoEndpoint.count({ where }),
       this.prisma.periodoEndpoint.findMany({ where, orderBy: [{ anio: 'desc' }, { mes: 'desc' }], skip: skipFor(q), take: q.limit }),
@@ -164,7 +167,8 @@ export class PeriodosEndpointService {
       const base = { modulo: 'endpoints' as const, activo: null, fueraDePlazo: false, ruta: `/proteccion-endpoints/${p.id}` };
       const nombre = `${NOMBRE_MES[p.mes - 1]} de ${p.anio}`;
       if (quiere(1) && inicio <= q.hasta && fin >= q.desde) {
-        const estado = p.estado === 'CERRADO' ? 'COMPLETADO' : p.estado === 'EN_PROGRESO' ? 'EN_CURSO' : fin < ahora ? 'VENCIDO' : 'EN_CURSO';
+        // Abierto (azul), en progreso (amarillo) y cerrado se distinguen; un abierto de un mes ya pasado está vencido.
+        const estado = p.estado === 'CERRADO' ? 'COMPLETADO' : p.estado === 'EN_PROGRESO' ? 'EN_CURSO' : fin < ahora ? 'VENCIDO' : 'PROGRAMADO';
         eventos.push({ ...base, clave: `ep1-${p.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Período de endpoints · ${nombre}`, inicio, fin, estado, responsable: p.responsable, detalle: `Estado ${p.estado.toLowerCase().replace('_', ' ')}` });
       }
       if (quiere(2) && p.fechaEjecucion && p.fechaEjecucion >= q.desde && p.fechaEjecucion <= q.hasta) {

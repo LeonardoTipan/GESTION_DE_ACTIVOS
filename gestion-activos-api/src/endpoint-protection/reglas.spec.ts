@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo } from './reglas.js';
+import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo, interpretarBusqueda } from './reglas.js';
 
 const OCTUBRE = { anio: 2026, mes: 10 };
 const AHORA = new Date('2026-10-29T17:00:00Z');
@@ -12,6 +12,23 @@ const completo: DatosRegistroPeriodo = {
   repositorioVerificable: 'Carpeta Compartida TICs/Antivirus',
 };
 const vacio: DatosRegistroPeriodo = { totalActivos: null, equiposConAntivirus: null, fechaEjecucion: null, responsableEjecucion: null, evidencia: null, repositorioVerificable: null };
+
+describe('Protección de Endpoints · búsqueda por año o mes', () => {
+  it('reconoce año, mes por nombre o número, y los dos juntos', () => {
+    expect(interpretarBusqueda('2026')).toEqual({ anio: 2026 });
+    expect(interpretarBusqueda('octubre')).toEqual({ meses: [10] });
+    expect(interpretarBusqueda('OCT')).toEqual({ meses: [10] });
+    expect(interpretarBusqueda('10')).toEqual({ meses: [10] });
+    expect(interpretarBusqueda('enero de 2021')).toEqual({ anio: 2021, meses: [1] });
+  });
+
+  it('un prefijo puede ser de varios meses; lo que no es año ni mes no coincide con nada', () => {
+    expect(interpretarBusqueda('a')).toEqual({ meses: [4, 8] });
+    expect(interpretarBusqueda('13')).toBeNull();
+    expect(interpretarBusqueda('hola')).toBeNull();
+    expect(interpretarBusqueda('2026 hola')).toBeNull();
+  });
+});
 
 describe('Protección de Endpoints · reglas de la fase 2', () => {
   it('cobertura con 1 decimal; sin datos o con total 0, null', () => {

@@ -1,4 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
+import { exigirRepositorioValido } from '../common/evidencia/repositorio.js';
 import { diaLocal, instanteLocal, zonaHoraria } from '../common/plazos/plazos.js';
 import type { ClaseMantenimiento, TipoMantenimiento } from '../generated/prisma/enums.js';
 
@@ -80,7 +81,22 @@ export function cumplimiento(conEjecucionCompletada: number, esperables: number)
 // ── Verificable ─────────────────────────────────────────────────────────────
 
 /** Compartida con Vulnerabilidades: vive en common/evidencia. */
-export { exigirRepositorioValido } from '../common/evidencia/repositorio.js';
+export { exigirRepositorioValido };
+
+/**
+ * Una ejecución completada debe conservar su evidencia: el verificable (informe) y el
+ * repositorio donde está guardado. Se aplica al completar y al corregir una completada; las
+ * registradas antes de esta regla no se alteran, pero corregirlas exige completarla. Solo
+ * espacios cuenta como vacío. El mensaje dice qué falta.
+ */
+export function exigirEvidenciaDeCierre(evidencia: string | null | undefined, repositorio: string | null | undefined): void {
+  const faltan = [
+    !evidencia?.trim() && 'el verificable (informe o evidencia de la ejecución)',
+    !repositorio?.trim() && 'el repositorio del verificable',
+  ].filter(Boolean);
+  if (faltan.length) throw new BadRequestException(`Para completar el mantenimiento falta: ${faltan.join(', ')}.`);
+  exigirRepositorioValido(repositorio);
+}
 
 // ── Fechas reales ───────────────────────────────────────────────────────────
 
