@@ -176,7 +176,7 @@ Parámetros: `anio`, `semestre` (exige el año), `activoId`, `tipo`, `responsabl
 | `POST /api/mantenimientos/planes/:id/programar` | admin, analista | Cuerpo opcional `{ fecha?, adicional? }`; la adicional no mueve la próxima fecha |
 | `POST /api/mantenimientos` | admin, analista | Ahora `{ planId, activoId?, fecha, fechaLimite? }` |
 | `PATCH /api/mantenimientos/:id/iniciar` | admin, analista | `fechaInicio` obligatoria; con traza |
-| `PATCH /api/mantenimientos/:id/finalizar` | admin, analista | `fechaFin` obligatoria; `repositorioVerificable`; con traza |
+| `PATCH /api/mantenimientos/:id/finalizar` | admin, analista | `fechaFin`, `evidencia` y `repositorioVerificable` obligatorios (cuenta lo ya guardado); con traza |
 | `PATCH /api/mantenimientos/:id/cancelar` | admin, analista | `fechaCancelacion`; con traza |
 | `PATCH /api/mantenimientos/:id/ejecucion` | admin, analista (completada: admin) | **Nuevo**: corrección de lo ejecutado |
 | `GET /api/mantenimientos/bitacora/general` | todos | **Nuevo** |

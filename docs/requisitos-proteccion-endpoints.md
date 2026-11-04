@@ -1,6 +1,6 @@
 # Protección de Endpoints · requisitos funcionales
 
-**Estado (29/10/2026):** **fase 1 implementada** (sin commitear). La fase 2 sigue siendo especificación.
+**Estado (04/11/2026):** las dos fases están implementadas y organizadas en tres pestañas (sección «Interfaz en tres pestañas», al final). Las secciones siguientes conservan la especificación y las decisiones de cada fecha.
 
 ## Implementado · fase 1
 
@@ -170,3 +170,31 @@ La recomendada es **(a)**, que ya está en la especificación: «los errores se 
 - **Pruebas:**
   - `src/endpoint-protection/reglas.spec.ts`;
   - `test/endpoints-evaluacion-fase2.e2e-spec.ts`: registro, coherencia, cierre, reapertura, permisos, 404, anulado, pendientes y traza.
+
+## Interfaz en tres pestañas (04/11/2026)
+
+Reorganiza la interfaz sin duplicar la fase 2 y **sin migraciones**. La pestaña va en la URL (`/proteccion-endpoints?pestana=ejecucion|bitacora`).
+
+| Pestaña | Contenido |
+|---|---|
+| **1 · Planificación** | Lo que ya existía: cifras, calendario de doce meses, listado y apertura. Las reglas de creación no cambian. |
+| **2 · Ejecución y cierre** | Períodos ABIERTO y EN_PROGRESO. Acciones: Ejecutar o Continuar ejecución (abren la ficha), Consultar detalle y Cerrar. |
+| **Bitácora** | Todos los períodos, también los anulados. Solo consulta, con detalle e historial de auditoría. |
+
+**Ficha del período:** sigue siendo `/proteccion-endpoints/:id`, con los mismos servicios y DTO. Cambian las etiquetas y se añade la confirmación antes de cerrar.
+
+**Cerrar desde la tabla:** el botón aparece cuando ya están guardados los datos obligatorios y son coherentes. Envía el cierre sin datos nuevos; el backend valida lo guardado.
+
+**API (solo añade filtros a `GET /api/proteccion-endpoints/periodos`):**
+
+- `pendientes=true`: ABIERTO o EN_PROGRESO.
+- `responsable`: contiene el texto, en el responsable asignado o en el de la ejecución.
+- `q`: año y/o mes («2026», «oct», «octubre de 2026», «10»). Lo que no sea año ni mes no devuelve filas.
+
+**Fecha de cierre:** no hay columna. Se toma de la auditoría: la traza más reciente cuyo estado pasó a CERRADO. «Cerrado por» sigue siendo `cerradoPor`.
+
+**Calendario general:** un período abierto del mes en curso pasa de «En curso» a «Programado», para distinguirlo de uno en progreso. Abierto de un mes pasado: «Vencido». En progreso: «En curso». Cerrado: «Completado».
+
+**Decisión de alcance:** «Sin abrir» se muestra en el calendario de doce meses de Planificación, no en el calendario general: allí solo hay eventos de períodos que existen, y no se inventan eventos para meses sin registro.
+
+**Terminología pendiente:** la interfaz dice «ejecución», pero los mensajes del backend y el título de la agenda aún dicen «medición» (p. ej. «Para cerrar el período falta: la fecha real de la medición»). No se cambiaron porque las pruebas de la fase 2 fijan esos textos.
