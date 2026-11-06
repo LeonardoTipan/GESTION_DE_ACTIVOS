@@ -18,6 +18,8 @@ export const ASPECTO_ESTADO: Record<EstadoEvento, { etiqueta: string; color: str
   PROGRAMADO: { etiqueta: 'Programado', color: 'blue' },
   EN_CURSO: { etiqueta: 'En curso', color: 'yellow' },
   VENCIDO: { etiqueta: 'Vencido', color: 'red' },
+  // Endpoints y Evaluación: abierto (sin empezar) con la fecha planificada ya pasada.
+  POR_EJECUTAR: { etiqueta: 'Por ejecutar', color: 'pink' },
   COMPLETADO: { etiqueta: 'Completado', color: 'green' },
   FALLIDO: { etiqueta: 'Fallido o no satisfactorio', color: 'orange' },
   CANCELADO: { etiqueta: 'Cancelado', color: 'gray' },
@@ -42,8 +44,8 @@ export const NOMBRE_CAPA: Record<Modulo, Record<Capa, string>> = {
   mantenimientos: { 1: 'Planificación', 2: 'Ejecución', 3: '—' },
   vulnerabilidades: { 1: 'Detección', 2: 'Remediación', 3: '—' },
   renovaciones: { 1: 'Planificación y caducidad', 2: 'Renovación real', 3: '—' },
-  endpoints: { 1: 'Período mensual', 2: 'Medición real', 3: '—' },
-  evaluaciones: { 1: 'Paso a producción programado', 2: 'Pruebas reales', 3: '—' },
+  endpoints: { 1: 'Planificación del período', 2: 'Medición real', 3: '—' },
+  evaluaciones: { 1: 'Evaluación planificada', 2: 'Pruebas reales', 3: '—' },
 }
 
 /** La semana empieza el lunes. */

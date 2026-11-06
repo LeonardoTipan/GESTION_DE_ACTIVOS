@@ -87,6 +87,24 @@ export function useReabrirEvaluacion() {
 }
 
 /** Bitácora General por semestres (planificadas por fecha programada; cerradas por fecha real). */
+/** Bitácora General con la fórmula del Excel: pruebas ejecutadas ÷ total de sistemas en producción. */
+export function useBitacoraIndicadorEvaluacion(anio: number) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'indicador', anio],
+    queryFn: () => ejecutar(api.GET('/api/evaluaciones-sistemas/bitacora/indicador', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** El «Total sistemas en producción» del semestre y si cada uno se evaluó. */
+export function useSistemasProduccion(anio: number, semestre: 1 | 2 | undefined) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'sistemas', anio, semestre],
+    queryFn: () => ejecutar(api.GET('/api/evaluaciones-sistemas/bitacora/sistemas', { params: { query: { anio, semestre: semestre ?? 1 } } })),
+    enabled: semestre !== undefined,
+  })
+}
+
 export function useBitacoraGeneral(anio: number, semestre?: 1 | 2) {
   return useQuery({
     queryKey: [...claves.todo, 'bitacora', 'general', anio, semestre],

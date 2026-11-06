@@ -69,3 +69,23 @@ export function faltantesCierre(d: {
     d.nuevaSinCaducidad && !d.observacion.trim() && 'la justificación de «sin caducidad» en la observación',
   ].filter((x): x is string => Boolean(x))
 }
+
+/** Nombres de los campos, para las trazas (sin nombres internos). */
+export const ETIQUETAS_RENOVACION: Record<string, string> = {
+  activoId: 'Sistema (activo)',
+  tipo: 'Tipo de renovación',
+  responsable: 'Responsable',
+  fechaPlanificada: 'Fecha planificada',
+  fechaCaducidadActual: 'Fecha de caducidad actual',
+  sinCaducidadActual: 'Sin caducidad (actual)',
+  estado: 'Estado',
+  fechaRenovacion: 'Fecha real de renovación',
+  nuevaFechaCaducidad: 'Nueva fecha de caducidad',
+  nuevaSinCaducidad: 'Sin caducidad (nueva)',
+  evidencia: 'Verificable',
+  repositorioVerificable: 'Repositorio verificable',
+  descripcion: 'Descripción',
+  observacion: 'Observación',
+  cerradaPor: 'Cerrada por',
+  renovacionAnteriorId: 'Renovación anterior',
+}

@@ -5,7 +5,7 @@ import { ESTADOS, TIPOS, VIGENCIAS } from './textos.ts'
 export const TAMANO_PAGINA = 20
 
 /** Las DOS fases del módulo, cada una en su pestaña. */
-export const FASES = ['planificacion', 'ejecucion'] as const
+export const FASES = ['planificacion', 'ejecucion', 'bitacora'] as const
 export type Fase = (typeof FASES)[number]
 
 const DIA = /^\d{4}-\d{2}-\d{2}$/

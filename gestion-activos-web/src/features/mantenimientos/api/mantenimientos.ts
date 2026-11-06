@@ -257,6 +257,15 @@ export type FiltrosBitacoraEspecifica = NonNullable<
   paths['/api/mantenimientos/bitacora/especifica']['get']['parameters']['query']
 >
 
+/** Bitácora General con el formato del Excel (contrato común de las bitácoras). */
+export function useBitacoraIndicadorMantenimientos(anio: number) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'indicador', anio],
+    queryFn: () => ejecutar(api.GET('/api/mantenimientos/bitacora/indicador', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
 export function useBitacoraGeneral(anio: number, semestre?: 1 | 2) {
   return useQuery({
     queryKey: [...claves.todo, 'bitacora', 'general', anio, semestre],

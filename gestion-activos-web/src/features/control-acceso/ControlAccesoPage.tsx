@@ -1,14 +1,15 @@
-import { Anchor, Badge, Button, Group, SegmentedControl, Select, Stack, Table, Text, TextInput, Title } from '@mantine/core'
+import { Anchor, Badge, Button, Group, SegmentedControl, Select, Stack, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
-import { IconPlus, IconSearch } from '@tabler/icons-react'
+import { IconKey, IconNotebook, IconPlus, IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
-import { Link, useNavigate } from 'react-router'
+import { Link, useNavigate, useSearchParams } from 'react-router'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { instante } from '../../shared/zona.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useSolicitudes, type EstadoSolicitud, type Solicitud, type TipoAcceso, type TipoSolicitud } from './api.ts'
+import { BitacoraAcceso } from './BitacoraAcceso.tsx'
 import { SolicitudFormModal } from './SolicitudFormModal.tsx'
 import { destino, ESTADO, solicitante, TIPO_ACCESO, TIPO_SOLICITUD } from './textos.ts'
 
@@ -20,6 +21,9 @@ export function ControlAccesoPage() {
   const navigate = useNavigate()
   const puedeOperar = usePuedeOperar()
   const [nueva, modal] = useDisclosure()
+  // Pestaña en la URL: Solicitudes (por defecto) o Bitácora (consulta).
+  const [params, setParams] = useSearchParams()
+  const pestana = params.get('pestana') === 'bitacora' ? 'bitacora' : 'solicitudes'
   const [busqueda, setBusqueda] = useState('')
   const [q] = useDebouncedValue(busqueda.trim(), 300)
   const [tipoAcceso, setTipoAcceso] = useState<'' | TipoAcceso>('')
@@ -65,6 +69,21 @@ export function ControlAccesoPage() {
         )}
       </Group>
 
+      <Tabs value={pestana} onChange={(v) => setParams(v === 'bitacora' ? { pestana: 'bitacora' } : {}, { replace: true })}>
+        <Tabs.List>
+          <Tabs.Tab value="solicitudes" leftSection={<IconKey size={16} />}>
+            Solicitudes
+          </Tabs.Tab>
+          <Tabs.Tab value="bitacora" leftSection={<IconNotebook size={16} />}>
+            Bitácora
+          </Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+
+      {pestana === 'bitacora' ? (
+        <BitacoraAcceso />
+      ) : (
+      <>
       <Group gap="sm" align="flex-end" wrap="wrap">
         <SegmentedControl
           data={[{ value: '', label: 'Todas' }, ...opciones(TIPO_ACCESO)]}
@@ -109,6 +128,8 @@ export function ControlAccesoPage() {
       >
         {(solicitudes) => <TablaSolicitudes solicitudes={solicitudes} />}
       </TarjetaListado>
+      </>
+      )}
 
       <SolicitudFormModal abierto={nueva} onCerrar={modal.close} onGuardada={(s) => navigate(`/control-acceso/${s.id}`)} />
     </Stack>

@@ -7,7 +7,6 @@ import {
   Group,
   Loader,
   Pagination,
-  Progress,
   SegmentedControl,
   Select,
   Stack,
@@ -21,12 +20,12 @@ import { IconSearch } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { formatearDia, formatearFechaHora } from '../../../shared/formato.ts'
+import { BitacoraGeneral } from '../../../shared/bitacora/BitacoraGeneral.tsx'
 import { SelectorActivo } from '../../inventario/componentes/SelectorActivo.tsx'
 import {
   useBitacoraEspecifica,
-  useBitacoraGeneral,
+  useBitacoraIndicadorMantenimientos,
   type FilaBitacora,
-  type ResumenBitacora,
   type SituacionBitacora,
   type TipoMantenimiento,
 } from '../api/mantenimientos.ts'
@@ -61,94 +60,6 @@ function SelectorPeriodoBitacora({ anio, semestre, onChange }: { anio: number; s
         onChange={(v) => onChange(anio, v === '0' ? undefined : (Number(v) as 1 | 2))}
       />
     </Group>
-  )
-}
-
-function FilaResumen({ r, total = false }: { r: ResumenBitacora; total?: boolean }) {
-  const porcentaje = r.cumplimiento
-  return (
-    <Table.Tr fw={total ? 700 : undefined} bg={total ? 'var(--mantine-color-default-hover)' : undefined}>
-      <Table.Td>{total ? `Total ${r.periodo.etiqueta}` : r.periodo.etiqueta}</Table.Td>
-      <Table.Td ta="right">{r.planificadas}</Table.Td>
-      <Table.Td ta="right" c="dimmed">
-        {r.suspendidas}
-      </Table.Td>
-      <Table.Td ta="right">{r.esperadas}</Table.Td>
-      <Table.Td ta="right" c="green">
-        {r.cumplidas}
-      </Table.Td>
-      <Table.Td ta="right" c={r.pendientes ? 'orange' : undefined}>
-        {r.pendientes}
-      </Table.Td>
-      <Table.Td miw={170}>
-        {porcentaje === null ? (
-          <Text size="sm" c="dimmed">
-            — (sin planificaciones exigibles)
-          </Text>
-        ) : (
-          <Group gap="xs" wrap="nowrap">
-            <Progress value={porcentaje} color={porcentaje >= 80 ? 'green' : porcentaje >= 50 ? 'yellow' : 'red'} w={90} aria-label={`Cumplimiento ${porcentaje} %`} />
-            <Text size="sm" fw={600}>
-              {porcentaje} %
-            </Text>
-          </Group>
-        )}
-      </Table.Td>
-      <Table.Td ta="right">
-        {r.ejecucionesCompletadas}
-        {r.ejecucionesSinPlanificacion > 0 && (
-          <Text span size="xs" c="dimmed">
-            {' '}
-            ({r.ejecucionesSinPlanificacion} sin planificación)
-          </Text>
-        )}
-      </Table.Td>
-    </Table.Tr>
-  )
-}
-
-/** Bitácora General: cumplimiento por semestre (sin doble conteo). */
-function BitacoraGeneral({ anio, semestre }: { anio: number; semestre: Semestre }) {
-  const { data, isPending, error } = useBitacoraGeneral(anio, semestre)
-  return (
-    <Card withBorder padding="lg">
-      <Title order={4}>Bitácora General</Title>
-      <Text size="sm" c="dimmed" mb="sm">
-        Cada planificación cuenta una vez, en el semestre de su fecha de inicio planificada; está cumplida si tiene al menos una
-        ejecución completada (aunque se ejecute en otro semestre). Las suspendidas sin ejecución no son exigibles. Las ejecuciones
-        completadas se cuentan aparte, en su semestre real. Los registros anulados no cuentan.
-      </Text>
-      {error ? (
-        <Alert color="red">{error.message}</Alert>
-      ) : isPending ? (
-        <Center py="md">
-          <Loader size="sm" />
-        </Center>
-      ) : (
-        <Table.ScrollContainer minWidth={900}>
-          <Table verticalSpacing="xs" fz="sm">
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Semestre</Table.Th>
-                <Table.Th ta="right">Planificadas</Table.Th>
-                <Table.Th ta="right">Suspendidas</Table.Th>
-                <Table.Th ta="right">Exigibles</Table.Th>
-                <Table.Th ta="right">Cumplidas</Table.Th>
-                <Table.Th ta="right">Pendientes</Table.Th>
-                <Table.Th>Cumplimiento</Table.Th>
-                <Table.Th ta="right">Ejecuciones completadas (semestre real)</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {data.semestres.map((r) => (
-                <FilaResumen key={r.periodo.etiqueta} r={r} />
-              ))}
-              {data.semestres.length > 1 && <FilaResumen r={data.total} total />}
-            </Table.Tbody>
-          </Table>
-        </Table.ScrollContainer>
-      )}
-    </Card>
   )
 }
 
@@ -370,10 +281,12 @@ function BitacoraEspecifica({ anio, semestre }: { anio: number; semestre: Semest
 /** Pestaña Bitácoras: General (cumplimiento) y Específica (detalle), del mismo período. */
 export function Bitacoras() {
   const [periodo, setPeriodo] = useState<{ anio: number; semestre: Semestre }>({ anio: AÑO_ACTUAL, semestre: undefined })
+  const indicador = useBitacoraIndicadorMantenimientos(periodo.anio)
   return (
     <Stack gap="md">
       <SelectorPeriodoBitacora anio={periodo.anio} semestre={periodo.semestre} onChange={(anio, semestre) => setPeriodo({ anio, semestre })} />
-      <BitacoraGeneral anio={periodo.anio} semestre={periodo.semestre} />
+      {/* Bitácora General con el formato del Excel (contrato común); mismo cálculo de siempre. */}
+      <BitacoraGeneral consulta={indicador} seleccionado={periodo.semestre} onSeleccionar={(s) => setPeriodo((p) => ({ ...p, semestre: s as Semestre }))} />
       <BitacoraEspecifica key={`${periodo.anio}-${periodo.semestre ?? 0}`} anio={periodo.anio} semestre={periodo.semestre} />
     </Stack>
   )

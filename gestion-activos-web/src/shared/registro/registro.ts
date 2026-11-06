@@ -99,3 +99,11 @@ export function metaIndicador(i: Pick<Indicador, 'meta' | 'unidad' | 'direccion'
   const signo = i.direccion === 'bajar' ? '≤' : '≥'
   return `Meta ${signo} ${i.meta}${i.unidad === '%' ? ' %' : i.unidad ? ` ${i.unidad}` : ''}`
 }
+
+/**
+ * Fecha del último cierre según la auditoría (los módulos de dos fases no tienen columna propia).
+ * Las trazas llegan de la más reciente a la más antigua. La usa quien ya sabe que está cerrado.
+ */
+export function ultimoCierre(trazas: { fecha: string; cambios: { campo: string; despues?: unknown }[] }[]): string | null {
+  return trazas.find((t) => t.cambios.some((c) => c.campo === 'estado' && c.despues === 'CERRADO'))?.fecha ?? null
+}

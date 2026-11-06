@@ -1,6 +1,8 @@
 import {
   Anchor,
+  Badge,
   Button,
+  SegmentedControl,
   Group,
   Select,
   Stack,
@@ -13,7 +15,7 @@ import {
 } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
-import { IconPlus, IconSearch, IconShieldCheck, IconShieldSearch } from '@tabler/icons-react'
+import { IconNotebook, IconPlus, IconSearch, IconShieldCheck, IconShieldSearch } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { Calendario } from '../../shared/calendario/Calendario.tsx'
@@ -37,7 +39,8 @@ import {
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { RegistrarModal } from './componentes/RegistrarModal.tsx'
 import { TableroDeteccion } from './componentes/TableroDeteccion.tsx'
-import { aConsultaApi, escribirFiltros, leerFiltros, type Fase } from './filtros-url.ts'
+import { BitacoraVulnerabilidades } from './componentes/BitacoraVulnerabilidades.tsx'
+import { aConsultaApi, escribirFiltros, leerFiltros, type Fase, type Vista } from './filtros-url.ts'
 import { ESTADOS, INFO_ESTADO, INFO_NIVEL, NIVELES } from './riesgo.ts'
 
 /** Texto que puede ser largo: dos líneas y el resto en el título. */
@@ -110,8 +113,14 @@ function TablaVulnerabilidades({ vulnerabilidades }: { vulnerabilidades: Vulnera
               </Table.Td>
               <Table.Td>{v.responsable ?? '—'}</Table.Td>
               <Table.Td>
-                {v.fechaRemediacion ? (
+                {v.estado === 'REMEDIADO' && v.fechaRemediacion ? (
                   formatearDia(v.fechaRemediacion)
+                ) : v.fechaRemediacion ? (
+                  // Fecha guardada con «Guardar sin cerrar»: NO es una remediación hasta marcarla.
+                  <>
+                    <Text size="sm" c="dimmed">{formatearDia(v.fechaRemediacion)}</Text>
+                    <Badge size="xs" color="gray" variant="outline">Guardada, sin cerrar</Badge>
+                  </>
                 ) : (
                   <Text size="sm" c="dimmed">
                     No remediada
@@ -182,9 +191,12 @@ function CampoTexto({ valor, onCambio, ...props }: { valor?: string; onCambio: (
  */
 export function VulnerabilidadesPage() {
   const navigate = useNavigate()
-  const { filtros, actualizar, limpiar } = useFiltrosUrl(leerFiltros, escribirFiltros)
+  const { filtros, actualizar } = useFiltrosUrl(leerFiltros, escribirFiltros)
+  // Quita los filtros de búsqueda, pero se queda en la misma pestaña y vista.
+  const limpiar = () =>
+    actualizar({ nivelRiesgo: undefined, estado: undefined, activoId: undefined, categoriaId: undefined, responsable: undefined, desde: undefined, hasta: undefined, q: undefined, vencidas: undefined, page: 1 })
   const fase: Fase = filtros.fase ?? 'deteccion'
-  const consulta = useVulnerabilidades(aConsultaApi(filtros))
+  const consulta = useVulnerabilidades(aConsultaApi(filtros), fase !== 'bitacora')
   const puedeOperar = usePuedeOperar()
   const categorias = useCategorias()
   const [modalAbierto, modal] = useDisclosure()
@@ -221,7 +233,12 @@ export function VulnerabilidadesPage() {
         )}
       </Group>
 
-      <Tabs value={fase} onChange={(v) => actualizar({ fase: v === 'remediacion' ? 'remediacion' : undefined, estado: undefined, page: 1 })}>
+      <Tabs
+        value={fase}
+        onChange={(v) =>
+          actualizar({ fase: v === 'remediacion' || v === 'bitacora' ? v : undefined, estado: undefined, vista: undefined, anio: undefined, trimestre: undefined, page: 1 })
+        }
+      >
         <Tabs.List>
           <Tabs.Tab value="deteccion" leftSection={<IconShieldSearch size={16} />}>
             1 · Detección
@@ -229,8 +246,14 @@ export function VulnerabilidadesPage() {
           <Tabs.Tab value="remediacion" leftSection={<IconShieldCheck size={16} />}>
             2 · Remediación
           </Tabs.Tab>
+          <Tabs.Tab value="bitacora" leftSection={<IconNotebook size={16} />}>
+            Bitácora
+          </Tabs.Tab>
         </Tabs.List>
       </Tabs>
+      {fase === 'bitacora' && <BitacoraVulnerabilidades filtros={filtros} actualizar={actualizar} />}
+      {fase !== 'bitacora' && (
+      <>
       {/* Tablero de la fase (patrón de Planificación de Mantenimientos), solo en Detección. */}
       {fase === 'deteccion' && <TableroDeteccion />}
       {fase === 'deteccion' ? (
@@ -247,9 +270,25 @@ export function VulnerabilidadesPage() {
           }
         />
       ) : (
-        <Text size="sm" c="dimmed">
-          Lo pendiente de remediar (abierto o en progreso). Abra una para iniciar la remediación, registrar la fecha real, el verificable y su repositorio, y marcarla como remediada.
-        </Text>
+        <Group justify="space-between" align="center" wrap="wrap">
+          <Text size="sm" c="dimmed" maw={720}>
+            {filtros.vista === 'remediadas'
+              ? 'Las vulnerabilidades ya remediadas, con su fecha real, el verificable y el repositorio. Ábralas para ver el detalle o reabrirlas.'
+              : filtros.vista === 'todas'
+                ? 'Todas las vulnerabilidades, pendientes y remediadas.'
+                : 'Lo pendiente de remediar (abierto o en progreso). Abra una para iniciar la remediación, registrar la fecha real, el verificable y su repositorio, y marcarla como remediada.'}
+          </Text>
+          <SegmentedControl
+            aria-label="Vista de remediación"
+            data={[
+              { value: 'pendientes', label: 'Pendientes' },
+              { value: 'remediadas', label: 'Remediadas' },
+              { value: 'todas', label: 'Todas' },
+            ]}
+            value={filtros.vista ?? 'pendientes'}
+            onChange={(v) => actualizar({ vista: v === 'pendientes' ? undefined : (v as Vista), page: 1 })}
+          />
+        </Group>
       )}
 
       <Group gap="sm" align="flex-end" wrap="wrap">
@@ -281,15 +320,18 @@ export function VulnerabilidadesPage() {
           w={{ base: '100%', sm: 140 }}
         />
         <CampoTexto label="Responsable" placeholder="ANALISTA 1" valor={filtros.responsable} onCambio={(responsable) => actualizar({ responsable, page: 1 })} w={{ base: '100%', sm: 160 }} />
-        <Select
-          label="Estado"
-          placeholder={fase === 'remediacion' ? 'Pendientes' : 'Todos'}
-          clearable
-          data={ESTADOS.map((e) => ({ value: e, label: INFO_ESTADO[e].etiqueta }))}
-          value={filtros.estado ?? null}
-          onChange={(v) => actualizar({ estado: (v as EstadoVulnerabilidad | null) ?? undefined, page: 1 })}
-          w={{ base: '100%', sm: 150 }}
-        />
+        {/* En Remediación el estado lo decide el selector Pendientes | Remediadas | Todas. */}
+        {fase === 'deteccion' && (
+          <Select
+            label="Estado"
+            placeholder="Todos"
+            clearable
+            data={ESTADOS.map((e) => ({ value: e, label: INFO_ESTADO[e].etiqueta }))}
+            value={filtros.estado ?? null}
+            onChange={(v) => actualizar({ estado: (v as EstadoVulnerabilidad | null) ?? undefined, page: 1 })}
+            w={{ base: '100%', sm: 150 }}
+          />
+        )}
         <DatePickerInput
           type="range"
           label="Detectadas entre"
@@ -323,7 +365,11 @@ export function VulnerabilidadesPage() {
               {hayFiltros
                 ? 'Ninguna vulnerabilidad coincide con los filtros.'
                 : fase === 'remediacion'
-                  ? 'No hay vulnerabilidades pendientes de remediar.'
+                  ? filtros.vista === 'remediadas'
+                    ? 'Todavía no hay vulnerabilidades remediadas.'
+                    : filtros.vista === 'todas'
+                      ? 'Todavía no hay vulnerabilidades registradas.'
+                      : 'No hay vulnerabilidades pendientes de remediar.'
                   : 'Todavía no hay vulnerabilidades registradas.'}
             </Text>
             {hayFiltros && (
@@ -347,6 +393,8 @@ export function VulnerabilidadesPage() {
         modulos={['vulnerabilidades']}
         capa={fase === 'deteccion' ? 1 : 2}
       />
+      </>
+      )}
 
       {puedeOperar && (
         <RegistrarModal

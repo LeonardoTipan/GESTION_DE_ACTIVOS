@@ -1,19 +1,21 @@
 import { Alert, Anchor, Badge, Button, Center, Group, Loader, ScrollArea, Select, SimpleGrid, Stack, Switch, Table, Tabs, Text, TextInput, Title } from '@mantine/core'
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
-import { IconBook, IconCalendarStats, IconPlus, IconSearch } from '@tabler/icons-react'
+import { IconBook, IconCalendarStats, IconPlus, IconSearch, IconTool } from '@tabler/icons-react'
 import { useState } from 'react'
-import { Link } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
 import { Cifra, PanelTablero } from '../../shared/components/Tablero.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora } from '../../shared/formato.ts'
 import { BadgeRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
-import { useActivos } from '../inventario/api/activos.ts'
+import { useActivos, useCategoriasConActivos } from '../inventario/api/activos.ts'
 import { useEvaluaciones, useProximasEvaluaciones, type EstadoEvaluacion } from './api.ts'
 import { BitacoraEvaluacion } from './BitacoraEvaluacion.tsx'
+import { BadgeEstadoEvaluacion } from './componentes.tsx'
+import { EjecucionEvaluacion } from './EjecucionEvaluacion.tsx'
 import { PlanificacionEvaluacionModal } from './PlanificacionEvaluacionModal.tsx'
-import { DIAS_TABLERO, ESTADOS, INFO_ESTADO } from './textos.ts'
+import { DIAS_TABLERO, ESTADOS, INFO_ESTADO, pestanaDe, periodoPlanificado, type PestanaEvaluacion } from './textos.ts'
 
 /** Cifras y paneles de la planificación (patrón de Planificación de Mantenimientos), con datos reales. */
 function Tablero() {
@@ -98,38 +100,33 @@ function Tablero() {
 }
 
 /**
- * Evaluación de Sistemas Productivos · fase 1 (planificación con la fecha programada de paso
- * a producción). La fase 2 (fecha real de las pruebas de seguridad e informe) aún no está.
+ * Evaluación de Sistemas Productivos: Planificación (sistemas reales del inventario, fecha
+ * planificada), Ejecución y cierre (las pendientes; se ejecutan en la ficha) y Bitácora (consulta).
+ * La pestaña va en la URL, para volver a ella desde la ficha.
  */
 export function EvaluacionSistemasPage() {
-  const puedeOperar = usePuedeOperar()
-  const [pestana, setPestana] = useState<string | null>('planificacion')
-  const [filtros, setFiltros] = useState<{ page: number; q: string; responsable: string; estado?: EstadoEvaluacion; vencidas?: boolean }>({ page: 1, q: '', responsable: '' })
-  const [q] = useDebouncedValue(filtros.q.trim(), 300)
-  const [responsable] = useDebouncedValue(filtros.responsable.trim(), 300)
-  const consulta = useEvaluaciones({ page: filtros.page, limit: 20, q: q || undefined, responsable: responsable || undefined, estado: filtros.estado, vencidas: filtros.vencidas })
-  const [modalAbierto, modal] = useDisclosure()
-  const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
-  const hayFiltros = Boolean(filtros.q || filtros.responsable || filtros.estado || filtros.vencidas)
-
+  const [params, setParams] = useSearchParams()
+  const pestana = pestanaDe(params.get('pestana'))
+  const ir = (p: PestanaEvaluacion) => setParams(p === 'planificacion' ? {} : { pestana: p })
   return (
     <Stack gap="md">
-      <Group justify="space-between" align="flex-end">
-        <div>
-          <Title order={2}>Evaluación de Sistemas Productivos</Title>
-          <Text c="dimmed" size="sm">
-            Pruebas de seguridad antes del paso a producción · fase 1: planificación
-          </Text>
-          <Text c="dimmed" size="xs">
-            ISO/IEC 27001:2022 · A.8.29 Pruebas de seguridad en el desarrollo y la aceptación
-          </Text>
-        </div>
-      </Group>
+      <div>
+        <Title order={2}>Evaluación de Sistemas Productivos</Title>
+        <Text c="dimmed" size="sm">
+          Pruebas de seguridad de cada sistema antes de su paso a producción
+        </Text>
+        <Text c="dimmed" size="xs">
+          ISO/IEC 27001:2022 · A.8.29 Pruebas de seguridad en el desarrollo y la aceptación
+        </Text>
+      </div>
 
-      <Tabs value={pestana} onChange={setPestana}>
+      <Tabs value={pestana} onChange={(v) => ir(pestanaDe(v))}>
         <Tabs.List>
           <Tabs.Tab value="planificacion" leftSection={<IconCalendarStats size={16} />}>
             1 · Planificación
+          </Tabs.Tab>
+          <Tabs.Tab value="ejecucion" leftSection={<IconTool size={16} />}>
+            2 · Ejecución y cierre
           </Tabs.Tab>
           <Tabs.Tab value="bitacora" leftSection={<IconBook size={16} />}>
             Bitácora
@@ -137,11 +134,27 @@ export function EvaluacionSistemasPage() {
         </Tabs.List>
       </Tabs>
 
-      {pestana === 'bitacora' ? (
-        <BitacoraEvaluacion />
-      ) : (
-      <>
+      {pestana === 'planificacion' && <PlanificacionEvaluacion />}
+      {pestana === 'ejecucion' && <EjecucionEvaluacion onIrAPlanificacion={() => ir('planificacion')} />}
+      {pestana === 'bitacora' && <BitacoraEvaluacion />}
+    </Stack>
+  )
+}
 
+/** Pestaña 1: tablero, planificaciones y alta. */
+function PlanificacionEvaluacion() {
+  const puedeOperar = usePuedeOperar()
+  const [filtros, setFiltros] = useState<{ page: number; q: string; responsable: string; estado?: EstadoEvaluacion; vencidas?: boolean; categoriaId?: number }>({ page: 1, q: '', responsable: '' })
+  const [q] = useDebouncedValue(filtros.q.trim(), 300)
+  const [responsable] = useDebouncedValue(filtros.responsable.trim(), 300)
+  const categorias = useCategoriasConActivos({ operativos: false, aplica: 'EVALUACION' })
+  const consulta = useEvaluaciones({ page: filtros.page, limit: 20, q: q || undefined, responsable: responsable || undefined, estado: filtros.estado, vencidas: filtros.vencidas, categoriaId: filtros.categoriaId })
+  const [modalAbierto, modal] = useDisclosure()
+  const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
+  const hayFiltros = Boolean(filtros.q || filtros.responsable || filtros.estado || filtros.vencidas || filtros.categoriaId)
+
+  return (
+    <Stack gap="md">
       <Tablero />
 
       <EncabezadoSeccion
@@ -163,9 +176,18 @@ export function EvaluacionSistemasPage() {
           onChange={(e) => cambiar({ q: e.currentTarget.value })}
           w={{ base: '100%', sm: 240 }}
         />
+        <Select
+          label="Categoría"
+          placeholder="Todas"
+          clearable
+          data={(categorias.data ?? []).map((c) => ({ value: String(c.categoriaId), label: c.nombre }))}
+          value={filtros.categoriaId ? String(filtros.categoriaId) : null}
+          onChange={(v) => cambiar({ categoriaId: v ? Number(v) : undefined })}
+          w={{ base: '100%', sm: 180 }}
+        />
         <TextInput
-          label="Asignado"
-          placeholder="Responsable"
+          label="Responsable"
+          placeholder="Responsable asignado"
           value={filtros.responsable}
           onChange={(e) => cambiar({ responsable: e.currentTarget.value })}
           w={{ base: '100%', sm: 180 }}
@@ -179,7 +201,7 @@ export function EvaluacionSistemasPage() {
           onChange={(v) => cambiar({ estado: (v as EstadoEvaluacion | null) ?? undefined })}
           w={{ base: '100%', sm: 160 }}
         />
-        <Switch label="Solo vencidas" color="red" checked={filtros.vencidas ?? false} onChange={(e) => cambiar({ vencidas: e.currentTarget.checked || undefined })} mb={8} />
+        <Switch label="Solo vencidas (por ejecutar o en progreso)" color="red" checked={filtros.vencidas ?? false} onChange={(e) => cambiar({ vencidas: e.currentTarget.checked || undefined })} mb={8} />
       </Group>
 
       <TarjetaListado
@@ -205,10 +227,10 @@ export function EvaluacionSistemasPage() {
                 <Table.Tr>
                   <Table.Th>N.º</Table.Th>
                   <Table.Th>Sistema</Table.Th>
-                  <Table.Th>Paso a producción programado</Table.Th>
+                  <Table.Th>Fecha planificada de evaluación</Table.Th>
                   <Table.Th>Pruebas reales</Table.Th>
-                  <Table.Th>Asignado</Table.Th>
-                  <Table.Th>Descripción planificada</Table.Th>
+                  <Table.Th>Responsable asignado</Table.Th>
+                  <Table.Th>Descripción</Table.Th>
                   <Table.Th>Estado</Table.Th>
                   <Table.Th>Reg.</Table.Th>
                 </Table.Tr>
@@ -231,11 +253,9 @@ export function EvaluacionSistemasPage() {
                     </Table.Td>
                     <Table.Td c={e.vencida ? 'red' : undefined} fw={e.vencida ? 600 : undefined}>
                       {formatearFechaHora(e.fechaProgramadaProduccion)}
-                      {e.vencida && (
-                        <Badge size="xs" color="red" variant="light" ml={6}>
-                          Vencida
-                        </Badge>
-                      )}
+                      <Text size="xs" c="dimmed">
+                        {periodoPlanificado(e)}
+                      </Text>
                     </Table.Td>
                     <Table.Td>
                       {e.fechaPruebas ? formatearFechaHora(e.fechaPruebas) : '—'}
@@ -252,9 +272,7 @@ export function EvaluacionSistemasPage() {
                       </Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge size="sm" variant="light" color={INFO_ESTADO[e.estado].color}>
-                        {INFO_ESTADO[e.estado].etiqueta}
-                      </Badge>
+                      <BadgeEstadoEvaluacion e={e} />
                     </Table.Td>
                     <Table.Td>
                       <BadgeRegistro registro={e} />
@@ -266,8 +284,6 @@ export function EvaluacionSistemasPage() {
           </Table.ScrollContainer>
         )}
       </TarjetaListado>
-      </>
-      )}
 
       {puedeOperar && <PlanificacionEvaluacionModal opened={modalAbierto} onClose={modal.close} />}
     </Stack>

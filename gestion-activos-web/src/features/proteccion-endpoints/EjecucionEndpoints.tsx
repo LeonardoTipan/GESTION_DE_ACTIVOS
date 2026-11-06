@@ -7,7 +7,7 @@ import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora, hoyLocal } from '../../shared/formato.ts'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useCerrarPeriodo, usePeriodos, type EstadoPeriodo, type PeriodoEndpoint } from './api.ts'
-import { BadgeEstadoPeriodo, ConfirmarCierreModal, DetallePeriodoModal } from './componentes.tsx'
+import { BadgeEstadoPeriodo, ConfirmarCierreModal, DetallePeriodoModal, FiltrosEquipo } from './componentes.tsx'
 import { INFO_ESTADO, MESES, nombrePeriodo, resumenParaCerrar } from './textos.ts'
 
 const PENDIENTES: EstadoPeriodo[] = ['ABIERTO', 'EN_PROGRESO']
@@ -20,12 +20,12 @@ const PENDIENTES: EstadoPeriodo[] = ['ABIERTO', 'EN_PROGRESO']
 export function EjecucionEndpoints({ onIrAPlanificacion }: { onIrAPlanificacion: () => void }) {
   const puedeOperar = usePuedeOperar()
   const anioHoy = Number(hoyLocal().slice(0, 4))
-  const [filtros, setFiltros] = useState<{ page: number; anio?: number; estado?: EstadoPeriodo }>({ page: 1 })
-  const consulta = usePeriodos({ page: filtros.page, limit: 20, pendientes: true, anio: filtros.anio, estado: filtros.estado })
+  const [filtros, setFiltros] = useState<{ page: number; anio?: number; estado?: EstadoPeriodo; activo?: string; categoriaId?: number }>({ page: 1 })
+  const consulta = usePeriodos({ page: filtros.page, limit: 20, pendientes: true, anio: filtros.anio, estado: filtros.estado, activo: filtros.activo, categoriaId: filtros.categoriaId })
   const [detalle, setDetalle] = useState<PeriodoEndpoint | null>(null)
   const [porCerrar, setPorCerrar] = useState<PeriodoEndpoint | null>(null)
   const cerrar = useCerrarPeriodo()
-  const hayFiltros = filtros.anio !== undefined || filtros.estado !== undefined
+  const hayFiltros = filtros.anio !== undefined || filtros.estado !== undefined || Boolean(filtros.activo || filtros.categoriaId)
   const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
 
   const confirmarCierre = () => {
@@ -47,6 +47,7 @@ export function EjecucionEndpoints({ onIrAPlanificacion }: { onIrAPlanificacion:
     <Stack gap="md">
       <EncabezadoSeccion titulo="Períodos por ejecutar o en progreso" />
       <Group gap="sm" align="flex-end" wrap="wrap">
+        <FiltrosEquipo onCambio={(f) => cambiar(f)} />
         <Select
           label="Año"
           placeholder="Todos"
@@ -81,7 +82,7 @@ export function EjecucionEndpoints({ onIrAPlanificacion }: { onIrAPlanificacion:
           <>
             <Text c="dimmed">{hayFiltros ? 'Ningún período coincide con los filtros.' : 'No hay períodos por ejecutar ni en progreso.'}</Text>
             {hayFiltros ? (
-              <Button variant="subtle" onClick={() => setFiltros({ page: 1 })}>
+              <Button variant="subtle" onClick={() => setFiltros((f) => ({ page: 1, activo: f.activo, categoriaId: f.categoriaId }))}>
                 Quitar filtros
               </Button>
             ) : (
@@ -95,12 +96,13 @@ export function EjecucionEndpoints({ onIrAPlanificacion }: { onIrAPlanificacion:
         }
       >
         {(periodos) => (
-          <Table.ScrollContainer minWidth={980}>
+          <Table.ScrollContainer minWidth={1100}>
             <Table striped verticalSpacing="xs" fz="sm">
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Año</Table.Th>
                   <Table.Th>Mes</Table.Th>
+                  <Table.Th>Fecha planificada</Table.Th>
                   <Table.Th>Responsable asignado</Table.Th>
                   <Table.Th>Estado</Table.Th>
                   <Table.Th>Fecha real de ejecución</Table.Th>
@@ -112,9 +114,15 @@ export function EjecucionEndpoints({ onIrAPlanificacion }: { onIrAPlanificacion:
                   <Table.Tr key={p.id}>
                     <Table.Td>{p.anio}</Table.Td>
                     <Table.Td>{MESES[p.mes - 1]}</Table.Td>
+                    <Table.Td>{p.fechaPlanificada ? formatearFechaHora(p.fechaPlanificada) : '—'}</Table.Td>
                     <Table.Td>{p.responsable}</Table.Td>
                     <Table.Td>
-                      <BadgeEstadoPeriodo estado={p.estado} />
+                      <BadgeEstadoPeriodo estado={p.estado} porEjecutar={p.porEjecutar} />
+                      {p.equiposSinRegistrar ? (
+                        <Text size="xs" c="dimmed" mt={2}>
+                          {p.equiposSinRegistrar} equipo(s) sin registrar
+                        </Text>
+                      ) : null}
                     </Table.Td>
                     <Table.Td>{p.fechaEjecucion ? formatearFechaHora(p.fechaEjecucion) : '—'}</Table.Td>
                     <Table.Td>

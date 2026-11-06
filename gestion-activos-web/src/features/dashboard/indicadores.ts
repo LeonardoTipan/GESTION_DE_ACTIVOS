@@ -69,6 +69,7 @@ export function tarjetasDe(i: Indicadores): { titulo: string; ruta: string; line
         { etiqueta: 'Períodos abiertos', valor: i.endpoints.abiertos, alerta: 'orange' },
         { etiqueta: 'En progreso', valor: i.endpoints.enProgreso },
         { etiqueta: 'Cerrados', valor: i.endpoints.cerrados },
+        { etiqueta: 'Por ejecutar', valor: i.endpoints.porEjecutar, alerta: 'red' },
       ],
     },
     {
@@ -78,6 +79,7 @@ export function tarjetasDe(i: Indicadores): { titulo: string; ruta: string; line
         { etiqueta: 'Pendientes', valor: i.evaluaciones.abiertos },
         { etiqueta: 'En progreso', valor: i.evaluaciones.enProgreso },
         { etiqueta: 'Vencidas', valor: i.evaluaciones.vencidas, alerta: 'red' },
+        { etiqueta: 'Próximas (30 días)', valor: i.evaluaciones.proximas30Dias },
         { etiqueta: 'Cerradas', valor: i.evaluaciones.cerrados },
       ],
     },

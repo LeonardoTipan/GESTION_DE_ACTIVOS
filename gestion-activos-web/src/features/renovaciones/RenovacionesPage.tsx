@@ -1,7 +1,7 @@
 import { Anchor, Button, Card, Group, Select, SimpleGrid, Stack, Table, Tabs, Text, TextInput, Title, UnstyledButton } from '@mantine/core'
 import { DatePickerInput } from '@mantine/dates'
 import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
-import { IconCalendarEvent, IconChecklist, IconPlus, IconSearch } from '@tabler/icons-react'
+import { IconCalendarEvent, IconChecklist, IconPlus, IconSearch, IconNotebook } from '@tabler/icons-react'
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
@@ -17,6 +17,7 @@ import { useCaducidades, useRenovaciones, useResumenVigencias, type EstadoRenova
 import { BadgeEstado, BadgeVigencia } from './componentes.tsx'
 import { aConsultaApi, escribirFiltros, leerFiltros, type Fase } from './filtros-url.ts'
 import { PanelesPlanificacion } from './PanelesPlanificacion.tsx'
+import { BitacoraRenovaciones } from './BitacoraRenovaciones.tsx'
 import { PlanificacionModal } from './PlanificacionModal.tsx'
 import { ESTADOS, INFO_ESTADO, INFO_TIPO, INFO_VIGENCIA, textoDias, TIPOS, VIGENCIAS } from './textos.ts'
 
@@ -202,13 +203,16 @@ export function RenovacionesPage() {
         </>
       )}
 
-      <Tabs value={fase} onChange={(v) => actualizar({ fase: v === 'ejecucion' ? 'ejecucion' : undefined, estado: undefined, page: 1 })}>
+      <Tabs value={fase} onChange={(v) => actualizar({ fase: v === 'ejecucion' || v === 'bitacora' ? v : undefined, estado: undefined, page: 1 })}>
         <Tabs.List>
           <Tabs.Tab value="planificacion" leftSection={<IconCalendarEvent size={16} />}>
             1 · Planificación
           </Tabs.Tab>
           <Tabs.Tab value="ejecucion" leftSection={<IconChecklist size={16} />}>
             2 · Ejecución y cierre
+          </Tabs.Tab>
+          <Tabs.Tab value="bitacora" leftSection={<IconNotebook size={16} />}>
+            Bitácora
           </Tabs.Tab>
         </Tabs.List>
       </Tabs>
@@ -219,6 +223,9 @@ export function RenovacionesPage() {
           <PanelesPlanificacion />
         </Stack>
       )}
+      {fase === 'bitacora' && <BitacoraRenovaciones />}
+      {fase !== 'bitacora' && (
+      <>
       {fase === 'planificacion' ? (
         // Misma presentación que «Planificaciones de mantenimiento»: título de la sección y su acción.
         <EncabezadoSeccion
@@ -303,6 +310,8 @@ export function RenovacionesPage() {
       >
         {(renovaciones) => <TablaRenovaciones renovaciones={renovaciones} />}
       </TarjetaListado>
+      </>
+      )}
 
       {puedeOperar && <PlanificacionModal opened={modalAbierto} onClose={modal.close} onGuardada={(r) => navigate(`/renovaciones/${r.id}`)} />}
     </Stack>

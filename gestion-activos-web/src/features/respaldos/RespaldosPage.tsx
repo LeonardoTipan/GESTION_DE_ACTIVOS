@@ -22,8 +22,9 @@ import { opciones, RESULTADO } from './catalogos.ts'
 import { PasoEjecucion } from './componentes/PasoEjecucion.tsx'
 import { PasoPlan } from './componentes/PasoPlan.tsx'
 import { PasoRestauracion } from './componentes/PasoRestauracion.tsx'
+import { BitacoraRespaldos } from './componentes/BitacoraRespaldos.tsx'
 
-const PASOS = ['plan', 'ejecucion', 'restauracion', 'anteriores'] as const
+const PASOS = ['plan', 'ejecucion', 'restauracion', 'bitacora', 'anteriores'] as const
 const RESULTADOS = Object.keys(RESULTADO) as Ejecucion['resultado'][]
 const CLAVES_FILTRO = ['page', 'categoriaId', 'q', 'responsable', 'resultado'] as const
 
@@ -165,13 +166,14 @@ export function RespaldosPage() {
             label="Restauración o prueba"
             description={`${restauraciones.data?.meta.total ?? 0} en el período · ${pendientes?.prueba ?? 0} verificable(s) por registrar`}
           />
+          <Stepper.Step label="Bitácora" description="Indicador mensual y registros que lo justifican" />
           {(anteriores.data?.meta.total ?? 0) > 0 && (
             <Stepper.Step label="Registros anteriores" description={`${anteriores.data?.meta.total} de solo lectura`} />
           )}
         </Stepper>
       </Card>
 
-      {paso !== 'anteriores' && (
+      {paso !== 'anteriores' && paso !== 'bitacora' && (
         <Group gap="sm" align="flex-end" wrap="wrap">
           <CampoTexto label="Buscar" placeholder="Activo (código o nombre)…" valor={filtros.q} onCambio={(q) => filtrar({ q })} />
           <Select
@@ -221,6 +223,7 @@ export function RespaldosPage() {
       {planes.data && restauraciones.data && paso === 'restauracion' && (
         <PasoRestauracion planes={planes.data.data} restauraciones={restauraciones.data.data} tablero={tablero.data} etiquetaPeriodo={periodo.etiqueta} />
       )}
+      {paso === 'bitacora' && <BitacoraRespaldos />}
       {paso === 'anteriores' && <RegistrosAnteriores />}
       {meta && meta.totalPages > 1 && (
         <Group justify="center">

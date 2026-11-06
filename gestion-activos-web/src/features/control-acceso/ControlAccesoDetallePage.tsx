@@ -1,4 +1,4 @@
-import { Alert, Anchor, Badge, Breadcrumbs, Button, Card, Center, Group, Loader, Modal, SimpleGrid, Stack, Table, Text, Textarea, Title } from '@mantine/core'
+import { Alert, Anchor, Badge, Breadcrumbs, Button, Card, Center, Group, Loader, Modal, SimpleGrid, Stack, Text, Textarea, Title } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
@@ -18,8 +18,9 @@ import {
   useSolicitud,
   type Solicitud,
 } from './api.ts'
+import { HistorialSolicitud } from './HistorialSolicitud.tsx'
 import { SolicitudFormModal } from './SolicitudFormModal.tsx'
-import { atencionesAnteriores, ESTADO, nombreCampo, solicitante, TIPO_ACCESO, TIPO_SOLICITUD, valorLegible } from './textos.ts'
+import { atencionesAnteriores, ESTADO, solicitante, TIPO_ACCESO, TIPO_SOLICITUD } from './textos.ts'
 
 const aviso = (titulo: string, cerrar?: () => void) => ({
   onSuccess: (s: Solicitud) => {
@@ -274,40 +275,7 @@ export function ControlAccesoDetallePage() {
         <Text size="xs" c="dimmed" mb="sm">
           Lo escribe el sistema en la misma operación que cada cambio, con el usuario de la sesión. No se puede modificar ni borrar.
         </Text>
-        {historial.isPending ? (
-          <Loader size="sm" />
-        ) : historial.error ? (
-          <Alert color="red">{historial.error.message}</Alert>
-        ) : (
-          <Table.ScrollContainer minWidth={760}>
-            <Table verticalSpacing="xs" fz="sm" striped>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Fecha</Table.Th>
-                  <Table.Th>Usuario</Table.Th>
-                  <Table.Th>Campo</Table.Th>
-                  <Table.Th>Antes</Table.Th>
-                  <Table.Th>Después</Table.Th>
-                  <Table.Th>Motivo</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {historial.data.map((h) => (
-                  <Table.Tr key={h.id}>
-                    <Table.Td>{formatearFechaHora(h.fecha)}</Table.Td>
-                    <Table.Td>{h.usuario}</Table.Td>
-                    <Table.Td fw={500}>{nombreCampo(h.campo)}</Table.Td>
-                    <Table.Td c="dimmed" maw={220}>
-                      {h.campo === 'CREACION' ? '—' : valorLegible(h.campo, h.valorAnterior)}
-                    </Table.Td>
-                    <Table.Td maw={220}>{valorLegible(h.campo, h.valorNuevo)}</Table.Td>
-                    <Table.Td maw={240}>{h.motivo ?? '—'}</Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
-        )}
+        <HistorialSolicitud id={id} />
       </Card>
 
       <SolicitudFormModal abierto={editando} onCerrar={edicion.close} solicitud={s} />

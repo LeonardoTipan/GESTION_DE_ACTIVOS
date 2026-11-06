@@ -1,59 +1,48 @@
-import { Alert, Anchor, Badge, Breadcrumbs, Button, Card, Center, Group, Loader, SimpleGrid, Stack, Text, Title } from '@mantine/core'
+import { Alert, Anchor, Badge, Breadcrumbs, Button, Card, Center, Group, Loader, SimpleGrid, Stack, Text, TextInput, Title } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { useDisclosure } from '@mantine/hooks'
 import { notifications } from '@mantine/notifications'
 import { IconHistory, IconRotateClockwise } from '@tabler/icons-react'
+import { useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { BloqueEjecucionCierre } from '../../shared/cierre/BloqueEjecucionCierre.tsx'
 import { avisoExito as aviso, avisoFallo as fallo } from '../../shared/cierre/avisos.ts'
-import { Dato, EnlaceRepositorio as Repositorio, ModalReabrir } from '../../shared/cierre/componentes.tsx'
+import { ModalReabrir } from '../../shared/cierre/componentes.tsx'
 import { errorRepositorio } from '../../shared/evidencia.ts'
 import { ahoraLocal, fechaHoraLocalAIso, formatearFechaHora, isoAFechaHoraLocal } from '../../shared/formato.ts'
 import { BadgeRegistro, TrazasModal } from '../../shared/registro/componentes.tsx'
 import { errorMotivo } from '../../shared/registro/registro.ts'
 import { usePuedeAdministrar, usePuedeOperar } from '../auth/use-puede.ts'
 import { useCerrarEvaluacion, useEvaluacion, useGuardarEjecucionEvaluacion, useReabrirEvaluacion, type EvaluacionSistema } from './api.ts'
-import { INFO_ESTADO, INFO_SITUACION } from './textos.ts'
-
-/** Nombres legibles de los campos, para el historial (trazas). */
-const ETIQUETAS: Record<string, string> = {
-  activoId: 'Sistema (activo)',
-  fechaProgramadaProduccion: 'Paso a producción programado',
-  responsable: 'Asignado',
-  descripcion: 'Descripción planificada',
-  estado: 'Estado',
-  fechaPruebas: 'Fecha real de las pruebas',
-  evidencia: 'Verificable (informe)',
-  repositorioVerificable: 'Repositorio verificable',
-  observacion: 'Observaciones',
-  cerradoPor: 'Cerrada por',
-}
-
-/** Mínimo de la justificación de unas pruebas tardías (la regla del backend). */
-const JUSTIFICACION_MINIMA = 20
+import { BadgeEstadoEvaluacion, ConfirmarCierreEvaluacionModal, DatosEjecucionEvaluacion, DatosPlanificacionEvaluacion, type ResumenCierreEvaluacion } from './componentes.tsx'
+import { ETIQUETAS_TRAZA, INFO_SITUACION, JUSTIFICACION_MINIMA } from './textos.ts'
 
 interface Valores {
   fechaPruebas: string | null
+  responsableEjecucion: string
   evidencia: string
   repositorioVerificable: string
   observacion: string
 }
 
-/** Fase 2 · ejecución y cierre: guardar avance (En progreso) o cerrar. */
+/** Fase 2 · ejecución y cierre: guardar avance (En progreso) o cerrar, con confirmación. */
 function FormEjecucion({ e }: { e: EvaluacionSistema }) {
   const guardar = useGuardarEjecucionEvaluacion()
   const cerrar = useCerrarEvaluacion()
+  const [porCerrar, setPorCerrar] = useState<ResumenCierreEvaluacion | null>(null)
   const programada = isoAFechaHoraLocal(e.fechaProgramadaProduccion)
   const form = useForm<Valores>({
     initialValues: {
       fechaPruebas: e.fechaPruebas ? isoAFechaHoraLocal(e.fechaPruebas) : null,
+      responsableEjecucion: e.responsableEjecucion ?? '',
       evidencia: e.evidencia ?? '',
       repositorioVerificable: e.repositorioVerificable ?? '',
       observacion: e.observacion ?? '',
     },
     validate: {
       fechaPruebas: (v) => (v && v > ahoraLocal() ? 'No puede ser futura' : null),
+      responsableEjecucion: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
       evidencia: (v) => (v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
       repositorioVerificable: errorRepositorio,
     },
@@ -61,6 +50,7 @@ function FormEjecucion({ e }: { e: EvaluacionSistema }) {
   const tardia = Boolean(form.values.fechaPruebas && form.values.fechaPruebas > programada)
   const datos = (x: Valores) => ({
     fechaPruebas: x.fechaPruebas ? fechaHoraLocalAIso(x.fechaPruebas) : undefined,
+    responsableEjecucion: x.responsableEjecucion.trim() || undefined,
     evidencia: x.evidencia.trim() || undefined,
     repositorioVerificable: x.repositorioVerificable.trim() || undefined,
     observacion: x.observacion.trim() || undefined,
@@ -82,10 +72,11 @@ function FormEjecucion({ e }: { e: EvaluacionSistema }) {
     const x = form.getValues()
     const faltan: Partial<Record<keyof Valores, string>> = {
       ...(x.fechaPruebas ? {} : { fechaPruebas: 'Obligatoria para cerrar' }),
+      ...(x.responsableEjecucion.trim() ? {} : { responsableEjecucion: 'Obligatorio para cerrar' }),
       ...(x.evidencia.trim() ? {} : { evidencia: 'Obligatorio para cerrar' }),
       ...(x.repositorioVerificable.trim() ? {} : { repositorioVerificable: 'Obligatorio para cerrar' }),
       ...(tardia && x.observacion.trim().length < JUSTIFICACION_MINIMA
-        ? { observacion: `Las pruebas fueron posteriores al paso a producción programado: justifíquelo (mínimo ${JUSTIFICACION_MINIMA} caracteres)` }
+        ? { observacion: `Las pruebas fueron posteriores a la fecha planificada: justifique el retraso (mínimo ${JUSTIFICACION_MINIMA} caracteres)` }
         : {}),
     }
     if (Object.keys(faltan).length) {
@@ -93,37 +84,64 @@ function FormEjecucion({ e }: { e: EvaluacionSistema }) {
       notifications.show({ color: 'orange', title: 'No se puede cerrar todavía', message: 'Complete los campos marcados.' })
       return
     }
-    cerrar.mutate({ id: e.id, datos: datos(x) }, { onSuccess: () => aviso('Evaluación cerrada', 'Queda en la bitácora por semestres.'), onError: fallo('No se pudo cerrar') })
+    // Se confirma lo que quedará registrado; nada se envía hasta entonces.
+    setPorCerrar({
+      codigo: e.activo.codigo,
+      fechaPruebas: fechaHoraLocalAIso(x.fechaPruebas!),
+      responsableEjecucion: x.responsableEjecucion.trim(),
+      evidencia: x.evidencia.trim(),
+      repositorioVerificable: x.repositorioVerificable.trim(),
+      tardia,
+    })
   }
+  const confirmarCierre = () =>
+    cerrar.mutate(
+      { id: e.id, datos: datos(form.getValues()) },
+      {
+        onSuccess: () => {
+          aviso('Evaluación cerrada', 'Queda en la bitácora por semestres.')
+          setPorCerrar(null)
+        },
+        onError: fallo('No se pudo cerrar'),
+      },
+    )
   return (
     <form onSubmit={enviar} noValidate>
       <BloqueEjecucionCierre
-        verificable={{ label: 'Verificable (informe de las pruebas)', description: 'Nombre del informe; el veredicto vive en el informe y en las observaciones', placeholder: 'Informe de pruebas de seguridad nómina v2.1.pdf', ...form.getInputProps('evidencia') }}
-        repositorio={{ description: 'Carpeta compartida o URL http(s) (no se guardan archivos)', placeholder: 'Carpeta Compartida TICs/Seguridad', ...form.getInputProps('repositorioVerificable') }}
+        verificable={{ label: 'Verificable (informe de seguridad)', withAsterisk: true, description: 'Nombre del informe; el veredicto vive en el informe y en las observaciones', placeholder: 'Informe de pruebas de seguridad nómina v2.1.pdf', ...form.getInputProps('evidencia') }}
+        repositorio={{ withAsterisk: true, description: 'Carpeta compartida o URL http(s) (no se guardan archivos)', placeholder: 'Carpeta Compartida TICs/Seguridad', ...form.getInputProps('repositorioVerificable') }}
         observacion={{
           label: 'Observaciones',
-          description: tardia ? `Obligatoria (mínimo ${JUSTIFICACION_MINIMA} caracteres): las pruebas son posteriores al paso a producción programado.` : 'Resultado de las pruebas y hallazgos relevantes.',
+          description: tardia ? `Obligatoria (mínimo ${JUSTIFICACION_MINIMA} caracteres): las pruebas son posteriores a la fecha planificada.` : 'Resultado de las pruebas y hallazgos relevantes.',
           withAsterisk: tardia,
           ...form.getInputProps('observacion'),
         }}
-        guardar={{ etiqueta: 'Guardar avance', cargando: guardar.isPending, deshabilitado: !form.isDirty() }}
+        guardar={{ etiqueta: 'Guardar avance', cargando: guardar.isPending, deshabilitado: !form.isDirty() || cerrar.isPending }}
         cerrar={{ etiqueta: 'Cerrar evaluación', cargando: cerrar.isPending, onClick: cerrarEvaluacion }}
       >
-        <DateTimePicker
-          label="Fecha real de las pruebas de seguridad"
-          description={`Cuándo se hicieron REALMENTE (no futura). Paso a producción programado: ${formatearFechaHora(e.fechaProgramadaProduccion)}.`}
-          placeholder="Elija fecha y hora"
-          valueFormat="DD MMM YYYY HH:mm"
-          clearable
-          maxDate={ahoraLocal()}
-          {...form.getInputProps('fechaPruebas')}
-        />
+        <Text size="xs" c="dimmed">
+          Los campos con * son obligatorios para cerrar. Puede guardar avances sin ellos.
+        </Text>
+        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+          <DateTimePicker
+            label="Fecha real de las pruebas de seguridad"
+            withAsterisk
+            description={`Cuándo se hicieron REALMENTE (no futura). Planificada: ${formatearFechaHora(e.fechaProgramadaProduccion)}.`}
+            placeholder="Elija fecha y hora"
+            valueFormat="DD MMM YYYY HH:mm"
+            clearable
+            maxDate={ahoraLocal()}
+            {...form.getInputProps('fechaPruebas')}
+          />
+          <TextInput label="Responsable de la ejecución" withAsterisk description="Quién realizó las pruebas (puede no ser el asignado)" placeholder="Seguridad TIC · M. López" {...form.getInputProps('responsableEjecucion')} />
+        </SimpleGrid>
         {tardia && (
           <Alert color="orange" variant="light">
-            Las pruebas son posteriores a la fecha programada de paso a producción. Se permite cerrar, justificándolo en las observaciones.
+            Las pruebas son posteriores a la fecha planificada. Se permite cerrar, justificando el retraso en las observaciones.
           </Alert>
         )}
       </BloqueEjecucionCierre>
+      <ConfirmarCierreEvaluacionModal resumen={porCerrar} enviando={cerrar.isPending} onConfirmar={confirmarCierre} onCerrar={() => setPorCerrar(null)} />
     </form>
   )
 }
@@ -145,7 +163,7 @@ function ReabrirModal({ e, opened, onClose }: { e: EvaluacionSistema; opened: bo
   )
 }
 
-/** Ficha de una evaluación: fase 1 (planificación), fase 2 (ejecución y cierre) e historial. */
+/** Ficha de una evaluación: planificación, ejecución y cierre, e historial. */
 export function EvaluacionPage() {
   const id = Number(useParams().id)
   const consulta = useEvaluacion(id)
@@ -160,14 +178,14 @@ export function EvaluacionPage() {
   return (
     <Stack gap="md">
       <Breadcrumbs>
-        <Anchor component={Link} to="/evaluacion-sistemas-productivos">Evaluación de Sistemas Productivos</Anchor>
+        <Anchor component={Link} to={`/evaluacion-sistemas-productivos?pestana=${cerrada ? 'bitacora' : 'ejecucion'}`}>Evaluación de Sistemas Productivos</Anchor>
         <Text>Evaluación #{e.id}</Text>
       </Breadcrumbs>
       <Group justify="space-between" align="flex-end">
         <div>
           <Title order={2}>Evaluación #{e.id} · {e.activo.codigo}</Title>
           <Group gap="xs" mt={4}>
-            <Badge variant="light" color={INFO_ESTADO[e.estado].color}>{INFO_ESTADO[e.estado].etiqueta}</Badge>
+            <BadgeEstadoEvaluacion e={e} />
             <Badge variant="outline" color={INFO_SITUACION[e.situacion].color}>{INFO_SITUACION[e.situacion].etiqueta}</Badge>
             <BadgeRegistro registro={e} />
           </Group>
@@ -182,47 +200,15 @@ export function EvaluacionPage() {
 
       <Card withBorder padding="lg">
         <Title order={4} mb="sm">1 · Planificación</Title>
-        <Stack gap="sm">
-          <SimpleGrid cols={{ base: 1, sm: 3 }}>
-            <Dato etiqueta="Sistema">
-              <Anchor component={Link} to={`/activos/${e.activoId}`} size="sm">{e.activo.codigo} · {e.activo.nombre}</Anchor>
-              <Text size="xs" c="dimmed">{e.activo.categoria}</Text>
-            </Dato>
-            <Dato etiqueta="Paso a producción programado">
-              <Text size="sm" c={e.vencida ? 'red' : undefined} fw={e.vencida ? 600 : undefined}>{formatearFechaHora(e.fechaProgramadaProduccion)}</Text>
-              <Text size="xs" c="dimmed">Semestre planificado {e.semestrePlanificado}</Text>
-            </Dato>
-            <Dato etiqueta="Asignado">{e.responsable}</Dato>
-          </SimpleGrid>
-          <Dato etiqueta="Descripción planificada">{e.descripcion}</Dato>
-          <Dato etiqueta="Registrada el (no es una fecha de negocio)">{formatearFechaHora(e.createdAt)}</Dato>
-        </Stack>
+        <DatosPlanificacionEvaluacion e={e} />
       </Card>
 
       <Card withBorder padding="lg">
         <Title order={4} mb="sm">2 · Ejecución y cierre</Title>
-        {cerrada || !puedeOperar || e.anuladoEn ? (
-          <Stack gap="sm">
-            <SimpleGrid cols={{ base: 1, sm: 3 }}>
-              <Dato etiqueta="Fecha real de las pruebas">
-                {formatearFechaHora(e.fechaPruebas)}
-                {e.tardia && <Badge size="xs" color="orange" variant="light" ml={6}>Posterior a lo programado</Badge>}
-              </Dato>
-              <Dato etiqueta="Semestre real">{e.semestreReal ?? '—'}</Dato>
-              <Dato etiqueta="Cerrada por">{e.cerradoPor ?? '—'}</Dato>
-            </SimpleGrid>
-            <SimpleGrid cols={{ base: 1, sm: 2 }}>
-              <Dato etiqueta="Verificable (informe)">{e.evidencia ?? '—'}</Dato>
-              <Dato etiqueta="Repositorio verificable"><Repositorio valor={e.repositorioVerificable} /></Dato>
-            </SimpleGrid>
-            {e.observacion && <Dato etiqueta="Observaciones">{e.observacion}</Dato>}
-          </Stack>
-        ) : (
-          <FormEjecucion key={e.version} e={e} />
-        )}
+        {cerrada || !puedeOperar || e.anuladoEn ? <DatosEjecucionEvaluacion e={e} /> : <FormEjecucion key={e.version} e={e} />}
       </Card>
 
-      <TrazasModal abierto={historial} entidad="EVALUACION_SISTEMA" registroId={e.id} titulo={`Historial · evaluación #${e.id}`} etiquetas={ETIQUETAS} onCerrar={verHistorial.close} />
+      <TrazasModal abierto={historial} entidad="EVALUACION_SISTEMA" registroId={e.id} titulo={`Historial · evaluación #${e.id}`} etiquetas={ETIQUETAS_TRAZA} onCerrar={verHistorial.close} />
       {esAdmin && <ReabrirModal e={e} opened={reabriendo} onClose={reapertura.close} />}
     </Stack>
   )

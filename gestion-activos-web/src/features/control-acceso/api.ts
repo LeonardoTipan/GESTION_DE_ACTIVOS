@@ -69,7 +69,10 @@ export function useCategoriasElegibles(tipoAcceso: TipoAcceso) {
  */
 function useInvalidar() {
   const queryClient = useQueryClient()
-  return () => queryClient.invalidateQueries({ queryKey: claves.todo })
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: claves.todo })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+  }
 }
 
 export function useCrearSolicitud() {
@@ -112,5 +115,26 @@ export function useReabrirSolicitud() {
     mutationFn: ({ id, motivo }: { id: number; motivo: string }) =>
       ejecutar(api.PATCH('/api/control-acceso/{id}/reabrir', { params: { path: { id } }, body: { motivo } })),
     onSettled: invalidar,
+  })
+}
+
+// ── Bitácora (solo lectura) ─────────────────────────────────────────────────
+
+export type FiltrosBitacoraAcceso = NonNullable<paths['/api/control-acceso/bitacora/especifica']['get']['parameters']['query']>
+export type FilaBitacoraAcceso = S['FilaBitacoraControlAccesoDto']
+
+export function useBitacoraGeneralAcceso(anio: number) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'general', anio],
+    queryFn: () => ejecutar(api.GET('/api/control-acceso/bitacora/general', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+export function useBitacoraEspecificaAcceso(filtros: FiltrosBitacoraAcceso) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'especifica', filtros],
+    queryFn: () => ejecutar(api.GET('/api/control-acceso/bitacora/especifica', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
   })
 }

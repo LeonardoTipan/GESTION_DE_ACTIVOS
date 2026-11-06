@@ -120,3 +120,21 @@ export function clasificarPendientes(pendientes: Vulnerabilidad[], ahora: number
   const sinPlazo = pendientes.filter((v) => !v.fechaLimite)
   return { proximos, sinPlazo }
 }
+
+/** Nombres de los campos, para las trazas. */
+export const ETIQUETAS_VULNERABILIDAD: Record<string, string> = {
+  activoId: 'Sistema (activo)',
+  fecha: 'Fecha de detección',
+  descripcion: 'Vulnerabilidad',
+  nivelRiesgo: 'Criticidad',
+  responsable: 'Responsable',
+  cve: 'CVE',
+  fechaLimite: 'Plazo de remediación',
+  estado: 'Estado',
+  tratamientoIniciadoEn: 'Inicio de la remediación',
+  fechaRemediacion: 'Fecha de remediación',
+  evidencia: 'Verificable',
+  repositorioVerificable: 'Repositorio verificable',
+  observacion: 'Observación',
+  cerradaPor: 'Remediación registrada por',
+}

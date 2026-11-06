@@ -238,7 +238,7 @@ export function SeleccionActivos({
                       {insignia?.(a)}
                     </Group>
                   }
-                  description={motivo ?? `${a.categoria.nombre}${a.estado ? ` · ${a.estado}` : ''}`}
+                  description={motivo ?? `${a.categoria.nombre}${a.tipo ? ` · ${a.tipo}` : ''}${a.estado ? ` · ${a.estado}` : ''}`}
                 />
               )
             })}

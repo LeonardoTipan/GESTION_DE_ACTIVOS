@@ -1,5 +1,27 @@
 import { describe, expect, it } from 'vitest'
-import { mesesDelAnio, mesesSinAbrir, nombrePeriodo, pestanaDe, resumenParaCerrar, ultimoCierre } from './textos.ts'
+import { cambiosDeEquipos, conteoEquipos, mesesDelAnio, mesesSinAbrir, nombrePeriodo, pestanaDe, resumenParaCerrar, ultimoCierre } from './textos.ts'
+
+describe('Protección de Endpoints · detalle por equipo', () => {
+  it('los totales se calculan de las marcas; los sin registrar se cuentan aparte', () => {
+    expect(conteoEquipos({ 1: true, 2: false, 3: null, 4: true })).toEqual({ total: 4, con: 2, sin: 1, sinRegistrar: 1 })
+    expect(conteoEquipos({})).toEqual({ total: 0, con: 0, sin: 0, sinRegistrar: 0 })
+  })
+
+  it('solo se envían los equipos que cambiaron (y nunca un «sin registrar»)', () => {
+    expect(cambiosDeEquipos({ 1: true, 2: null, 3: false }, { 1: true, 2: false, 3: true })).toEqual([
+      { activoId: 2, conAntivirus: false },
+      { activoId: 3, conAntivirus: true },
+    ])
+    expect(cambiosDeEquipos({ 1: null }, { 1: null })).toEqual([])
+  })
+
+  it('con equipos sin registrar no se ofrece «Cerrar»', () => {
+    const base = { anio: 2026, mes: 10, totalActivos: 3, equiposConAntivirus: 2, fechaEjecucion: '2026-10-30T15:00:00.000Z', responsableEjecucion: 'X', evidencia: 'E', repositorioVerificable: 'R' }
+    expect(resumenParaCerrar({ ...base, equiposSinRegistrar: 1 })).toBeNull()
+    expect(resumenParaCerrar({ ...base, equiposSinRegistrar: 0 })).not.toBeNull()
+    expect(resumenParaCerrar({ ...base, equiposSinRegistrar: null })).not.toBeNull()
+  })
+})
 
 describe('Protección de Endpoints · pestañas y cierre', () => {
   it('la pestaña sale de la URL; un valor desconocido es Planificación', () => {

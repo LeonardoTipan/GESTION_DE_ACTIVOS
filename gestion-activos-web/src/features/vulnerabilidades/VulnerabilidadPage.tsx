@@ -23,36 +23,20 @@ import { formatearFechaHora } from '../../shared/formato.ts'
 import { AvisoAnulado, ControlRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useCategorias } from '../inventario/api/catalogos.ts'
+import { useActivo } from '../inventario/api/activos.ts'
 import { BadgeClase } from '../inventario/componentes/BadgeClase.tsx'
 import { useAnulacionVulnerabilidad, useVulnerabilidad, type Vulnerabilidad } from './api/vulnerabilidades.ts'
 import { BadgeEstado, BadgeNivel, BadgeSla } from './componentes/Badges.tsx'
 import { EditarVulnerabilidadModal } from './componentes/EditarVulnerabilidadModal.tsx'
 import { Remediacion } from './componentes/Remediacion.tsx'
-import { admiteEdicion, INFO_ESTADO } from './riesgo.ts'
-
-/** Nombres de los campos, para las trazas. */
-const ETIQUETAS_VULNERABILIDAD: Record<string, string> = {
-  activoId: 'Sistema (activo)',
-  fecha: 'Fecha de detección',
-  descripcion: 'Vulnerabilidad',
-  nivelRiesgo: 'Criticidad',
-  responsable: 'Responsable',
-  cve: 'CVE',
-  fechaLimite: 'Plazo de remediación',
-  estado: 'Estado',
-  tratamientoIniciadoEn: 'Inicio de la remediación',
-  fechaRemediacion: 'Fecha de remediación',
-  evidencia: 'Verificable',
-  repositorioVerificable: 'Repositorio verificable',
-  observacion: 'Observación',
-  cerradaPor: 'Remediación registrada por',
-}
+import { admiteEdicion, ETIQUETAS_VULNERABILIDAD, INFO_ESTADO } from './riesgo.ts'
 
 /** Fase 1 · Detección: los datos con que se registró (corregibles con motivo mientras está pendiente). */
 function Deteccion({ v }: { v: Vulnerabilidad }) {
   const puedeOperar = usePuedeOperar()
   const categorias = useCategorias()
   const [editando, edicion] = useDisclosure()
+  const activo = useActivo(v.activoId)
   const clase = categorias.data?.find((c) => c.id === v.activo.categoriaId)?.claseMantenimiento ?? null
   return (
     <Card withBorder padding="lg">
@@ -77,6 +61,11 @@ function Deteccion({ v }: { v: Vulnerabilidad }) {
               </Text>
               <BadgeClase clase={clase} size="xs" />
             </Group>
+            {/* Solo lectura: la condición la informa GLPI; remediar no la cambia. */}
+            <Text size="xs" mt={4}>
+              Condición del activo: <b>{activo.data ? (activo.data.estado ?? 'Sin dato') : '…'}</b>{' '}
+              <Text span size="xs" c="dimmed">(informada por GLPI)</Text>
+            </Text>
           </Dato>
           <Dato etiqueta="Criticidad">
             <BadgeNivel nivel={v.nivelRiesgo} />

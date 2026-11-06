@@ -1,5 +1,5 @@
-import { Alert, Anchor, Badge, Button, Center, Group, Loader, Paper, Select, SimpleGrid, Stack, Table, Text } from '@mantine/core'
-import { useDisclosure } from '@mantine/hooks'
+import { Alert, Anchor, Badge, Button, Center, Group, Loader, Paper, Select, SimpleGrid, Stack, Table, Text, TextInput } from '@mantine/core'
+import { useDebouncedValue, useDisclosure } from '@mantine/hooks'
 import { IconPlus } from '@tabler/icons-react'
 import { useState } from 'react'
 import { Link } from 'react-router'
@@ -11,6 +11,7 @@ import { BadgeRegistro } from '../../shared/registro/componentes.tsx'
 import { usePuedeOperar } from '../auth/use-puede.ts'
 import { useActivos } from '../inventario/api/activos.ts'
 import { usePeriodos, type EstadoPeriodo } from './api.ts'
+import { BadgeEstadoPeriodo, FiltrosEquipo } from './componentes.tsx'
 import { PlanificacionPeriodoModal } from './PlanificacionPeriodoModal.tsx'
 import { ESTADOS, INFO_ESTADO, MESES, mesesDelAnio, mesesSinAbrir, nombrePeriodo, type SituacionMes } from './textos.ts'
 
@@ -97,11 +98,13 @@ export function PlanificacionEndpoints() {
   const puedeOperar = usePuedeOperar()
   const [anioHoy, mesHoy] = hoyLocal().split('-').map(Number)
   const hoy = { anio: anioHoy, mes: mesHoy }
-  const [filtros, setFiltros] = useState<{ page: number; anio?: number; mes?: number; estado?: EstadoPeriodo }>({ page: 1 })
-  const consulta = usePeriodos({ page: filtros.page, limit: 20, anio: filtros.anio, mes: filtros.mes, estado: filtros.estado })
+  const [filtros, setFiltros] = useState<{ page: number; anio?: number; mes?: number; estado?: EstadoPeriodo; activo?: string; categoriaId?: number }>({ page: 1 })
+  const [textoResponsable, setTextoResponsable] = useState('')
+  const [responsable] = useDebouncedValue(textoResponsable.trim(), 300)
+  const consulta = usePeriodos({ page: filtros.page, limit: 20, anio: filtros.anio, mes: filtros.mes, estado: filtros.estado, activo: filtros.activo, categoriaId: filtros.categoriaId, responsable: responsable || undefined })
   const [modalAbierto, modal] = useDisclosure()
   const cambiar = (c: Partial<typeof filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
-  const hayFiltros = filtros.anio !== undefined || filtros.mes !== undefined || filtros.estado !== undefined
+  const hayFiltros = filtros.anio !== undefined || filtros.mes !== undefined || filtros.estado !== undefined || Boolean(filtros.activo || filtros.categoriaId || responsable)
 
   return (
     <Stack gap="md">
@@ -118,6 +121,8 @@ export function PlanificacionEndpoints() {
         }
       />
       <Group gap="sm" align="flex-end" wrap="wrap">
+        <FiltrosEquipo onCambio={(f) => cambiar(f)} />
+        <TextInput label="Responsable" placeholder="Asignado o de la ejecución" value={textoResponsable} onChange={(e) => { setTextoResponsable(e.currentTarget.value); setFiltros((f) => ({ ...f, page: 1 })) }} w={{ base: '100%', sm: 200 }} />
         <Select
           label="Año"
           placeholder="Todos"
@@ -156,7 +161,7 @@ export function PlanificacionEndpoints() {
           <>
             <Text c="dimmed">{hayFiltros ? 'Ningún período coincide con los filtros.' : 'Todavía no hay períodos abiertos.'}</Text>
             {hayFiltros && (
-              <Button variant="subtle" onClick={() => setFiltros({ page: 1 })}>
+              <Button variant="subtle" onClick={() => { setFiltros((f) => ({ page: 1, activo: f.activo, categoriaId: f.categoriaId })); setTextoResponsable('') }}>
                 Quitar filtros
               </Button>
             )}
@@ -169,6 +174,7 @@ export function PlanificacionEndpoints() {
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Período</Table.Th>
+                  <Table.Th>Fecha planificada</Table.Th>
                   <Table.Th>Estado</Table.Th>
                   <Table.Th>Responsable asignado</Table.Th>
                   <Table.Th>Cobertura</Table.Th>
@@ -185,11 +191,13 @@ export function PlanificacionEndpoints() {
                       <Anchor component={Link} to={`/proteccion-endpoints/${p.id}`} fw={600} size="sm">
                         {nombrePeriodo(p.anio, p.mes)}
                       </Anchor>
+                      <Text size="xs" c="dimmed">
+                        {p.semestre}
+                      </Text>
                     </Table.Td>
+                    <Table.Td>{p.fechaPlanificada ? formatearFechaHora(p.fechaPlanificada) : '—'}</Table.Td>
                     <Table.Td>
-                      <Badge size="sm" variant="light" color={INFO_ESTADO[p.estado].color}>
-                        {INFO_ESTADO[p.estado].etiqueta}
-                      </Badge>
+                      <BadgeEstadoPeriodo estado={p.estado} porEjecutar={p.porEjecutar} />
                     </Table.Td>
                     <Table.Td>{p.responsable}</Table.Td>
                     <Table.Td>

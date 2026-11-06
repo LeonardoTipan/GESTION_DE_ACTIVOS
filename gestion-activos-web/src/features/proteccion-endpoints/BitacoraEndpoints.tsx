@@ -5,8 +5,9 @@ import { useState } from 'react'
 import { EncabezadoSeccion } from '../../shared/components/EncabezadoSeccion.tsx'
 import { TarjetaListado } from '../../shared/components/TarjetaListado.tsx'
 import { formatearFechaHora, hoyLocal } from '../../shared/formato.ts'
+import { BitacoraMensual } from './BitacoraMensual.tsx'
 import { usePeriodos, type EstadoPeriodo, type PeriodoEndpoint } from './api.ts'
-import { BadgeCobertura, BadgeEstadoPeriodo, DetallePeriodoModal } from './componentes.tsx'
+import { BadgeCobertura, BadgeEstadoPeriodo, DetallePeriodoModal, FiltrosEquipo } from './componentes.tsx'
 import { ESTADOS, INFO_ESTADO, MESES } from './textos.ts'
 
 interface Filtros {
@@ -16,6 +17,8 @@ interface Filtros {
   estado?: EstadoPeriodo
   anio?: number
   mes?: number
+  activo?: string
+  categoriaId?: number
 }
 
 /**
@@ -35,14 +38,17 @@ export function BitacoraEndpoints() {
     estado: filtros.estado,
     anio: filtros.anio,
     mes: filtros.mes,
+    activo: filtros.activo,
+    categoriaId: filtros.categoriaId,
     incluirAnulados: true,
   })
   const [detalle, setDetalle] = useState<PeriodoEndpoint | null>(null)
   const cambiar = (c: Partial<Filtros>) => setFiltros((f) => ({ ...f, page: 1, ...c }))
-  const hayFiltros = Boolean(filtros.q || filtros.responsable || filtros.estado || filtros.anio || filtros.mes)
+  const hayFiltros = Boolean(filtros.q || filtros.responsable || filtros.estado || filtros.anio || filtros.mes || filtros.activo || filtros.categoriaId)
 
   return (
     <Stack gap="md">
+      <BitacoraMensual />
       <EncabezadoSeccion titulo="Historial de períodos" />
       <Group gap="sm" align="flex-end" wrap="wrap">
         <TextInput
@@ -60,6 +66,7 @@ export function BitacoraEndpoints() {
           onChange={(e) => cambiar({ responsable: e.currentTarget.value })}
           w={{ base: '100%', sm: 220 }}
         />
+        <FiltrosEquipo onCambio={(f) => cambiar(f)} />
         <Select
           label="Estado"
           placeholder="Todos"
@@ -98,7 +105,7 @@ export function BitacoraEndpoints() {
           <>
             <Text c="dimmed">{hayFiltros ? 'Ningún período coincide con los filtros.' : 'Todavía no hay períodos registrados.'}</Text>
             {hayFiltros && (
-              <Button variant="subtle" onClick={() => setFiltros({ page: 1, q: '', responsable: '' })}>
+              <Button variant="subtle" onClick={() => setFiltros((f) => ({ page: 1, q: '', responsable: '', activo: f.activo, categoriaId: f.categoriaId }))}>
                 Quitar filtros
               </Button>
             )}
@@ -106,7 +113,7 @@ export function BitacoraEndpoints() {
         }
       >
         {(periodos) => (
-          <Table.ScrollContainer minWidth={1150}>
+          <Table.ScrollContainer minWidth={1250}>
             <Table striped verticalSpacing="xs" horizontalSpacing={8} fz="sm">
               <Table.Thead>
                 <Table.Tr>
@@ -114,6 +121,7 @@ export function BitacoraEndpoints() {
                   <Table.Th>Mes</Table.Th>
                   <Table.Th>Responsable asignado</Table.Th>
                   <Table.Th>Responsable de ejecución</Table.Th>
+                  <Table.Th>Fecha planificada</Table.Th>
                   <Table.Th>Fecha real de ejecución</Table.Th>
                   <Table.Th>Total de activos</Table.Th>
                   <Table.Th>Con antivirus</Table.Th>
@@ -130,6 +138,7 @@ export function BitacoraEndpoints() {
                     <Table.Td>{MESES[p.mes - 1]}</Table.Td>
                     <Table.Td>{p.responsable}</Table.Td>
                     <Table.Td>{p.responsableEjecucion ?? '—'}</Table.Td>
+                    <Table.Td>{p.fechaPlanificada ? formatearFechaHora(p.fechaPlanificada) : '—'}</Table.Td>
                     <Table.Td>{p.fechaEjecucion ? formatearFechaHora(p.fechaEjecucion) : '—'}</Table.Td>
                     <Table.Td>{p.totalActivos ?? '—'}</Table.Td>
                     <Table.Td>{p.equiposConAntivirus ?? '—'}</Table.Td>
@@ -139,7 +148,7 @@ export function BitacoraEndpoints() {
                     </Table.Td>
                     <Table.Td>
                       <Stack gap={4} align="flex-start">
-                        <BadgeEstadoPeriodo estado={p.estado} />
+                        <BadgeEstadoPeriodo estado={p.estado} porEjecutar={p.porEjecutar} />
                         {p.anuladoEn && <Badge size="sm" variant="light" color="red">Anulado</Badge>}
                       </Stack>
                     </Table.Td>

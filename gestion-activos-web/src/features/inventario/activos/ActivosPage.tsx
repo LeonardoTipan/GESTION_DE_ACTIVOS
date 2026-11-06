@@ -8,11 +8,12 @@ import {
   LoadingOverlay,
   Pagination,
   Stack,
+  Tabs,
   Text,
   Title,
 } from '@mantine/core'
 import { useDisclosure } from '@mantine/hooks'
-import { IconAlertTriangle, IconPlus } from '@tabler/icons-react'
+import { IconAlertTriangle, IconNotebook, IconPlus, IconServer } from '@tabler/icons-react'
 import { useNavigate, useSearchParams } from 'react-router'
 import { usePuedeOperar } from '../../auth/use-puede.ts'
 import { SincronizarGlpi } from '../../glpi/SincronizarGlpi.tsx'
@@ -25,13 +26,16 @@ import {
   leerFiltros,
   type FiltrosActivos as Filtros,
 } from './filtros-url.ts'
+import { MovimientosInventario } from './MovimientosInventario.tsx'
 import { TablaActivos } from './TablaActivos.tsx'
 
 export function ActivosPage() {
   const navigate = useNavigate()
   const [params, setParams] = useSearchParams()
   const filtros = leerFiltros(params)
-  const { data, isPending, isFetching, error } = useActivos(aConsultaApi(filtros))
+  // Pestaña en la URL: Activos (por defecto) o Bitácora de movimientos (consulta).
+  const pestana = params.get('pestana') === 'bitacora' ? 'bitacora' : 'activos'
+  const { data, isPending, isFetching, error } = useActivos(aConsultaApi(filtros), pestana === 'activos')
   const puedeRegistrar = usePuedeOperar()
   const [modalAbierto, modal] = useDisclosure()
 
@@ -70,6 +74,21 @@ export function ActivosPage() {
         </Group>
       </Group>
 
+      <Tabs value={pestana} onChange={(v) => setParams(v === 'bitacora' ? { pestana: 'bitacora' } : new URLSearchParams(), { replace: true })}>
+        <Tabs.List>
+          <Tabs.Tab value="activos" leftSection={<IconServer size={16} />}>
+            Activos
+          </Tabs.Tab>
+          <Tabs.Tab value="bitacora" leftSection={<IconNotebook size={16} />}>
+            Bitácora de movimientos
+          </Tabs.Tab>
+        </Tabs.List>
+      </Tabs>
+
+      {pestana === 'bitacora' ? (
+        <MovimientosInventario />
+      ) : (
+      <>
       <FiltrosActivos filtros={filtros} onChange={actualizar} />
 
       <Card withBorder padding={0} pos="relative">
@@ -107,6 +126,8 @@ export function ActivosPage() {
             onChange={(page) => actualizar({ page })}
           />
         </Group>
+      )}
+      </>
       )}
 
       <ActivoFormModal

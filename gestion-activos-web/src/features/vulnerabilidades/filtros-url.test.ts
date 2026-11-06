@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aConsultaApi, escribirFiltros, leerFiltros } from './filtros-url.ts'
+import { aConsultaApi, aConsultaBitacora, escribirFiltros, leerFiltros } from './filtros-url.ts'
 
 describe('filtros de vulnerabilidades en la URL', () => {
   it('por defecto: pestaña Detección, todo el registro', () => {
@@ -25,9 +25,22 @@ describe('filtros de vulnerabilidades en la URL', () => {
     expect(leerFiltros(escribirFiltros(filtros))).toEqual(filtros)
   })
 
-  it('Remediación muestra por defecto lo pendiente; con un estado, ese estado', () => {
-    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion'))).abiertas).toBe(true)
-    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion&estado=REMEDIADO')))).toMatchObject({ abiertas: undefined, estado: 'REMEDIADO' })
+  // Cambio aprobado el 06/11/2026: en Remediación manda el selector Pendientes | Remediadas | Todas.
+  it('Remediación: pendientes por defecto, remediadas o todas según la vista', () => {
+    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion')))).toMatchObject({ abiertas: true, estado: undefined })
+    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion&vista=remediadas')))).toMatchObject({ abiertas: undefined, estado: 'REMEDIADO' })
+    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion&vista=todas')))).toMatchObject({ abiertas: undefined, estado: undefined })
+    // El estado elegido en Detección no filtra la vista de Remediación.
+    expect(aConsultaApi(leerFiltros(new URLSearchParams('fase=remediacion&estado=ABIERTO')))).toMatchObject({ abiertas: true, estado: undefined })
+    expect(aConsultaApi(leerFiltros(new URLSearchParams('estado=REMEDIADO')))).toMatchObject({ abiertas: undefined, estado: 'REMEDIADO' })
+  })
+
+  it('Bitácora: año y trimestre en la URL; sin año, el actual', () => {
+    const f = leerFiltros(new URLSearchParams('fase=bitacora&anio=2025&trimestre=3&estado=REMEDIADO'))
+    expect(f).toMatchObject({ fase: 'bitacora', anio: 2025, trimestre: 3 })
+    expect(aConsultaBitacora(f, 2026)).toMatchObject({ anio: 2025, trimestre: 3, estado: 'REMEDIADO', limit: 20 })
+    expect(aConsultaBitacora(leerFiltros(new URLSearchParams('fase=bitacora&trimestre=9')), 2026)).toMatchObject({ anio: 2026, trimestre: undefined })
+    expect(escribirFiltros(f).toString()).toBe('fase=bitacora&anio=2025&trimestre=3&estado=REMEDIADO')
   })
 
   it('el rango son días completos en la hora de Guayaquil (UTC−5)', () => {

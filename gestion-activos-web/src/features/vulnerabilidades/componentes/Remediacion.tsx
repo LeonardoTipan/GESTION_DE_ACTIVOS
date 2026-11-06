@@ -280,7 +280,8 @@ export function Remediacion({ v }: { v: Vulnerabilidad }) {
               <b> repositorio</b>. Puede guardarlos antes sin cerrarla.
             </Alert>
           )}
-          <FormRemediacion v={v} correccion={corrigiendo} onListo={() => setCorrigiendo(false)} />
+          {/* La clave reinicia el formulario con cada versión: nunca edita datos antiguos de este registro. */}
+          <FormRemediacion key={`${v.version}-${corrigiendo}`} v={v} correccion={corrigiendo} onListo={() => setCorrigiendo(false)} />
           {corrigiendo && (
             <Button variant="subtle" mt="xs" onClick={() => setCorrigiendo(false)}>
               Cancelar la corrección

@@ -23,8 +23,9 @@ const claves = {
 }
 
 /** La API ya las devuelve por urgencia: mayor criticidad primero y, dentro del nivel, la más antigua. */
-export function useVulnerabilidades(filtros: FiltrosApiVulnerabilidades) {
+export function useVulnerabilidades(filtros: FiltrosApiVulnerabilidades, activa = true) {
   return useQuery({
+    enabled: activa,
     queryKey: claves.lista(filtros),
     queryFn: () => ejecutar(api.GET('/api/vulnerabilidades', { params: { query: filtros } })),
     placeholderData: keepPreviousData,
@@ -76,6 +77,9 @@ function useInvalidarVulnerabilidades() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: claves.todo })
     void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    // El panel principal y el calendario muestran los mismos estados.
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    void queryClient.invalidateQueries({ queryKey: ['agenda'] })
   }
 }
 
@@ -168,6 +172,31 @@ export function useIndicadoresVulnerabilidad(desde: string, hasta: string) {
     queryKey: [...claves.todo, 'indicadores', desde, hasta],
     queryFn: () =>
       ejecutar(api.GET('/api/vulnerabilidades/indicadores', { params: { query: { desde, hasta } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+// ── Bitácora (solo lectura) ─────────────────────────────────────────────────
+
+export type FiltrosBitacoraVulnerabilidades = NonNullable<
+  paths['/api/vulnerabilidades/bitacora/especifica']['get']['parameters']['query']
+>
+export type FilaBitacoraVulnerabilidad = components['schemas']['FilaBitacoraVulnerabilidadDto']
+
+/** Bitácora General trimestral del año (calculada en el backend). */
+export function useBitacoraGeneralVulnerabilidades(anio: number) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'general', anio],
+    queryFn: () => ejecutar(api.GET('/api/vulnerabilidades/bitacora/general', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Bitácora Específica: los registros que justifican el indicador del período. */
+export function useBitacoraEspecificaVulnerabilidades(filtros: FiltrosBitacoraVulnerabilidades) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'especifica', filtros],
+    queryFn: () => ejecutar(api.GET('/api/vulnerabilidades/bitacora/especifica', { params: { query: filtros } })),
     placeholderData: keepPreviousData,
   })
 }

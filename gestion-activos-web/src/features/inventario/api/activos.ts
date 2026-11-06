@@ -17,8 +17,9 @@ export type FiltrosApiActivos = NonNullable<
   paths['/api/activos']['get']['parameters']['query']
 >
 
-export function useActivos(filtros: FiltrosApiActivos) {
+export function useActivos(filtros: FiltrosApiActivos, activa = true) {
   return useQuery({
+    enabled: activa,
     queryKey: claves.listaActivos(filtros),
     queryFn: () => ejecutar(api.GET('/api/activos', { params: { query: filtros } })),
     // Mientras carga la página siguiente, se sigue mostrando la actual (sin parpadeo).
@@ -113,4 +114,18 @@ export async function activosOperativosPorCriticidad(
     }
   }
   return todos
+}
+
+// ── Bitácora de movimientos (consulta global, solo lectura) ──────────────────
+
+export type FiltrosMovimientos = NonNullable<paths['/api/activos/bitacora']['get']['parameters']['query']>
+export type MovimientoInventario = components['schemas']['MovimientoInventarioDto']
+
+/** Altas, modificaciones, bajas e inactivaciones del período (manuales o de GLPI). */
+export function useMovimientosInventario(filtros: FiltrosMovimientos) {
+  return useQuery({
+    queryKey: [...claves.activos, 'movimientos', filtros],
+    queryFn: () => ejecutar(api.GET('/api/activos/bitacora', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
+  })
 }

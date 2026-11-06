@@ -7,11 +7,13 @@ export type PeriodoEndpoint = components['schemas']['PeriodoEndpointDto']
 export type EstadoPeriodo = PeriodoEndpoint['estado']
 export type FiltrosApiPeriodos = NonNullable<paths['/api/proteccion-endpoints/periodos']['get']['parameters']['query']>
 export type DatosRegistroPeriodo = components['schemas']['DatosRegistroPeriodoDto']
+export type EquipoPeriodo = components['schemas']['EquipoPeriodoDetalleDto']
 
 const claves = {
   todo: ['proteccion-endpoints'] as const,
   lista: (f: FiltrosApiPeriodos) => ['proteccion-endpoints', 'periodos', f] as const,
   detalle: (id: number) => ['proteccion-endpoints', 'detalle', id] as const,
+  equipos: (id: number) => ['proteccion-endpoints', 'equipos', id] as const,
 }
 
 export function usePeriodos(filtros: FiltrosApiPeriodos) {
@@ -29,6 +31,24 @@ export function usePeriodo(id: number) {
   })
 }
 
+/** Equipos del período (activos reales) y su antivirus. Solo si el período tiene detalle. */
+export function useEquiposPeriodo(id: number, activo = true) {
+  return useQuery({
+    queryKey: claves.equipos(id),
+    queryFn: () => ejecutar(api.GET('/api/proteccion-endpoints/periodos/{id}/equipos', { params: { path: { id } } })),
+    enabled: activo && id > 0,
+  })
+}
+
+/** La lista del período frente a los equipos elegibles de hoy (solo informa). */
+export function useComparacionInventario(id: number, activo = true) {
+  return useQuery({
+    queryKey: ['proteccion-endpoints', 'comparacion', id],
+    queryFn: () => ejecutar(api.GET('/api/proteccion-endpoints/periodos/{id}/comparacion-inventario', { params: { path: { id } } })),
+    enabled: activo && id > 0,
+  })
+}
+
 /**
  * Tras cualquier operación (también si falla: p. ej. 409 porque otra persona lo cerró) se
  * refrescan el módulo, sus trazas, el panel y el calendario: la pantalla muestra lo confirmado.
@@ -41,6 +61,15 @@ function useInvalidar() {
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
     void queryClient.invalidateQueries({ queryKey: ['agenda'] })
   }
+}
+
+/** Bitácora General mensual del Excel (calculada en el backend). */
+export function useBitacoraGeneralEndpoints(anio: number) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', 'general', anio],
+    queryFn: () => ejecutar(api.GET('/api/proteccion-endpoints/periodos/bitacora/general', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
 }
 
 /** Fase 1 · abrir un período mensual. */
@@ -69,6 +98,15 @@ export function useCerrarPeriodo() {
   return useMutation({
     mutationFn: ({ id, datos }: { id: number; datos: DatosRegistroPeriodo }) =>
       ejecutar(api.PATCH('/api/proteccion-endpoints/periodos/{id}/cerrar', { params: { path: { id } }, body: datos })),
+    onSettled: invalidar,
+  })
+}
+
+/** Períodos anteriores al detalle: carga los equipos sujetos a control de hoy (una vez). */
+export function useCargarEquipos() {
+  const invalidar = useInvalidar()
+  return useMutation({
+    mutationFn: (id: number) => ejecutar(api.POST('/api/proteccion-endpoints/periodos/{id}/equipos', { params: { path: { id } } })),
     onSettled: invalidar,
   })
 }

@@ -57,6 +57,7 @@ function useInvalidar() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: claves.todo })
     void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
 }
 
@@ -127,5 +128,17 @@ export function useAnulacionRenovacion() {
         : ejecutar(api.POST('/api/renovaciones/{id}/reversar', opciones))
     },
     onSettled: invalidar,
+  })
+}
+
+// ── Bitácora operativa (solo lectura; el Excel no define indicador) ─────────
+
+export type FiltrosBitacoraRenovaciones = NonNullable<paths['/api/renovaciones/bitacora']['get']['parameters']['query']>
+
+export function useBitacoraRenovaciones(filtros: FiltrosBitacoraRenovaciones) {
+  return useQuery({
+    queryKey: [...claves.todo, 'bitacora', filtros],
+    queryFn: () => ejecutar(api.GET('/api/renovaciones/bitacora', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
   })
 }

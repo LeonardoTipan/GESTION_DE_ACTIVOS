@@ -9,8 +9,8 @@ const datos: Indicadores = {
   mantenimientos: { programados: 2, enEjecucion: 1, finalizados: 8, proximos30Dias: 3, planesVencidos: 1, ejecucionesVencidas: 0 },
   vulnerabilidades: { abiertas: 2, enProgreso: 1, remediadas: 5, vencidas: 1, criticasPendientes: 0 },
   renovaciones: { pendientes: 1, cerradas: 2, proximasAVencer: 3, caducadas: 1, diasAviso: 30 },
-  endpoints: { abiertos: 1, enProgreso: 0, cerrados: 9 },
-  evaluaciones: { abiertos: 1, enProgreso: 1, cerrados: 2, vencidas: 1 },
+  endpoints: { abiertos: 1, enProgreso: 0, cerrados: 9, porEjecutar: 1 },
+  evaluaciones: { abiertos: 1, enProgreso: 1, cerrados: 2, vencidas: 1, proximas30Dias: 4 },
 }
 
 describe('indicadores del panel', () => {
@@ -24,6 +24,8 @@ describe('indicadores del panel', () => {
     expect(valor('Respaldos', 'Fallidos')).toBe(1)
     expect(valor('Renovaciones', 'Por vencer (30 días)')).toBe(3)
     expect(valor('Evaluación de Sistemas', 'Vencidas')).toBe(1)
+    expect(valor('Evaluación de Sistemas', 'Próximas (30 días)')).toBe(4)
+    expect(valor('Protección de Endpoints', 'Por ejecutar')).toBe(1)
   })
 
   it('las cifras que requieren atención están marcadas para resaltarse', () => {

@@ -5,7 +5,7 @@ import {
   useQueryClient,
 } from '@tanstack/react-query'
 import { api } from '../../../api/client.ts'
-import type { components } from '../../../api/schema'
+import type { components, paths } from '../../../api/schema'
 import { ejecutar } from '../../../shared/api/errores.ts'
 
 type S = components['schemas']
@@ -42,6 +42,7 @@ function useInvalidar() {
   return () => {
     void queryClient.invalidateQueries({ queryKey: RAIZ })
     void queryClient.invalidateQueries({ queryKey: ['trazas'] })
+    void queryClient.invalidateQueries({ queryKey: ['dashboard'] })
   }
 }
 
@@ -213,5 +214,28 @@ export function useAmpliarPlazoPrueba() {
     mutationFn: ({ id, nuevoLimite, motivo }: { id: number; nuevoLimite: string; motivo: string }) =>
       ejecutar(api.PATCH('/api/respaldos/ejecuciones/{id}/plazo-prueba', { params: { path: { id } }, body: { nuevoLimite, motivo } })),
     onSuccess: invalidar,
+  })
+}
+
+// ── Bitácora (solo lectura) ─────────────────────────────────────────────────
+
+export type FiltrosBitacoraRespaldos = NonNullable<paths['/api/respaldos/bitacora/especifica']['get']['parameters']['query']>
+export type FilaBitacoraRespaldo = S['FilaBitacoraRespaldoDto']
+
+/** Bitácora General mensual del año (calculada en el backend). */
+export function useBitacoraGeneralRespaldos(anio: number) {
+  return useQuery({
+    queryKey: [...RAIZ, 'bitacora', 'general', anio],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/bitacora/general', { params: { query: { anio } } })),
+    placeholderData: keepPreviousData,
+  })
+}
+
+/** Bitácora Específica: una fila por ventana programada. */
+export function useBitacoraEspecificaRespaldos(filtros: FiltrosBitacoraRespaldos) {
+  return useQuery({
+    queryKey: [...RAIZ, 'bitacora', 'especifica', filtros],
+    queryFn: () => ejecutar(api.GET('/api/respaldos/bitacora/especifica', { params: { query: filtros } })),
+    placeholderData: keepPreviousData,
   })
 }

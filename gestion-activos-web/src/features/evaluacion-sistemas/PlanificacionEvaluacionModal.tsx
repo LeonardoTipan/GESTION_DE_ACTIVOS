@@ -1,8 +1,9 @@
-import { Alert, Button, Group, Modal, SimpleGrid, Stack, Textarea, TextInput } from '@mantine/core'
+import { Badge, Button, Group, Modal, SimpleGrid, Stack, Text, Textarea, TextInput } from '@mantine/core'
 import { DateTimePicker } from '@mantine/dates'
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { fechaHoraLocalAIso, formatearFechaHora } from '../../shared/formato.ts'
+import { periodoDeFecha } from '../../shared/periodo.ts'
 import { useCategorias } from '../inventario/api/catalogos.ts'
 import { BadgeClase } from '../inventario/componentes/BadgeClase.tsx'
 import { SeleccionActivos } from '../inventario/componentes/SeleccionActivos.tsx'
@@ -37,12 +38,13 @@ function Formulario({ onClose }: { onClose: () => void }) {
     initialValues: { activoIds: [], fechaProgramadaProduccion: null, responsable: '', descripcion: '' },
     validate: {
       activoIds: (v) => (v.length === 1 ? null : 'Elija el sistema que pasa a producción'),
-      fechaProgramadaProduccion: (v) => (v ? null : 'Indique la fecha programada de paso a producción'),
+      fechaProgramadaProduccion: (v) => (v ? null : 'Indique la fecha planificada de evaluación'),
       responsable: (v) => (!v.trim() ? 'Obligatorio' : v.trim().length > 191 ? 'Máximo 191 caracteres' : null),
       descripcion: (v) => (v.trim().length < 10 ? 'Mínimo 10 caracteres' : v.trim().length > 2000 ? 'Máximo 2000 caracteres' : null),
     },
   })
 
+  const periodo = periodoDeFecha(form.values.fechaProgramadaProduccion)
   const enviar = form.onSubmit((v) =>
     planificar.mutate(
       {
@@ -56,7 +58,7 @@ function Formulario({ onClose }: { onClose: () => void }) {
           notifications.show({
             color: 'green',
             title: 'Evaluación planificada',
-            message: `${e.activo.codigo} · paso a producción ${formatearFechaHora(e.fechaProgramadaProduccion)}.`,
+            message: `${e.activo.codigo} · evaluación planificada para ${formatearFechaHora(e.fechaProgramadaProduccion)}.`,
           })
           onClose()
         },
@@ -81,27 +83,39 @@ function Formulario({ onClose }: { onClose: () => void }) {
         />
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
           <DateTimePicker
-            label="Fecha programada de paso a producción"
-            description="Cuándo está previsto que el sistema pase a producción. No es la fecha de solicitud."
+            label="Fecha planificada de evaluación"
+            description="La del paso a producción previsto (puede ser futura). No es la fecha de registro."
             placeholder="Elija fecha y hora"
             valueFormat="DD MMM YYYY HH:mm"
             withAsterisk
             {...form.getInputProps('fechaProgramadaProduccion')}
           />
-          <TextInput label="Asignado" description="Quién realiza la evaluación de seguridad" withAsterisk placeholder="Seguridad TIC" {...form.getInputProps('responsable')} />
+          <TextInput label="Responsable asignado" description="Quién realiza la evaluación de seguridad" withAsterisk placeholder="Seguridad TIC" {...form.getInputProps('responsable')} />
         </SimpleGrid>
+        <Group gap="xs" aria-label="Período calculado">
+          <Text size="sm" c="dimmed">
+            Período calculado:
+          </Text>
+          {periodo ? (
+            <>
+              <Badge variant="light">Mes: {periodo.nombreMes}</Badge>
+              <Badge variant="light">Año: {periodo.anio}</Badge>
+              <Badge variant="light">Semestre: {periodo.semestre}</Badge>
+            </>
+          ) : (
+            <Text size="sm" c="dimmed">
+              —
+            </Text>
+          )}
+        </Group>
         <Textarea
-          label="Descripción planificada"
+          label="Descripción"
           withAsterisk
           autosize
           minRows={2}
           placeholder="Versión 2.1 del sistema de nómina: pruebas de autenticación, autorización e inyección."
           {...form.getInputProps('descripcion')}
         />
-        <Alert color="blue" variant="light">
-          Fase 1: se planifica la evaluación. La fecha real de las pruebas de seguridad y el informe verificable se
-          registrarán en la fase 2 (aún no disponible).
-        </Alert>
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             Cancelar

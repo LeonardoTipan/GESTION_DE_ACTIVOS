@@ -22,6 +22,8 @@ export const pestanaDe = (v: string | null): PestanaEndpoints => (v === 'ejecuci
 export const ETIQUETAS_TRAZA: Record<string, string> = {
   anio: 'Año',
   mes: 'Mes',
+  fechaPlanificada: 'Fecha planificada',
+  equipos: 'Equipos sujetos a control',
   responsable: 'Responsable asignado',
   observacion: 'Observaciones',
   estado: 'Estado',
@@ -41,6 +43,8 @@ export const ETIQUETAS_TRAZA: Record<string, string> = {
 export function resumenParaCerrar(p: {
   anio: number
   mes: number
+  /** Con detalle por equipo: equipos aún sin registrar (null si no tiene detalle). */
+  equiposSinRegistrar?: number | null
   totalActivos: number | null
   equiposConAntivirus: number | null
   fechaEjecucion: string | null
@@ -51,15 +55,32 @@ export function resumenParaCerrar(p: {
   const { anio, mes, totalActivos, equiposConAntivirus, fechaEjecucion, responsableEjecucion, evidencia, repositorioVerificable } = p
   if (totalActivos === null || totalActivos < 1 || equiposConAntivirus === null || equiposConAntivirus > totalActivos) return null
   if (!fechaEjecucion || !responsableEjecucion?.trim() || !evidencia?.trim() || !repositorioVerificable?.trim()) return null
+  if (p.equiposSinRegistrar) return null
   return { anio, mes, totalActivos, equiposConAntivirus, fechaEjecucion, responsableEjecucion, evidencia, repositorioVerificable }
 }
 
-/**
- * Fecha del último cierre, según la auditoría (no hay columna propia). Las trazas llegan de la
- * más reciente a la más antigua. La usa quien ya sabe que el período está cerrado.
- */
-export function ultimoCierre(trazas: { fecha: string; cambios: { campo: string; despues?: unknown }[] }[]): string | null {
-  return trazas.find((t) => t.cambios.some((c) => c.campo === 'estado' && c.despues === 'CERRADO'))?.fecha ?? null
+/** Fecha del último cierre según la auditoría (compartida con Evaluación). */
+export { ultimoCierre } from '../../shared/registro/registro.ts'
+
+/** El antivirus de cada equipo del período, por activoId (null = sin registrar). */
+export type MarcasEquipos = Record<number, boolean | null>
+
+/** Totales calculados del detalle: nunca se escriben a mano. */
+export function conteoEquipos(marcas: MarcasEquipos) {
+  const valores = Object.values(marcas)
+  return {
+    total: valores.length,
+    con: valores.filter((v) => v === true).length,
+    sin: valores.filter((v) => v === false).length,
+    sinRegistrar: valores.filter((v) => v === null).length,
+  }
+}
+
+/** Solo los equipos que cambiaron respecto de lo guardado (lo demás se conserva en el backend). */
+export function cambiosDeEquipos(iniciales: MarcasEquipos, actuales: MarcasEquipos) {
+  return Object.entries(actuales)
+    .filter(([id, v]) => v !== null && v !== iniciales[Number(id)])
+    .map(([id, v]) => ({ activoId: Number(id), conAntivirus: v as boolean }))
 }
 
 /** Situación de cada mes de un año en el calendario: su estado, «sin abrir» o futuro. */

@@ -13,27 +13,7 @@ import { useAnulacionRenovacion, useRenovacion, type Renovacion } from './api.ts
 import { BadgeEstado, BadgeVigencia } from './componentes.tsx'
 import { Ejecucion } from './Ejecucion.tsx'
 import { PlanificacionModal } from './PlanificacionModal.tsx'
-import { INFO_ESTADO, INFO_TIPO } from './textos.ts'
-
-/** Nombres de los campos, para las trazas (sin nombres internos). */
-const ETIQUETAS: Record<string, string> = {
-  activoId: 'Sistema (activo)',
-  tipo: 'Tipo de renovación',
-  responsable: 'Responsable',
-  fechaPlanificada: 'Fecha planificada',
-  fechaCaducidadActual: 'Fecha de caducidad actual',
-  sinCaducidadActual: 'Sin caducidad (actual)',
-  estado: 'Estado',
-  fechaRenovacion: 'Fecha real de renovación',
-  nuevaFechaCaducidad: 'Nueva fecha de caducidad',
-  nuevaSinCaducidad: 'Sin caducidad (nueva)',
-  evidencia: 'Verificable',
-  repositorioVerificable: 'Repositorio verificable',
-  descripcion: 'Descripción',
-  observacion: 'Observación',
-  cerradaPor: 'Cerrada por',
-  renovacionAnteriorId: 'Renovación anterior',
-}
+import { INFO_ESTADO, INFO_TIPO, ETIQUETAS_RENOVACION } from './textos.ts'
 
 /** Fase 1 · Planificación. */
 function Planificacion({ r }: { r: Renovacion }) {
@@ -159,7 +139,7 @@ export function RenovacionPage() {
           entidad="RENOVACION"
           registroId={r.id}
           nombre={`la renovación #${r.id}`}
-          etiquetas={ETIQUETAS}
+          etiquetas={ETIQUETAS_RENOVACION}
           enviando={anulacion.isPending}
           onAnulacion={(modo, motivo, listo) =>
             anulacion.mutate(
