@@ -198,3 +198,7 @@ Reorganiza la interfaz sin duplicar la fase 2 y **sin migraciones**. La pestaña
 **Decisión de alcance:** «Sin abrir» se muestra en el calendario de doce meses de Planificación, no en el calendario general: allí solo hay eventos de períodos que existen, y no se inventan eventos para meses sin registro.
 
 **Terminología pendiente:** la interfaz dice «ejecución», pero los mensajes del backend y el título de la agenda aún dicen «medición» (p. ej. «Para cerrar el período falta: la fecha real de la medición»). No se cambiaron porque las pruebas de la fase 2 fijan esos textos.
+
+## Homologación con activos reales (06/11/2026)
+
+Modelo C (control mensual con detalle por equipo), fecha planificada y «por ejecutar»: ver [homologacion-endpoints-evaluacion-2026-11-06.md](homologacion-endpoints-evaluacion-2026-11-06.md).

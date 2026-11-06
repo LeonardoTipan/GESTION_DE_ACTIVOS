@@ -169,3 +169,7 @@ Ni la fase 2 ni la corrección y la anulación están desarrolladas. Esto es lo 
 - **Pruebas:**
   - `src/production-evaluation/reglas.spec.ts`: reglas, semestres y cálculo de la bitácora;
   - `test/endpoints-evaluacion-fase2.e2e-spec.ts`.
+
+## Homologación (06/11/2026)
+
+Responsable de la ejecución (obligatorio al cerrar), pestaña Ejecución y cierre, filtro por categoría y detalle en la Bitácora: ver [homologacion-endpoints-evaluacion-2026-11-06.md](homologacion-endpoints-evaluacion-2026-11-06.md).
