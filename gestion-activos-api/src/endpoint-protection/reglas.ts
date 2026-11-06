@@ -61,9 +61,33 @@ export function interpretarBusqueda(q: string): { anio?: number; meses?: number[
   return resultado;
 }
 
+/** Semestre de un mes: S1 enero–junio, S2 julio–diciembre («S1-2026»). Se calcula: no se guarda. */
+export const semestreDelMes = (anio: number, mes: number): string => `S${mes <= 6 ? 1 : 2}-${anio}`;
+
 /** Primer instante del mes del período en la hora de la institución. */
 export const inicioDelMes = (p: MesPeriodo, zona = zonaHoraria()): Date =>
   instanteLocal(`${p.anio}-${String(p.mes).padStart(2, '0')}-01`, 0, zona);
+
+/** Último instante del mes del período (un minuto antes del inicio del mes siguiente). */
+export const finDelMes = (p: MesPeriodo, zona = zonaHoraria()): Date =>
+  new Date(inicioDelMes(p.mes === 12 ? { anio: p.anio + 1, mes: 1 } : { anio: p.anio, mes: p.mes + 1 }, zona).getTime() - 60_000);
+
+/**
+ * «Por ejecutar»: sigue ABIERTO (nadie empezó) y su fecha planificada ya pasó. Los períodos sin
+ * fecha planificada (anteriores a ella) vencen al terminar su mes. Un cerrado nunca lo está.
+ */
+export function porEjecutar(p: MesPeriodo & { estado: string; fechaPlanificada: Date | null }, ahora = new Date()): boolean {
+  return p.estado === 'ABIERTO' && (p.fechaPlanificada ?? finDelMes(p)).getTime() < ahora.getTime();
+}
+
+/** La misma condición, para contar en la base. */
+export function wherePorEjecutar(ahora = new Date(), zona = zonaHoraria()) {
+  const [anio, mes] = new Intl.DateTimeFormat('en-CA', { timeZone: zona, year: 'numeric', month: '2-digit' }).format(ahora).split('-').map(Number);
+  return {
+    estado: 'ABIERTO' as const,
+    OR: [{ fechaPlanificada: { lt: ahora } }, { fechaPlanificada: null, OR: [{ anio: { lt: anio } }, { anio, mes: { lt: mes } }] }],
+  };
+}
 
 /**
  * Coherencia de lo guardado (también sin cerrar): total ≥ 1, con antivirus ≤ total, fecha real

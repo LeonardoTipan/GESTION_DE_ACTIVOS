@@ -33,10 +33,14 @@ import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto.js';
 import {
   BitacoraDto,
+  MovimientoInventarioDto,
   PaginatedBitacoraDto,
+  PaginatedMovimientoInventarioDto,
+  QueryMovimientosDto,
 } from '../bitacora/dto/bitacora.dto.js';
 import { APLICACIONES, ENUM_APLICACION, type Aplicacion } from './aplicacion.js';
 import { ActivosService } from './activos.service.js';
+import { BitacoraService } from '../bitacora/bitacora.service.js';
 import {
   ActivoDto,
   CategoriaActivoDto,
@@ -54,7 +58,10 @@ import { QueryActivosDto } from './dto/query-activos.dto.js';
 @ApiForbiddenResponse({ type: ApiErrorDto, description: 'Rol insuficiente.' })
 @Controller('activos')
 export class ActivosController {
-  constructor(private readonly activos: ActivosService) {}
+  constructor(
+    private readonly activos: ActivosService,
+    private readonly bitacora: BitacoraService,
+  ) {}
 
   @ApiOperation({
     summary: 'Listar activos',
@@ -96,6 +103,19 @@ export class ActivosController {
     @Query('aplica', new ParseEnumPipe(ENUM_APLICACION, { optional: true })) aplica?: Aplicacion,
   ): Promise<CategoriaActivoDto[]> {
     return this.activos.categorias(operativos === 'true', aplica);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora de movimientos del inventario',
+    description:
+      'Consulta histórica (no modifica activos): altas, modificaciones, bajas e inactivaciones del período, con el usuario, ' +
+      'los valores anterior y nuevo, y el origen (manual o sincronización GLPI). El Excel no define indicador de Inventario.',
+  })
+  @ApiOkResponse({ type: PaginatedMovimientoInventarioDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @Get('bitacora')
+  movimientos(@Query() q: QueryMovimientosDto): Promise<Paginated<MovimientoInventarioDto>> {
+    return this.bitacora.movimientos(q);
   }
 
   @ApiOperation({ summary: 'Detalle de un activo (también si está dado de baja)' })

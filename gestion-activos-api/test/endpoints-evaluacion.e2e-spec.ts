@@ -36,6 +36,8 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
     .map(Number);
   const mesAnterior = mesHoy === 1 ? { anio: anioHoy - 1, mes: 12 } : { anio: anioHoy, mes: mesHoy - 1 };
   const mesSiguiente = mesHoy === 12 ? { anio: anioHoy + 1, mes: 1 } : { anio: anioHoy, mes: mesHoy + 1 };
+  /** Una fecha planificada de ese mes (mediodía en Guayaquil). */
+  const fechaDe = (m: { anio: number; mes: number }, dia = 15) => new Date(`${m.anio}-${String(m.mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T12:00:00-05:00`).toISOString();
   const enDias = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
   const evaluacion = (activoId: number, extra: object = {}) => ({
     activoId,
@@ -87,30 +89,32 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
   describe('Protección de Endpoints · apertura del período mensual', () => {
     it('abre el mes en curso (ABIERTO) y deja la traza de alta', async () => {
       const res = await api(tokens.analista)
-        .post('/api/proteccion-endpoints/periodos', { anio: anioHoy, mes: mesHoy, responsable: 'Soporte TIC', observacion: 'Corte con el inventario de GLPI.' })
+        .post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe({ anio: anioHoy, mes: mesHoy }, 1), responsable: 'Soporte TIC', observacion: 'Corte con el inventario de GLPI.' })
         .expect(201);
-      expect(res.body).toMatchObject({ anio: anioHoy, mes: mesHoy, responsable: 'Soporte TIC', estado: 'ABIERTO', anuladoEn: null });
+      expect(res.body).toMatchObject({ anio: anioHoy, mes: mesHoy, responsable: 'Soporte TIC', estado: 'ABIERTO', anuladoEn: null, conDetalle: true, equiposSinRegistrar: 1 });
       const trazas = await api(tokens.auditor).get(`/api/trazas?entidad=PERIODO_ENDPOINT&registroId=${res.body.id}`).expect(200);
       expect(trazas.body[0]).toMatchObject({ accion: 'REGISTRAR', responsable: 'analista.test' });
     });
 
     it('no duplica el mismo mes (409) ni abre meses futuros (400)', async () => {
-      const dup = await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { anio: anioHoy, mes: mesHoy, responsable: 'Otro' }).expect(409);
+      // Otro día del mismo mes: es el mismo período.
+      const dup = await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe({ anio: anioHoy, mes: mesHoy }, 2), responsable: 'Otro' }).expect(409);
       expect(dup.body.message).toMatch(/ya existe/);
-      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { ...mesSiguiente, responsable: 'Soporte TIC' }).expect(400);
+      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe(mesSiguiente), responsable: 'Soporte TIC' }).expect(400);
       expect(await prisma.periodoEndpoint.count()).toBe(1);
     });
 
-    it('valida los datos: mes 1–12, año y responsable obligatorios; no admite campos de la fase 2', async () => {
-      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { anio: anioHoy, mes: 13, responsable: 'X' }).expect(400);
-      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { anio: anioHoy, mes: 1 }).expect(400);
+    it('valida los datos: fecha planificada y responsable obligatorios; año y mes no se escriben; no admite campos de la fase 2', async () => {
+      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: 'no-es-una-fecha', responsable: 'X' }).expect(400);
+      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe(mesAnterior) }).expect(400);
+      await api(tokens.admin).post('/api/proteccion-endpoints/periodos', { ...mesAnterior, responsable: 'X' }).expect(400);
       await api(tokens.admin)
-        .post('/api/proteccion-endpoints/periodos', { ...mesAnterior, responsable: 'Soporte TIC', totalActivos: 10, conAntivirus: 9 })
+        .post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe(mesAnterior), responsable: 'Soporte TIC', totalActivos: 10, conAntivirus: 9 })
         .expect(400);
     });
 
     it('un mes anterior se puede abrir (carga histórica); el listado los ordena y filtra por año', async () => {
-      await api(tokens.analista).post('/api/proteccion-endpoints/periodos', { ...mesAnterior, responsable: 'Soporte TIC' }).expect(201);
+      await api(tokens.analista).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe(mesAnterior), responsable: 'Soporte TIC' }).expect(201);
       const lista = await api(tokens.auditor).get('/api/proteccion-endpoints/periodos').expect(200);
       expect(lista.body.meta.total).toBe(2);
       expect(lista.body.data.map((p: { anio: number; mes: number }) => p.anio * 12 + p.mes)).toEqual([anioHoy * 12 + mesHoy, mesAnterior.anio * 12 + mesAnterior.mes]);
@@ -119,7 +123,7 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
     });
 
     it('permisos: el auditor consulta pero no abre (403); sin sesión, 401', async () => {
-      await api(tokens.auditor).post('/api/proteccion-endpoints/periodos', { anio: 2020, mes: 1, responsable: 'X' }).expect(403);
+      await api(tokens.auditor).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe({ anio: 2020, mes: 1 }), responsable: 'X' }).expect(403);
       await api().get('/api/proteccion-endpoints/periodos').expect(401);
       expect(await prisma.periodoEndpoint.count({ where: { anio: 2020 } })).toBe(0);
     });

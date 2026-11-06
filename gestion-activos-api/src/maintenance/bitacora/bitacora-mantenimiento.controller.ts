@@ -7,6 +7,7 @@ import {
   ApiTags,
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
+import { BitacoraIndicadorDto, QueryBitacoraIndicadorDto } from '../../common/bitacora/dto.js';
 import { ApiErrorDto } from '../../common/dto/api-error.dto.js';
 import type { Paginated } from '../../common/dto/paginated-response.dto.js';
 import { BitacoraMantenimientoService } from './bitacora-mantenimiento.service.js';
@@ -38,6 +39,17 @@ export class BitacoraMantenimientoController {
   @Get('general')
   general(@Query() query: QueryBitacoraGeneralDto): Promise<BitacoraGeneralDto> {
     return this.bitacora.general(query);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora General con el formato del Excel (semestral)',
+    description: 'Indicador «Mantenimientos ejecutados / Total Planificados» con el contrato común de las bitácoras: el mismo cálculo de /general (suspendidas sin ejecución fuera del total).',
+  })
+  @ApiOkResponse({ type: BitacoraIndicadorDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @Get('indicador')
+  indicador(@Query() q: QueryBitacoraIndicadorDto): Promise<BitacoraIndicadorDto> {
+    return this.bitacora.indicador(q.anio);
   }
 
   @ApiOperation({

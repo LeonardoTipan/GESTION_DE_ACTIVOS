@@ -73,14 +73,17 @@ export class ActivosService {
 
   /** Vigente y en un estado que permite operar (sin estado también cuenta). */
   filtroOperativo(): Prisma.ActivoWhereInput {
+    return { ...VIGENTE, ...this.filtroEstadoOperativo() };
+  }
+
+  /**
+   * Solo la parte del ESTADO de GLPI que permite operar (sin estado también cuenta), sin exigir
+   * que siga vigente hoy: la usan las bitácoras que reconstruyen el inventario de una fecha pasada.
+   */
+  filtroEstadoOperativo(): Prisma.ActivoWhereInput {
     const excluidos = this.estadosNoOperativos();
-    return excluidos.length === 0
-      ? VIGENTE
-      : {
-          ...VIGENTE,
-          // NOT IN descarta los NULL en SQL: los equipos sin estado se incluyen aparte.
-          OR: [{ estado: null }, { estado: { notIn: excluidos } }],
-        };
+    // NOT IN descarta los NULL en SQL: los equipos sin estado se incluyen aparte.
+    return excluidos.length === 0 ? {} : { OR: [{ estado: null }, { estado: { notIn: excluidos } }] };
   }
 
   /**

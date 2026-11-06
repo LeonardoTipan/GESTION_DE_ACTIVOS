@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo, interpretarBusqueda } from './reglas.js';
+import { cobertura, equiposSinAntivirus, exigirCierre, exigirCoherencia, inicioDelMes, type DatosRegistroPeriodo, interpretarBusqueda, finDelMes, porEjecutar, semestreDelMes, wherePorEjecutar } from './reglas.js';
 
 const OCTUBRE = { anio: 2026, mes: 10 };
 const AHORA = new Date('2026-10-29T17:00:00Z');
@@ -76,5 +76,37 @@ describe('Protección de Endpoints · reglas de la fase 2', () => {
     expect(() => exigirCierre({ ...completo, evidencia: null }, OCTUBRE, AHORA)).toThrow('falta: el verificable (inventario de equipos).');
     expect(() => exigirCierre({ ...completo, responsableEjecucion: '' }, OCTUBRE, AHORA)).toThrow('falta: el responsable de la medición.');
     expect(() => exigirCierre({ ...completo, equiposConAntivirus: 30 }, OCTUBRE, AHORA)).toThrow('no pueden superar');
+  });
+});
+
+describe('Protección de Endpoints · período derivado y «por ejecutar»', () => {
+  const Z = 'America/Guayaquil';
+  it('semestre del mes: S1 enero–junio, S2 julio–diciembre', () => {
+    expect(semestreDelMes(2026, 3)).toBe('S1-2026');
+    expect(semestreDelMes(2026, 6)).toBe('S1-2026');
+    expect(semestreDelMes(2026, 7)).toBe('S2-2026');
+  });
+
+  it('fin del mes en la hora de Ecuador (también diciembre y febrero bisiesto)', () => {
+    expect(finDelMes({ anio: 2026, mes: 3 }, Z).toISOString()).toBe('2026-04-01T04:59:00.000Z');
+    expect(finDelMes({ anio: 2026, mes: 12 }, Z).toISOString()).toBe('2027-01-01T04:59:00.000Z');
+    expect(finDelMes({ anio: 2028, mes: 2 }, Z).toISOString()).toBe('2028-03-01T04:59:00.000Z');
+  });
+
+  it('por ejecutar: abierto con la fecha planificada pasada; sin fecha, al terminar su mes; nunca en progreso ni cerrado', () => {
+    const ahora = new Date('2026-03-20T17:00:00Z');
+    const base = { anio: 2026, mes: 3, estado: 'ABIERTO', fechaPlanificada: new Date('2026-03-15T17:00:00Z') };
+    expect(porEjecutar(base, ahora)).toBe(true);
+    expect(porEjecutar({ ...base, fechaPlanificada: new Date('2026-03-25T17:00:00Z') }, ahora)).toBe(false);
+    expect(porEjecutar({ ...base, estado: 'EN_PROGRESO' }, ahora)).toBe(false);
+    expect(porEjecutar({ ...base, estado: 'CERRADO' }, ahora)).toBe(false);
+    expect(porEjecutar({ ...base, fechaPlanificada: null }, ahora)).toBe(false);
+    expect(porEjecutar({ ...base, mes: 2, fechaPlanificada: null }, ahora)).toBe(true);
+  });
+
+  it('la condición para contar en la base usa el mes local, no el UTC', () => {
+    // 31/03 a las 21:00 en Guayaquil ya es 1 de abril en UTC: el mes en curso sigue siendo marzo.
+    const w = wherePorEjecutar(new Date('2026-04-01T02:00:00Z'), Z);
+    expect(w.OR[1]).toEqual({ fechaPlanificada: null, OR: [{ anio: { lt: 2026 } }, { anio: 2026, mes: { lt: 3 } }] });
   });
 });

@@ -23,6 +23,7 @@ import {
   DatosEjecucionDto,
   EditarPlanificacionDto,
   PaginatedRenovacionDto,
+  QueryBitacoraRenovacionesDto,
   QueryCaducidadesDto,
   QueryRenovacionesDto,
   ReabrirRenovacionDto,
@@ -52,6 +53,17 @@ export class RenovacionesController {
   @Get()
   findAll(@Query() q: QueryRenovacionesDto): Promise<Paginated<RenovacionDto>> {
     return this.renovaciones.findAll(q);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora operativa',
+    description: 'El Excel no define indicador de Renovaciones: sin fórmula ni frecuencia. Renovaciones registradas o ejecutadas (fecha real) en el período, sin anuladas, con los filtros del listado. Solo lectura.',
+  })
+  @ApiOkResponse({ type: PaginatedRenovacionDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @Get('bitacora')
+  bitacora(@Query() q: QueryBitacoraRenovacionesDto): Promise<Paginated<RenovacionDto>> {
+    return this.renovaciones.bitacora(q);
   }
 
   @ApiOperation({ summary: 'Resumen de vigencias', description: 'Vigentes, próximas a caducar (umbral RENOVACIONES_DIAS_AVISO), caducadas y sin caducidad.' })

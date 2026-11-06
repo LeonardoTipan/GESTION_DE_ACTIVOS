@@ -122,6 +122,7 @@ model Activo {
   controlesAcceso     ControlAcceso[]
   renovaciones        Renovacion[] // licencias, garantías, certificados y contratos del activo
   evaluaciones        EvaluacionSistema[] // pasos a producción evaluados (Evaluación de Sistemas Productivos)
+  periodosEndpoint    PeriodoEndpointActivo[] // equipos medidos en cada período de Protección de Endpoints
 
   @@index([updatedAt])
   // Filtro "activos / no activos" del inventario
@@ -918,6 +919,10 @@ model PeriodoEndpoint {
   anio        Int
   // 1 = enero … 12 = diciembre
   mes         Int
+  // Fecha PLANIFICADA de la medición, elegida en un calendario. Año y mes se derivan de ella (en la hora
+  // de la institución) y se guardan porque sostienen el índice único. Vacía en los períodos anteriores
+  // a esta columna: no se inventa (para ellos cuenta el mes)
+  fechaPlanificada DateTime?
   // Persona encargada del período (texto: las identidades viven en Keycloak)
   responsable String
   // Observación de la apertura; en la fase 2, también la del registro y el cierre
@@ -948,9 +953,33 @@ model PeriodoEndpoint {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
+  // Equipos sujetos a control en el período (detalle). Sin detalle (períodos anteriores) cuentan los
+  // totales escritos a mano; con detalle, los totales se calculan de él
+  equipos PeriodoEndpointActivo[]
+
   @@unique([anio, mes])
   @@index([estado])
   @@map("periodo_endpoint")
+}
+
+// Un equipo sujeto a control en un período de Protección de Endpoints: activo REAL del inventario
+// (categoría con aplicaEndpoint) y si tiene antivirus/EDR activo. Se copia la lista al abrir el
+// período; si después el activo se da de baja o cambia de categoría, la línea se conserva.
+model PeriodoEndpointActivo {
+  id           Int      @id @default(autoincrement())
+  periodoId    Int
+  activoId     Int
+  // null = aún sin registrar; obligatorio en todas las líneas para cerrar
+  conAntivirus Boolean?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  periodo PeriodoEndpoint @relation(fields: [periodoId], references: [id], onDelete: Restrict)
+  activo  Activo          @relation(fields: [activoId], references: [id], onDelete: Restrict)
+
+  @@unique([periodoId, activoId])
+  @@index([activoId])
+  @@map("periodo_endpoint_activo")
 }
 
 // ── Evaluación de Sistemas Productivos ────────────────────────────────────────
@@ -980,6 +1009,9 @@ model EvaluacionSistema {
   // ── Fase 2 · Ejecución y cierre (obligatorios al cerrar; vacíos hasta entonces) ──
   // Fecha REAL de las pruebas de seguridad: la indica el usuario (no futura)
   fechaPruebas           DateTime?
+  // Quién realizó las pruebas (puede ser distinto del asignado). Obligatorio al cerrar; vacío en las
+  // evaluaciones cerradas antes de esta columna
+  responsableEjecucion   String?
   // «Verificable»: informe de las pruebas (el veredicto vive en el informe y la observación)
   evidencia              String?
   // «Repositorio Verificable»: carpeta o URL http(s)

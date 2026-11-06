@@ -7,6 +7,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
 } from 'class-validator';
@@ -107,4 +108,27 @@ export class QueryVulnerabilidadesDto extends PaginationQueryDto {
   @toBoolean()
   @IsBoolean()
   incluirAnulados: boolean = true;
+}
+
+/**
+ * Bitácora Específica: los filtros del listado y, opcionalmente, el trimestre del indicador.
+ * Con trimestre (o solo el año) devuelve las vulnerabilidades que forman su «Total identificados»
+ * (pendientes en algún momento del período). Las anuladas nunca aparecen.
+ */
+export class QueryBitacoraEspecificaVulnerabilidadesDto extends QueryVulnerabilidadesDto {
+  @ApiPropertyOptional({ minimum: 2000, maximum: 2100, description: 'Año del indicador; sin él, todas.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  anio?: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 4, description: 'Trimestre (1–4); exige el año. Sin él, el año entero.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(4)
+  trimestre?: number;
 }

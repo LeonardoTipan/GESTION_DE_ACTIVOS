@@ -97,7 +97,7 @@ describe('contarPendientes de cada módulo', () => {
 
   it('Protección de Endpoints: períodos ABIERTO y EN_PROGRESO, no anulados', async () => {
     const p = prisma();
-    await expect(new PeriodosEndpointService(p as unknown as PrismaService, nada).contarPendientes()).resolves.toBe(7);
+    await expect(new PeriodosEndpointService(p as unknown as PrismaService, nada, nada).contarPendientes()).resolves.toBe(7);
     expect(p.periodoEndpoint.count).toHaveBeenCalledWith({ where: { estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, anuladoEn: null } });
     expect(p.periodoEndpoint.findMany).not.toHaveBeenCalled();
   });

@@ -5,6 +5,8 @@ import type { Prisma } from '../../generated/prisma/client.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { rangoDe, semestreDe, type NumeroSemestre } from '../planificacion.js';
 import { bitacoraGeneral } from './calculo.js';
+import { indicadorMantenimientos } from './indicador.js';
+import type { BitacoraIndicadorDto } from '../../common/bitacora/dto.js';
 import type {
   BitacoraGeneralDto,
   FilaBitacoraDto,
@@ -65,6 +67,12 @@ export class BitacoraMantenimientoService {
       planes,
       ejecuciones.map((e) => ({ planId: e.planId, fechaReal: e.fechaInicio ?? e.fechaFin ?? e.fecha })),
     );
+  }
+
+  /** La misma Bitácora General con el contrato común del Excel (año completo, S1 y S2). */
+  async indicador(anio: number): Promise<BitacoraIndicadorDto> {
+    const { semestres } = await this.general({ anio });
+    return indicadorMantenimientos(anio, semestres);
   }
 
   /**

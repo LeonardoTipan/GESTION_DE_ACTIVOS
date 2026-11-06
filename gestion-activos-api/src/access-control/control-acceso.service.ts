@@ -6,8 +6,13 @@ import type { Prisma } from '../generated/prisma/client.js';
 import type { TipoAcceso } from '../generated/prisma/enums.js';
 import { ActivosService } from '../inventory/activos/activos.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import type { BitacoraIndicadorDto } from '../common/bitacora/dto.js';
+import { periodoBitacora, rangoAnio } from '../common/bitacora/periodos.js';
+import { bitacoraControlAcceso, enIndicadorAcceso } from './bitacora.js';
 import type {
   CategoriaElegibleDto,
+  FilaBitacoraControlAccesoDto,
+  QueryBitacoraEspecificaControlAccesoDto,
   CerrarControlAccesoDto,
   ControlAccesoDto,
   CrearControlAccesoDto,
@@ -66,6 +71,23 @@ export class ControlAccesoService {
   }
 
   async findAll(q: QueryControlAccesoDto): Promise<Paginated<ControlAccesoDto>> {
+    const condiciones = this.condiciones(q);
+    const where: Prisma.ControlAccesoWhereInput = condiciones.length ? { AND: condiciones } : {};
+    const [total, filas] = await this.prisma.$transaction([
+      this.prisma.controlAcceso.count({ where }),
+      this.prisma.controlAcceso.findMany({
+        where,
+        include: INCLUDE,
+        orderBy: [{ fechaCreacion: 'desc' }, { id: 'desc' }],
+        skip: skipFor(q),
+        take: q.limit,
+      }),
+    ]);
+    return paginate(filas.map((f) => this.aDto(f)), total, q);
+  }
+
+  /** Filtros del listado (también los usa la Bitácora Específica). */
+  private condiciones(q: QueryControlAccesoDto): Prisma.ControlAccesoWhereInput[] {
     const condiciones: Prisma.ControlAccesoWhereInput[] = [];
     if (q.tipoAcceso) condiciones.push({ tipoAcceso: q.tipoAcceso });
     if (q.estado) condiciones.push({ estado: q.estado });
@@ -83,18 +105,40 @@ export class ControlAccesoService {
         ],
       });
     }
-    const where: Prisma.ControlAccesoWhereInput = condiciones.length ? { AND: condiciones } : {};
+    return condiciones;
+  }
+
+  // ── Bitácora (solo lectura) ───────────────────────────────────────────────
+
+  /** Bitácora General mensual del año: altas cerradas ÷ altas registradas (criterio en bitacora.ts). */
+  async bitacoraGeneral(anio: number): Promise<BitacoraIndicadorDto> {
+    const { desde, hasta } = rangoAnio(anio);
+    const solicitudes = await this.prisma.controlAcceso.findMany({
+      where: { fechaSolicitud: { gte: desde, lt: hasta } },
+      select: { fechaSolicitud: true, tipoSolicitud: true, estado: true },
+    });
+    return bitacoraControlAcceso(anio, solicitudes);
+  }
+
+  /** Bitácora Específica: las solicitudes del mes (altas y bajas) y cómo cuenta cada una. */
+  async bitacoraEspecifica(q: QueryBitacoraEspecificaControlAccesoDto): Promise<Paginated<FilaBitacoraControlAccesoDto>> {
+    const { desde, hasta } = q.mes ? periodoBitacora(q.anio, 'MENSUAL', q.mes) : rangoAnio(q.anio);
+    const where: Prisma.ControlAccesoWhereInput = { AND: [...this.condiciones(q), { fechaSolicitud: { gte: desde, lt: hasta } }] };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.controlAcceso.count({ where }),
       this.prisma.controlAcceso.findMany({
         where,
         include: INCLUDE,
-        orderBy: [{ fechaCreacion: 'desc' }, { id: 'desc' }],
+        orderBy: [{ fechaSolicitud: 'desc' }, { id: 'desc' }],
         skip: skipFor(q),
         take: q.limit,
       }),
     ]);
-    return paginate(filas.map((f) => this.aDto(f)), total, q);
+    return paginate(
+      filas.map((f): FilaBitacoraControlAccesoDto => Object.assign(this.aDto(f), { enIndicador: enIndicadorAcceso(f) })),
+      total,
+      q,
+    );
   }
 
   async findOne(id: number): Promise<ControlAccesoDto> {

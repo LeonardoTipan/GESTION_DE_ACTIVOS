@@ -8,6 +8,9 @@ import type { EstadoEvaluacionSistema } from '../generated/prisma/enums.js';
 import { ActivosService } from '../inventory/activos/activos.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { bitacoraGeneral } from './bitacora.js';
+import { enProduccion, indicadorEvaluacion, type SistemaProduccion } from './indicador.js';
+import type { BitacoraIndicadorDto } from '../common/bitacora/dto.js';
+import { filtroAplica } from '../inventory/activos/aplicacion.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 
 import type {
@@ -18,6 +21,7 @@ import type {
   QueryBitacoraEspecificaEvaluacionDto,
   QueryBitacoraEvaluacionDto,
   QueryEvaluacionesDto,
+  SistemaProduccionDto,
   ReabrirEvaluacionDto,
 } from './dto.js';
 import { esTardia, exigirCierre, exigirCoherencia, situacion, type DatosEjecucionEvaluacion, type Situacion } from './reglas.js';
@@ -66,6 +70,7 @@ export class EvaluacionesService {
     const ahora = new Date();
     const filtros: Prisma.EvaluacionSistemaWhereInput[] = [{ activoId: q.activoId, estado: q.estado }];
     if (!q.incluirAnulados) filtros.push({ anuladoEn: null });
+    if (q.categoriaId) filtros.push({ activo: { categoriaId: q.categoriaId } });
     if (q.responsable) filtros.push({ responsable: { contains: q.responsable } });
     if (q.pendientes === true) filtros.push({ estado: { in: PENDIENTES } });
     if (q.pendientes === false) filtros.push({ estado: 'CERRADO' });
@@ -204,6 +209,50 @@ export class EvaluacionesService {
     return bitacoraGeneral(anio, semestres, evaluaciones);
   }
 
+  /** Bitácora General con la fórmula del Excel: pruebas ejecutadas ÷ total de sistemas en producción (indicador.ts). */
+  async indicador(anio: number): Promise<BitacoraIndicadorDto> {
+    const { desde, hasta } = rangoDe(anio);
+    const [sistemas, evaluaciones] = await Promise.all([
+      this.sistemasProduccion(),
+      this.prisma.evaluacionSistema.findMany({
+        where: { anuladoEn: null, OR: [{ fechaProgramadaProduccion: { gte: desde, lt: hasta } }, { fechaPruebas: { gte: desde, lt: hasta } }] },
+        select: { activoId: true, estado: true, fechaProgramadaProduccion: true, fechaPruebas: true },
+      }),
+    ]);
+    return indicadorEvaluacion(anio, sistemas, evaluaciones);
+  }
+
+  /** El «Total sistemas en producción» del semestre (al corte) y si cada uno se evaluó en él. */
+  async sistemasDelSemestre(anio: number, semestre: NumeroSemestre): Promise<SistemaProduccionDto[]> {
+    const { desde, hasta } = rangoDe(anio, semestre);
+    const ahora = new Date();
+    const corte = hasta < ahora ? hasta : ahora;
+    const universo = enProduccion(await this.sistemasProduccion(), corte).map((s) => s.id);
+    const [activos, cerradas] = await Promise.all([
+      this.prisma.activo.findMany({ where: { id: { in: universo } }, ...SELECT_ACTIVO, orderBy: { codigo: 'asc' } }),
+      this.prisma.evaluacionSistema.findMany({
+        where: { anuladoEn: null, estado: 'CERRADO', activoId: { in: universo }, fechaPruebas: { gte: desde, lt: hasta } },
+        select: { id: true, activoId: true },
+      }),
+    ]);
+    return activos.map((a) => {
+      const evaluaciones = cerradas.filter((e) => e.activoId === a.id).map((e) => e.id);
+      return { activo: activoBreve(a), evaluado: evaluaciones.length > 0, evaluaciones };
+    });
+  }
+
+  /** Activos de las categorías de Evaluación con estado operativo, con sus fechas de alta y baja. */
+  private async sistemasProduccion(): Promise<SistemaProduccion[]> {
+    const filas = await this.prisma.activo.findMany({
+      where: { AND: [filtroAplica('EVALUACION'), this.activos.filtroEstadoOperativo()] },
+      select: { id: true, fechaAlta: true, createdAt: true, deletedAt: true, inactivoDesde: true },
+    });
+    return filas.map((a) => {
+      const bajas = [a.deletedAt, a.inactivoDesde].filter((f): f is Date => f !== null);
+      return { id: a.id, alta: a.fechaAlta ?? a.createdAt, baja: bajas.length ? new Date(Math.min(...bajas.map((f) => f.getTime()))) : null };
+    });
+  }
+
   /** Bitácora Específica: una fila por evaluación, filtrable por semestre planificado, sistema, asignado y situación. */
   async bitacoraEspecifica(q: QueryBitacoraEspecificaEvaluacionDto): Promise<Paginated<EvaluacionSistemaDto>> {
     if (q.semestre && !q.anio) throw new BadRequestException('El semestre exige el año.');
@@ -211,7 +260,12 @@ export class EvaluacionesService {
     const filtros: Prisma.EvaluacionSistemaWhereInput[] = [{ anuladoEn: null, activoId: q.activoId }];
     if (q.anio) {
       const { desde, hasta } = rangoDe(q.anio, q.semestre);
-      filtros.push({ fechaProgramadaProduccion: { gte: desde, lt: hasta } });
+      // PRUEBAS: las que forman el numerador del indicador (cerradas con las pruebas reales en el período).
+      filtros.push(
+        q.segun === 'PRUEBAS'
+          ? { estado: 'CERRADO', fechaPruebas: { gte: desde, lt: hasta } }
+          : { fechaProgramadaProduccion: { gte: desde, lt: hasta } },
+      );
     }
     if (q.responsable) filtros.push({ responsable: { contains: q.responsable } });
     if (q.situacion) filtros.push(this.filtroSituacion(q.situacion, ahora));
@@ -242,11 +296,14 @@ export class EvaluacionesService {
     for (const e of filas.map((f) => aDto(f, ahora))) {
       const base = { modulo: 'evaluaciones' as const, activo: e.activo, responsable: e.responsable, ruta: `/evaluacion-sistemas-productivos/${e.id}` };
       if (quiere(1) && e.fechaProgramadaProduccion >= q.desde && e.fechaProgramadaProduccion <= q.hasta) {
-        const estado = e.estado === 'CERRADO' ? 'COMPLETADO' : e.vencida ? 'VENCIDO' : e.estado === 'EN_PROGRESO' ? 'EN_CURSO' : 'PROGRAMADO';
-        eventos.push({ ...base, clave: `ev1-${e.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Paso a producción · ${e.activo.codigo}`, inicio: e.fechaProgramadaProduccion, fin: null, estado, fueraDePlazo: false, detalle: `Evaluación #${e.id}` });
+        // Abierto con la fecha pasada → «por ejecutar»; en progreso sigue en curso; cerrado nunca está pendiente.
+        const porEjecutar = e.estado === 'ABIERTO' && e.vencida;
+        const estado = e.estado === 'CERRADO' ? 'COMPLETADO' : e.estado === 'EN_PROGRESO' ? 'EN_CURSO' : porEjecutar ? 'POR_EJECUTAR' : 'PROGRAMADO';
+        const etiqueta = porEjecutar ? 'Por ejecutar' : { ABIERTO: 'Abierto', EN_PROGRESO: 'En progreso', CERRADO: 'Cerrado' }[e.estado];
+        eventos.push({ ...base, clave: `ev1-${e.id}`, capa: 1, tipo: 'PREVISTO', titulo: `Evaluación de seguridad · ${e.activo.codigo} · ${e.activo.nombre}`, inicio: e.fechaProgramadaProduccion, fin: null, estado, fueraDePlazo: false, detalle: `Evaluación #${e.id} · ${e.activo.categoria} · Estado: ${etiqueta}` });
       }
       if (quiere(2) && e.fechaPruebas && e.fechaPruebas >= q.desde && e.fechaPruebas <= q.hasta) {
-        eventos.push({ ...base, clave: `ev2-${e.id}`, capa: 2, tipo: 'REAL', titulo: `Pruebas de seguridad · ${e.activo.codigo}`, inicio: e.fechaPruebas, fin: null, estado: e.estado === 'CERRADO' ? 'COMPLETADO' : 'EN_CURSO', fueraDePlazo: e.tardia, detalle: e.tardia ? 'Posteriores a la fecha programada (justificadas)' : null });
+        eventos.push({ ...base, clave: `ev2-${e.id}`, capa: 2, tipo: 'REAL', titulo: `Pruebas de seguridad · ${e.activo.codigo} · ${e.activo.nombre}`, inicio: e.fechaPruebas, fin: null, estado: e.estado === 'CERRADO' ? 'COMPLETADO' : 'EN_CURSO', fueraDePlazo: e.tardia, detalle: e.tardia ? 'Posteriores a la fecha programada (justificadas)' : null });
       }
     }
     return (q.estado ? eventos.filter((x) => x.estado === q.estado) : eventos).sort((a, b) => a.inicio.getTime() - b.inicio.getTime());
@@ -304,6 +361,7 @@ export class EvaluacionesService {
     return {
       fechaProgramadaProduccion: actual.fechaProgramadaProduccion,
       fechaPruebas: d.fechaPruebas ?? actual.fechaPruebas,
+      responsableEjecucion: d.responsableEjecucion ?? actual.responsableEjecucion,
       evidencia: d.evidencia ?? actual.evidencia,
       repositorioVerificable: d.repositorioVerificable ?? actual.repositorioVerificable,
       observacion: d.observacion ?? actual.observacion,
@@ -313,6 +371,7 @@ export class EvaluacionesService {
   private cambios(d: DatosEjecucionEvaluacionDto): Record<string, unknown> {
     return definidos({
       fechaPruebas: d.fechaPruebas,
+      responsableEjecucion: d.responsableEjecucion,
       evidencia: d.evidencia,
       repositorioVerificable: d.repositorioVerificable,
       observacion: d.observacion,

@@ -14,7 +14,7 @@ export const TIPOS_EVENTO = ['PREVISTO', 'REAL'] as const;
  * PROGRAMADO (aún en plazo) · VENCIDO (pasó el límite sin hacerse) · EN_CURSO ·
  * COMPLETADO · FALLIDO (o no satisfactorio, o persiste) · CANCELADO.
  */
-export const ESTADOS_EVENTO = ['PROGRAMADO', 'VENCIDO', 'EN_CURSO', 'COMPLETADO', 'FALLIDO', 'CANCELADO'] as const;
+export const ESTADOS_EVENTO = ['PROGRAMADO', 'VENCIDO', 'POR_EJECUTAR', 'EN_CURSO', 'COMPLETADO', 'FALLIDO', 'CANCELADO'] as const;
 export type EstadoEvento = (typeof ESTADOS_EVENTO)[number];
 
 export class EventoAgendaDto {

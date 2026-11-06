@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional, OmitType, PartialType } from '@nestjs/swagger';
 import { Transform, Type } from 'class-transformer';
-import { IsDate, IsIn, IsInt, IsOptional, IsString, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
+import { IsDate, IsIn, IsInt, IsOptional, IsString, Max, MaxLength, Min, MinLength, ValidateIf } from 'class-validator';
 import { Trim } from '../common/decorators/trim.decorator.js';
 import { PaginatedResponseDto } from '../common/dto/paginated-response.dto.js';
 import { PaginationQueryDto } from '../common/dto/pagination-query.dto.js';
@@ -255,3 +255,33 @@ export class CategoriaElegibleDto {
 }
 
 export class PaginatedActivoElegibleDto extends PaginatedResponseDto(ActivoBreveDto) {}
+
+// ── Bitácora (solo lectura) ─────────────────────────────────────────────────
+
+/** Bitácora Específica: los filtros del listado y el mes de la fecha de solicitud. */
+export class QueryBitacoraEspecificaControlAccesoDto extends QueryControlAccesoDto {
+  @ApiProperty({ minimum: 2000, maximum: 2100, example: 2026 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  anio: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 12, description: 'Mes de la fecha de solicitud; sin él, el año entero.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  mes?: number;
+}
+
+export class FilaBitacoraControlAccesoDto extends ControlAccesoDto {
+  @ApiProperty({
+    enum: ['OTORGADO', 'PENDIENTE', 'NO_APLICA'],
+    description: 'OTORGADO: alta cerrada (numerador) · PENDIENTE: alta sin atender (solo en el total) · NO_APLICA: baja (fuera de la fórmula).',
+  })
+  enIndicador: 'OTORGADO' | 'PENDIENTE' | 'NO_APLICA';
+}
+
+export class PaginatedFilaBitacoraControlAccesoDto extends PaginatedResponseDto(FilaBitacoraControlAccesoDto) {}

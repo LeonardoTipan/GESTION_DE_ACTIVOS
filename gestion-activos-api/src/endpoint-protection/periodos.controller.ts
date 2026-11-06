@@ -13,12 +13,15 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { BitacoraIndicadorDto, QueryBitacoraIndicadorDto } from '../common/bitacora/dto.js';
 import { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
 import {
   AbrirPeriodoDto,
+  ComparacionInventarioDto,
   DatosRegistroPeriodoDto,
+  EquipoPeriodoDetalleDto,
   PaginatedPeriodoEndpointDto,
   PeriodoEndpointDto,
   QueryPeriodosDto,
@@ -42,7 +45,7 @@ export class PeriodosEndpointController {
     return this.periodos.findAll(q);
   }
 
-  @ApiOperation({ summary: 'Abrir un período mensual (admin, analista)', description: 'Fase 1. Mes en curso o anterior; uno solo por año y mes.' })
+  @ApiOperation({ summary: 'Abrir un período mensual (admin, analista)', description: 'Fase 1. Con la fecha planificada (año y mes se derivan); mes en curso o anterior; uno solo por mes. Copia los equipos sujetos a control.' })
   @ApiCreatedResponse({ type: PeriodoEndpointDto })
   @ApiBadRequestResponse({ type: ApiErrorDto })
   @ApiConflictResponse({ type: ApiErrorDto, description: 'Ese mes ya tiene período.' })
@@ -50,6 +53,16 @@ export class PeriodosEndpointController {
   @Post()
   abrir(@Body() dto: AbrirPeriodoDto, @CurrentUser() usuario: AuthUser): Promise<PeriodoEndpointDto> {
     return this.periodos.abrir(dto, usuario);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora General (mensual)',
+    description: 'Indicador del Excel «Equipos con antivirus activo / Total activos» por mes: del período CERRADO de cada mes (detalle por equipo o, en los anteriores, los totales registrados). Solo lectura.',
+  })
+  @ApiOkResponse({ type: BitacoraIndicadorDto })
+  @Get('bitacora/general')
+  bitacoraGeneral(@Query() q: QueryBitacoraIndicadorDto): Promise<BitacoraIndicadorDto> {
+    return this.periodos.bitacoraGeneral(q.anio);
   }
 
   @ApiOperation({ summary: 'Agenda del calendario', description: 'El mes de cada período (previsto) y la medición real (fecha de ejecución), en un rango.' })
@@ -65,6 +78,37 @@ export class PeriodosEndpointController {
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number): Promise<PeriodoEndpointDto> {
     return this.periodos.findOne(id);
+  }
+
+  @ApiOperation({ summary: 'Equipos del período', description: 'Activos reales del inventario sujetos al control y si tienen antivirus.' })
+  @ApiOkResponse({ type: [EquipoPeriodoDetalleDto] })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @Get(':id/equipos')
+  equipos(@Param('id', ParseIntPipe) id: number): Promise<EquipoPeriodoDetalleDto[]> {
+    return this.periodos.equipos(id);
+  }
+
+  @ApiOperation({
+    summary: 'Equipos del período frente al inventario de hoy',
+    description: 'Cuántos equipos copió el período al abrirse, cuántos son elegibles hoy, cuáles entraron después y cuáles dejaron de ser elegibles. Solo informa.',
+  })
+  @ApiOkResponse({ type: ComparacionInventarioDto })
+  @ApiNotFoundResponse({ type: ApiErrorDto })
+  @Get(':id/comparacion-inventario')
+  comparacion(@Param('id', ParseIntPipe) id: number): Promise<ComparacionInventarioDto> {
+    return this.periodos.comparacion(id);
+  }
+
+  @ApiOperation({
+    summary: 'Cargar los equipos (admin, analista)',
+    description: 'Para un período pendiente abierto antes del detalle por equipo: copia los equipos sujetos a control de hoy. Una sola vez.',
+  })
+  @ApiCreatedResponse({ type: PeriodoEndpointDto })
+  @ApiConflictResponse({ type: ApiErrorDto, description: 'Ya tiene equipos, o no está pendiente.' })
+  @Roles('admin', 'analista')
+  @Post(':id/equipos')
+  cargarEquipos(@Param('id', ParseIntPipe) id: number, @CurrentUser() usuario: AuthUser): Promise<PeriodoEndpointDto> {
+    return this.periodos.cargarEquipos(id, usuario);
   }
 
   // ── Fase 2 · Registro y cierre ──

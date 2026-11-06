@@ -246,6 +246,8 @@ describe('Tablero: trámites pendientes por módulo (e2e)', () => {
       abiertos: await total('/api/proteccion-endpoints/periodos?estado=ABIERTO'),
       enProgreso: await total('/api/proteccion-endpoints/periodos?estado=EN_PROGRESO'),
       cerrados: await total('/api/proteccion-endpoints/periodos?estado=CERRADO'),
+      // Los abiertos con la fecha planificada pasada, según el propio listado.
+      porEjecutar: (await get('/api/proteccion-endpoints/periodos?estado=ABIERTO&limit=100')).body.data.filter((p: { porEjecutar: boolean }) => p.porEjecutar).length,
     });
     expect(i.evaluaciones).toMatchObject({ vencidas: await total('/api/evaluaciones-sistemas?vencidas=true') });
     // Un pendiente nunca se cuenta dos veces: abiertos + en progreso = pendientes del módulo.

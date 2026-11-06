@@ -15,7 +15,9 @@ import type { EstadoRenovacion } from '../generated/prisma/enums.js';
 import { ActivosService } from '../inventory/activos/activos.service.js';
 import type { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { periodoBitacora, rangoAnio } from '../common/bitacora/periodos.js';
 import type {
+  QueryBitacoraRenovacionesDto,
   ActualizarEjecucionDto,
   CrearRenovacionDto,
   DatosEjecucionDto,
@@ -72,6 +74,42 @@ export class RenovacionesService {
   }
 
   async findAll(q: QueryRenovacionesDto): Promise<Paginated<RenovacionDto>> {
+    const where: Prisma.RenovacionWhereInput = { AND: this.filtros(q) };
+    const [total, filas] = await this.prisma.$transaction([
+      this.prisma.renovacion.count({ where }),
+      this.prisma.renovacion.findMany({
+        where,
+        include: INCLUDE,
+        orderBy: [{ fechaPlanificada: 'desc' }, { id: 'desc' }],
+        skip: skipFor(q),
+        take: q.limit,
+      }),
+    ]);
+    return paginate(filas.map((r) => aDto(r)), total, q);
+  }
+
+  /**
+   * Bitácora operativa (el Excel no define indicador de Renovaciones: no hay fórmula ni frecuencia).
+   * Los movimientos del período: renovaciones REGISTRADAS o EJECUTADAS (fecha real) en él, sin
+   * anuladas, con los filtros del listado. La más reciente primero.
+   */
+  async bitacora(q: QueryBitacoraRenovacionesDto): Promise<Paginated<RenovacionDto>> {
+    const local = q.mes ? periodoBitacora(q.anio, 'MENSUAL', q.mes) : rangoAnio(q.anio);
+    // fechaRenovacion es un DÍA guardado a medianoche UTC: se compara con días UTC.
+    const dia = (anio: number, mes: number) => new Date(Date.UTC(anio, mes - 1, 1));
+    const dias = q.mes ? { gte: dia(q.anio, q.mes), lt: dia(q.anio, q.mes + 1) } : { gte: dia(q.anio, 1), lt: dia(q.anio + 1, 1) };
+    const where: Prisma.RenovacionWhereInput = {
+      AND: [...this.filtros(q, true), { OR: [{ createdAt: { gte: local.desde, lt: local.hasta } }, { fechaRenovacion: dias }] }],
+    };
+    const [total, filas] = await this.prisma.$transaction([
+      this.prisma.renovacion.count({ where }),
+      this.prisma.renovacion.findMany({ where, include: INCLUDE, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }], skip: skipFor(q), take: q.limit }),
+    ]);
+    return paginate(filas.map((r) => aDto(r)), total, q);
+  }
+
+  /** Filtros del listado (también los usa la Bitácora). */
+  private filtros(q: QueryRenovacionesDto, soloVigentes = false): Prisma.RenovacionWhereInput[] {
     const filtros: Prisma.RenovacionWhereInput[] = [
       {
         activoId: q.activoId,
@@ -95,19 +133,8 @@ export class RenovacionesService {
         ],
       });
     }
-    if (!q.incluirAnulados) filtros.push({ anuladoEn: null });
-    const where: Prisma.RenovacionWhereInput = { AND: filtros };
-    const [total, filas] = await this.prisma.$transaction([
-      this.prisma.renovacion.count({ where }),
-      this.prisma.renovacion.findMany({
-        where,
-        include: INCLUDE,
-        orderBy: [{ fechaPlanificada: 'desc' }, { id: 'desc' }],
-        skip: skipFor(q),
-        take: q.limit,
-      }),
-    ]);
-    return paginate(filas.map((r) => aDto(r)), total, q);
+    if (soloVigentes || !q.incluirAnulados) filtros.push({ anuladoEn: null });
+    return filtros;
   }
 
   async findOne(id: number): Promise<RenovacionDto> {

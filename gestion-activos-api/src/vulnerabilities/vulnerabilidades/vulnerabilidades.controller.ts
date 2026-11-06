@@ -39,8 +39,14 @@ import {
   RegistrarVulnerabilidadDto,
   RemediarDto,
 } from './dto/acciones.dto.js';
-import { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
-import { PaginatedVulnerabilidadDto, VulnerabilidadDto } from './dto/vulnerabilidad.dto.js';
+import { QueryBitacoraEspecificaVulnerabilidadesDto, QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
+import {
+  FilaBitacoraVulnerabilidadDto,
+  PaginatedFilaBitacoraVulnerabilidadDto,
+  PaginatedVulnerabilidadDto,
+  VulnerabilidadDto,
+} from './dto/vulnerabilidad.dto.js';
+import { BitacoraIndicadorDto, QueryBitacoraIndicadorDto } from '../../common/bitacora/dto.js';
 import { VulnerabilidadesService } from './vulnerabilidades.service.js';
 
 /**
@@ -87,6 +93,30 @@ export class VulnerabilidadesController {
   @Get('agenda')
   agenda(@Query() q: QueryAgendaDto): Promise<EventoAgendaDto[]> {
     return this.vulnerabilidades.agenda(q);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora General (trimestral)',
+    description:
+      'Indicador del Excel «Vulnerabilidades remediadas / Total Identificados» por trimestre del año. Total identificados: ' +
+      'pendientes en algún momento del trimestre (detectadas antes de su fin y no remediadas antes de su inicio); remediadas: ' +
+      'de ellas, las remediadas con la fecha real dentro del trimestre. Sin anuladas. Solo lectura.',
+  })
+  @ApiOkResponse({ type: BitacoraIndicadorDto })
+  @Get('bitacora/general')
+  bitacoraGeneral(@Query() q: QueryBitacoraIndicadorDto): Promise<BitacoraIndicadorDto> {
+    return this.vulnerabilidades.bitacoraGeneral(q.anio);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora Específica',
+    description: 'Registros que justifican el indicador (sin anuladas), con los filtros del listado. Con año y trimestre: el total identificado del período, marcando las remediadas.',
+  })
+  @ApiOkResponse({ type: PaginatedFilaBitacoraVulnerabilidadDto })
+  @ApiBadRequestResponse({ type: ApiErrorDto })
+  @Get('bitacora/especifica')
+  bitacoraEspecifica(@Query() q: QueryBitacoraEspecificaVulnerabilidadesDto): Promise<Paginated<FilaBitacoraVulnerabilidadDto>> {
+    return this.vulnerabilidades.bitacoraEspecifica(q);
   }
 
   @ApiOperation({ summary: 'Detalle de una vulnerabilidad' })

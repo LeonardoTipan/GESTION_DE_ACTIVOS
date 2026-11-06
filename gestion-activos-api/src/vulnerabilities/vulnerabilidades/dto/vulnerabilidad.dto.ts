@@ -87,3 +87,15 @@ export class VulnerabilidadDto {
 }
 
 export class PaginatedVulnerabilidadDto extends PaginatedResponseDto(VulnerabilidadDto) {}
+
+/** Fila de la Bitácora Específica: la vulnerabilidad y cómo cuenta en el período pedido. */
+export class FilaBitacoraVulnerabilidadDto extends VulnerabilidadDto {
+  @ApiProperty({
+    enum: ['REMEDIADA', 'PENDIENTE'],
+    nullable: true,
+    description: 'Con período: REMEDIADA (numerador: remediada dentro del período) o PENDIENTE (solo en el total identificado). Sin período: null.',
+  })
+  enIndicador: 'REMEDIADA' | 'PENDIENTE' | null;
+}
+
+export class PaginatedFilaBitacoraVulnerabilidadDto extends PaginatedResponseDto(FilaBitacoraVulnerabilidadDto) {}

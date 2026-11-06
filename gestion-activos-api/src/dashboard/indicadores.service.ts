@@ -3,6 +3,7 @@ import { ActivosService } from '../inventory/activos/activos.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RenovacionesService } from '../renewals/renovaciones.service.js';
 import type { IndicadoresTableroDto } from './indicadores.dto.js';
+import { wherePorEjecutar } from '../endpoint-protection/reglas.js';
 
 const DIA = 86_400_000;
 const NO_ANULADO = { anuladoEn: null } as const;
@@ -38,8 +39,8 @@ export class IndicadoresTableroService {
         mProg, mEjec, mFin, mProximos, mPlanesVencidos, mEjecVencidas,
         vAbiertas, vProgreso, vRemediadas, vVencidas, vCriticas,
         rPendientes, rCerradas, vigencias,
-        eAbiertos, eProgreso, eCerrados,
-        evAbiertas, evProgreso, evCerradas, evVencidas,
+        eAbiertos, eProgreso, eCerrados, ePorEjecutar,
+        evAbiertas, evProgreso, evCerradas, evVencidas, evProximas,
       ] = await Promise.all([
         p.activo.count({ where: { deletedAt: null } }),
         p.activo.count({ where: this.activos.filtroOperativo() }),
@@ -66,10 +67,12 @@ export class IndicadoresTableroService {
         p.periodoEndpoint.count({ where: { ...NO_ANULADO, estado: 'ABIERTO' } }),
         p.periodoEndpoint.count({ where: { ...NO_ANULADO, estado: 'EN_PROGRESO' } }),
         p.periodoEndpoint.count({ where: { ...NO_ANULADO, estado: 'CERRADO' } }),
+        p.periodoEndpoint.count({ where: { ...NO_ANULADO, ...wherePorEjecutar(ahora) } }),
         p.evaluacionSistema.count({ where: { ...NO_ANULADO, estado: 'ABIERTO' } }),
         p.evaluacionSistema.count({ where: { ...NO_ANULADO, estado: 'EN_PROGRESO' } }),
         p.evaluacionSistema.count({ where: { ...NO_ANULADO, estado: 'CERRADO' } }),
         p.evaluacionSistema.count({ where: { ...NO_ANULADO, estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, fechaProgramadaProduccion: { lt: ahora } } }),
+        p.evaluacionSistema.count({ where: { ...NO_ANULADO, estado: { in: ['ABIERTO', 'EN_PROGRESO'] }, fechaProgramadaProduccion: { gte: ahora, lte: en30 } } }),
       ]);
       return {
         inventario: { total: totalActivos, operativos },
@@ -78,8 +81,8 @@ export class IndicadoresTableroService {
         mantenimientos: { programados: mProg, enEjecucion: mEjec, finalizados: mFin, proximos30Dias: mProximos, planesVencidos: mPlanesVencidos, ejecucionesVencidas: mEjecVencidas },
         vulnerabilidades: { abiertas: vAbiertas, enProgreso: vProgreso, remediadas: vRemediadas, vencidas: vVencidas, criticasPendientes: vCriticas },
         renovaciones: { pendientes: rPendientes, cerradas: rCerradas, proximasAVencer: vigencias.proximas, caducadas: vigencias.caducadas, diasAviso: vigencias.diasAviso },
-        endpoints: { abiertos: eAbiertos, enProgreso: eProgreso, cerrados: eCerrados },
-        evaluaciones: { abiertos: evAbiertas, enProgreso: evProgreso, cerrados: evCerradas, vencidas: evVencidas },
+        endpoints: { abiertos: eAbiertos, enProgreso: eProgreso, cerrados: eCerrados, porEjecutar: ePorEjecutar },
+        evaluaciones: { abiertos: evAbiertas, enProgreso: evProgreso, cerrados: evCerradas, vencidas: evVencidas, proximas30Dias: evProximas },
       };
     } catch (e) {
       const error = e as Error;

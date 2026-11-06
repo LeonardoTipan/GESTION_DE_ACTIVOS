@@ -16,6 +16,7 @@ import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
 import type { ActivoBreveDto } from '../common/dto/registro.dto.js';
+import { BitacoraIndicadorDto, QueryBitacoraIndicadorDto } from '../common/bitacora/dto.js';
 import { ControlAccesoService } from './control-acceso.service.js';
 import {
   CategoriaElegibleDto,
@@ -23,7 +24,10 @@ import {
   ControlAccesoDto,
   CrearControlAccesoDto,
   EditarControlAccesoDto,
+  FilaBitacoraControlAccesoDto,
   HistorialControlAccesoDto,
+  PaginatedFilaBitacoraControlAccesoDto,
+  QueryBitacoraEspecificaControlAccesoDto,
   PaginatedActivoElegibleDto,
   PaginatedControlAccesoDto,
   QueryActivosElegiblesDto,
@@ -53,6 +57,23 @@ export class ControlAccesoController {
   }
 
   // Rutas fijas antes que /:id.
+  @ApiOperation({
+    summary: 'Bitácora General (mensual)',
+    description: 'Indicador del Excel «Accesos otorgados / Total solicitudes formales»: solicitudes de ALTA del mes y, de ellas, las cerradas. Las bajas, aparte. Solo lectura.',
+  })
+  @ApiOkResponse({ type: BitacoraIndicadorDto })
+  @Get('bitacora/general')
+  bitacoraGeneral(@Query() q: QueryBitacoraIndicadorDto): Promise<BitacoraIndicadorDto> {
+    return this.servicio.bitacoraGeneral(q.anio);
+  }
+
+  @ApiOperation({ summary: 'Bitácora Específica', description: 'Solicitudes del mes (altas y bajas) con los filtros del listado y cómo cuenta cada una en el indicador.' })
+  @ApiOkResponse({ type: PaginatedFilaBitacoraControlAccesoDto })
+  @Get('bitacora/especifica')
+  bitacoraEspecifica(@Query() q: QueryBitacoraEspecificaControlAccesoDto): Promise<Paginated<FilaBitacoraControlAccesoDto>> {
+    return this.servicio.bitacoraEspecifica(q);
+  }
+
   @ApiOperation({
     summary: 'Activos elegibles para un tipo de acceso',
     description: 'Vigentes y operativos, de categorías que admiten el tipo (Catálogos). Filtrados en el servidor.',

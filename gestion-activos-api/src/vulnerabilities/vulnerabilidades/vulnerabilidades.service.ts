@@ -27,8 +27,11 @@ import type {
   RegistrarVulnerabilidadDto,
   RemediarDto,
 } from './dto/acciones.dto.js';
-import type { QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
-import type { VulnerabilidadDto } from './dto/vulnerabilidad.dto.js';
+import type { QueryBitacoraEspecificaVulnerabilidadesDto, QueryVulnerabilidadesDto } from './dto/query-vulnerabilidades.dto.js';
+import type { FilaBitacoraVulnerabilidadDto, VulnerabilidadDto } from './dto/vulnerabilidad.dto.js';
+import type { BitacoraIndicadorDto } from '../../common/bitacora/dto.js';
+import { periodoBitacora, rangoAnio } from '../../common/bitacora/periodos.js';
+import { bitacoraVulnerabilidades, remediadaEnPeriodo, wherePendienteEnPeriodo } from './bitacora.js';
 import { indicadoresVulnerabilidad } from './indicadores.js';
 import { exigirCierre, exigirFechaRemediacion, exigirInicio } from './reglas.js';
 import {
@@ -81,6 +84,23 @@ export class VulnerabilidadesService {
 
   async findAll(query: QueryVulnerabilidadesDto): Promise<Paginated<VulnerabilidadDto>> {
     const ahora = new Date();
+    const where = this.filtros(query, ahora);
+    const [total, filas] = await this.prisma.$transaction([
+      this.prisma.vulnerabilidad.count({ where }),
+      this.prisma.vulnerabilidad.findMany({
+        where,
+        include: INCLUDE,
+        // Lo más urgente primero: mayor criticidad y, dentro del nivel, la más antigua.
+        orderBy: [{ nivelRiesgo: 'desc' }, { fecha: 'asc' }, { id: 'asc' }],
+        skip: skipFor(query),
+        take: query.limit,
+      }),
+    ]);
+    return paginate(filas.map((v) => aDto(v, ahora)), total, query);
+  }
+
+  /** Filtros del listado (también los usa la Bitácora Específica). */
+  private filtros(query: QueryVulnerabilidadesDto, ahora: Date, soloVigentes = false): Prisma.VulnerabilidadWhereInput {
     const vencidas: Prisma.VulnerabilidadWhereInput = {
       estado: { in: ESTADOS_ABIERTOS },
       fechaLimite: { lt: ahora },
@@ -111,21 +131,56 @@ export class VulnerabilidadesService {
     if (query.vencidas === true) filtros.push(vencidas);
     if (query.vencidas === false) filtros.push({ NOT: vencidas });
     if (query.actualizadoDesde) filtros.push({ updatedAt: { gt: query.actualizadoDesde } });
-    if (!query.incluirAnulados) filtros.push({ anuladoEn: null });
-    const where: Prisma.VulnerabilidadWhereInput = { AND: [...filtros, CON_ACTIVO] };
+    if (soloVigentes || !query.incluirAnulados) filtros.push({ anuladoEn: null });
+    return { AND: [...filtros, CON_ACTIVO] };
+  }
 
+  // ── Bitácoras (solo lectura) ──────────────────────────────────────────────
+
+  /** Bitácora General trimestral del año (criterio en bitacora.ts). Las anuladas no cuentan. */
+  async bitacoraGeneral(anio: number): Promise<BitacoraIndicadorDto> {
+    const { desde, hasta } = rangoAnio(anio);
+    const filas = await this.prisma.vulnerabilidad.findMany({
+      where: { anuladoEn: null, ...CON_ACTIVO, ...wherePendienteEnPeriodo(desde, hasta) },
+      select: { fecha: true, estado: true, fechaLimite: true, fechaRemediacion: true },
+    });
+    return bitacoraVulnerabilidades(anio, filas);
+  }
+
+  /**
+   * Bitácora Específica: los registros que justifican el indicador. Con año (y trimestre),
+   * exactamente el «Total identificados» del período, marcando cuáles cuentan como remediadas.
+   */
+  async bitacoraEspecifica(q: QueryBitacoraEspecificaVulnerabilidadesDto): Promise<Paginated<FilaBitacoraVulnerabilidadDto>> {
+    if (q.trimestre && !q.anio) throw new BadRequestException('El trimestre exige el año.');
+    const ahora = new Date();
+    const periodo = q.anio
+      ? q.trimestre
+        ? periodoBitacora(q.anio, 'TRIMESTRAL', q.trimestre, ahora)
+        : rangoAnio(q.anio)
+      : null;
+    const where: Prisma.VulnerabilidadWhereInput = {
+      AND: [this.filtros(q, ahora, true), ...(periodo ? [wherePendienteEnPeriodo(periodo.desde, periodo.hasta)] : [])],
+    };
     const [total, filas] = await this.prisma.$transaction([
       this.prisma.vulnerabilidad.count({ where }),
       this.prisma.vulnerabilidad.findMany({
         where,
         include: INCLUDE,
-        // Lo más urgente primero: mayor criticidad y, dentro del nivel, la más antigua.
-        orderBy: [{ nivelRiesgo: 'desc' }, { fecha: 'asc' }, { id: 'asc' }],
-        skip: skipFor(query),
-        take: query.limit,
+        orderBy: [{ fecha: 'desc' }, { id: 'desc' }],
+        skip: skipFor(q),
+        take: q.limit,
       }),
     ]);
-    return paginate(filas.map((v) => aDto(v, ahora)), total, query);
+    return paginate(
+      filas.map((v): FilaBitacoraVulnerabilidadDto =>
+        Object.assign(aDto(v, ahora), {
+          enIndicador: periodo ? (remediadaEnPeriodo(v, periodo.desde, periodo.hasta) ? ('REMEDIADA' as const) : ('PENDIENTE' as const)) : null,
+        }),
+      ),
+      total,
+      q,
+    );
   }
 
   async findOne(id: number): Promise<VulnerabilidadDto> {

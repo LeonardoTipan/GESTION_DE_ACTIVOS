@@ -49,8 +49,13 @@ export class IndicadoresProcesoDto {
   @ApiProperty() cerrados: number;
 }
 
+export class IndicadoresEndpointsDto extends IndicadoresProcesoDto {
+  @ApiProperty({ description: 'Abiertos con la fecha planificada (o su mes) ya pasada.' }) porEjecutar: number;
+}
+
 export class IndicadoresEvaluacionesDto extends IndicadoresProcesoDto {
-  @ApiProperty({ description: 'Pendientes con la fecha programada de paso a producción ya pasada.' }) vencidas: number;
+  @ApiProperty({ description: 'Pendientes con la fecha planificada ya pasada.' }) vencidas: number;
+  @ApiProperty({ description: 'Pendientes con la fecha planificada en los próximos 30 días.' }) proximas30Dias: number;
 }
 
 export class IndicadoresTableroDto {
@@ -60,6 +65,6 @@ export class IndicadoresTableroDto {
   @ApiProperty({ type: IndicadoresMantenimientosDto }) mantenimientos: IndicadoresMantenimientosDto;
   @ApiProperty({ type: IndicadoresVulnerabilidadesDto }) vulnerabilidades: IndicadoresVulnerabilidadesDto;
   @ApiProperty({ type: IndicadoresRenovacionesDto }) renovaciones: IndicadoresRenovacionesDto;
-  @ApiProperty({ type: IndicadoresProcesoDto, description: 'Períodos mensuales de Protección de Endpoints.' }) endpoints: IndicadoresProcesoDto;
+  @ApiProperty({ type: IndicadoresEndpointsDto, description: 'Períodos mensuales de Protección de Endpoints.' }) endpoints: IndicadoresEndpointsDto;
   @ApiProperty({ type: IndicadoresEvaluacionesDto }) evaluaciones: IndicadoresEvaluacionesDto;
 }

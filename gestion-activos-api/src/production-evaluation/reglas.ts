@@ -20,6 +20,7 @@ export const SITUACIONES: readonly Situacion[] = ['PENDIENTE', 'VENCIDA', 'CUMPL
 export interface DatosEjecucionEvaluacion {
   fechaProgramadaProduccion: Date;
   fechaPruebas: Date | null;
+  responsableEjecucion: string | null;
   evidencia: string | null;
   repositorioVerificable: string | null;
   observacion: string | null;
@@ -47,12 +48,13 @@ export function exigirCoherencia(d: DatosEjecucionEvaluacion, ahora = new Date()
 }
 
 /**
- * Cerrar exige la fecha real de las pruebas, el informe (verificable) y su repositorio; si las
+ * Cerrar exige la fecha real de las pruebas, su responsable, el informe (verificable) y su repositorio; si las
  * pruebas fueron posteriores a la fecha programada, además la justificación en la observación.
  */
 export function exigirCierre(d: DatosEjecucionEvaluacion, ahora = new Date()): void {
   const faltan = [
     !d.fechaPruebas && 'la fecha real de las pruebas de seguridad',
+    !d.responsableEjecucion?.trim() && 'el responsable de la ejecución',
     !d.evidencia?.trim() && 'el verificable (informe de las pruebas)',
     !d.repositorioVerificable?.trim() && 'el repositorio del verificable',
   ].filter(Boolean);

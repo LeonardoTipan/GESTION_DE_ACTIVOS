@@ -117,6 +117,8 @@ export class TrazasService {
     responsable: string,
     condicion: Record<string, unknown> = {},
     ademas?: (tx: Prisma.TransactionClient) => Promise<unknown>,
+    // Cambios que no son columnas del registro (p. ej. una línea de detalle): solo se anotan.
+    extra: CambioCampo[] = [],
   ): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       const actual = await this.cargar(tx, entidad, id);
@@ -125,7 +127,7 @@ export class TrazasService {
           `${ENTIDADES[entidad].nombre} ${id} está anulado: reviértelo antes de modificarlo.`,
         );
       }
-      const cambios = diferencias(actual, datos);
+      const cambios = [...diferencias(actual, datos), ...extra];
       if (cambios.length === 0) {
         throw new BadRequestException('No hay cambios que guardar.');
       }

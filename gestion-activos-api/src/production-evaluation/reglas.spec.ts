@@ -9,6 +9,7 @@ const programada = new Date('2026-10-20T15:00:00Z');
 const completo: DatosEjecucionEvaluacion = {
   fechaProgramadaProduccion: programada,
   fechaPruebas: new Date('2026-10-18T14:00:00Z'),
+  responsableEjecucion: 'Seguridad TIC · M. López',
   evidencia: 'Informe de pruebas de seguridad v2.1.pdf',
   repositorioVerificable: 'Carpeta Compartida TICs/Seguridad',
   observacion: null,
@@ -32,6 +33,11 @@ describe('Evaluación de Sistemas Productivos · reglas de la fase 2', () => {
       'Para cerrar la evaluación falta: la fecha real de las pruebas de seguridad, el verificable (informe de las pruebas), el repositorio del verificable.',
     );
     expect(() => exigirCierre({ ...completo, repositorioVerificable: 'file:///c:/informe.pdf' }, AHORA)).toThrow('http o https');
+  });
+
+  it('cerrar exige también el responsable de la ejecución (solo espacios = vacío)', () => {
+    expect(() => exigirCierre({ ...completo, responsableEjecucion: null }, AHORA)).toThrow('Para cerrar la evaluación falta: el responsable de la ejecución.');
+    expect(() => exigirCierre({ ...completo, responsableEjecucion: '   ' }, AHORA)).toThrow('el responsable de la ejecución');
   });
 
   it('pruebas tardías: se permite cerrar, pero con la observación justificada (≥ 20 caracteres)', () => {

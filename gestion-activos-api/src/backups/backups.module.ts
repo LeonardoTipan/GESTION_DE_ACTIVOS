@@ -13,6 +13,8 @@ import { PlanesRespaldoService } from './plan/planes.service.js';
 import { TableroRespaldosService } from './plan/tablero.service.js';
 import { RespaldosController } from './respaldos/respaldos.controller.js';
 import { RespaldosService } from './respaldos/respaldos.service.js';
+import { BitacoraRespaldosController } from './bitacora/bitacora-respaldos.controller.js';
+import { BitacoraRespaldosService } from './bitacora/bitacora-respaldos.service.js';
 
 /**
  * Respaldos y restauración (A.8.13, A.5.30) en tres pasos: plan (alcance) →
@@ -27,6 +29,7 @@ import { RespaldosService } from './respaldos/respaldos.service.js';
   controllers: [
     AgendaRespaldosController,
     TableroRespaldosController,
+    BitacoraRespaldosController,
     PlanesRespaldoController,
     EjecucionesRespaldoController,
     RestauracionesController,
@@ -38,6 +41,7 @@ import { RespaldosService } from './respaldos/respaldos.service.js';
     RestauracionesService,
     TableroRespaldosService,
     RespaldosService,
+    BitacoraRespaldosService,
   ],
 })
 export class BackupsModule {}

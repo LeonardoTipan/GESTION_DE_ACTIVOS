@@ -54,10 +54,16 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
     evidencia: 'Inventario de equipos.xlsx',
     repositorioVerificable: 'Carpeta Compartida TICs/Antivirus',
   };
-  const INFORME = { evidencia: 'Informe de pruebas de seguridad.pdf', repositorioVerificable: 'https://intranet.local/seguridad/informes' };
+  const INFORME = { evidencia: 'Informe de pruebas de seguridad.pdf', repositorioVerificable: 'https://intranet.local/seguridad/informes', responsableEjecucion: 'Seguridad TIC · M. López' };
 
+  /** Fecha planificada de un mes: el 15 a mediodía; en el mes en curso, su último día a las 23:00 (aún no ha pasado). */
+  const fechaDe = (m: { anio: number; mes: number }) => {
+    const enCurso = m.anio === anioHoy && m.mes === mesHoy;
+    const dia = enCurso ? new Date(Date.UTC(m.anio, m.mes, 0)).getUTCDate() : 15;
+    return new Date(`${m.anio}-${String(m.mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}T${enCurso ? '23' : '12'}:00:00-05:00`).toISOString();
+  };
   const abrirPeriodo = async (n: number) =>
-    (await api(tokens.analista).post('/api/proteccion-endpoints/periodos', { ...mesAtras(n), responsable: 'Soporte TIC' }).expect(201)).body.id as number;
+    (await api(tokens.analista).post('/api/proteccion-endpoints/periodos', { fechaPlanificada: fechaDe(mesAtras(n)), responsable: 'Soporte TIC' }).expect(201)).body.id as number;
   const planificar = async (activoId: number, dias: number) =>
     (
       await api(tokens.analista)
@@ -189,7 +195,7 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
       const id = await planificar(ids.sistema, 10);
       await api(tokens.analista).patch(`/api/evaluaciones-sistemas/${id}/ejecucion`, { fechaPruebas: enDias(2) }).expect(400);
       const pruebas = enDias(-1);
-      const res = await api(tokens.analista).patch(`/api/evaluaciones-sistemas/${id}/ejecucion`, { fechaPruebas: pruebas, evidencia: INFORME.evidencia }).expect(200);
+      const res = await api(tokens.analista).patch(`/api/evaluaciones-sistemas/${id}/ejecucion`, { fechaPruebas: pruebas, evidencia: INFORME.evidencia, responsableEjecucion: INFORME.responsableEjecucion }).expect(200);
       expect(res.body).toMatchObject({ estado: 'EN_PROGRESO', fechaPruebas: pruebas, tardia: false, situacion: 'PENDIENTE', cerradoPor: null });
       expect(res.body.semestreReal).toMatch(/^S[12]-\d{4}$/);
       const t = (await trazas('EVALUACION_SISTEMA', id)).find((x) => x.accion === 'MODIFICAR')!;
@@ -297,7 +303,7 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
 
     it('q busca por año y/o mes; un texto que no es ninguno no devuelve nada', async () => {
       const { anio, mes } = mesAtras(21);
-      const id = (await api(tokens.analista).post(RUTA, { anio, mes, responsable: 'Responsable Búsqueda' }).expect(201)).body.id as number;
+      const id = (await api(tokens.analista).post(RUTA, { fechaPlanificada: fechaDe({ anio, mes }), responsable: 'Responsable Búsqueda' }).expect(201)).body.id as number;
       expect((await listar(`q=${anio}`)).data.every((p) => p.anio === anio)).toBe(true);
       const porAmbos = await listar(`q=${mes}%20${anio}`);
       expect(porAmbos.data.map((p) => p.id)).toEqual([id]);
@@ -312,16 +318,16 @@ describe('Protección de Endpoints y Evaluación de Sistemas Productivos · fase
       expect((await listar('responsable=nadie-con-este-nombre')).meta.total).toBe(0);
     }, LENTO);
 
-    it('la agenda distingue abierto (programado) de en progreso (en curso) y de un abierto vencido', async () => {
+    it('la agenda distingue abierto (programado) de en progreso (en curso) y de un abierto por ejecutar', async () => {
       const abierto = (await listar(`pendientes=true&anio=${anioHoy}&mes=${mesHoy}`)).data[0];
-      const id = abierto?.id ?? (await api(tokens.analista).post(RUTA, { anio: anioHoy, mes: mesHoy, responsable: 'Soporte' }).expect(201)).body.id;
+      const id = abierto?.id ?? (await api(tokens.analista).post(RUTA, { fechaPlanificada: fechaDe({ anio: anioHoy, mes: mesHoy }), responsable: 'Soporte' }).expect(201)).body.id;
       const vencido = await abrirPeriodo(23);
       const enProgreso = await abrirPeriodo(24);
       await api(tokens.analista).patch(`${RUTA}/${enProgreso}/registro`, { totalActivos: 5 }).expect(200);
       const eventos = (await api(tokens.auditor).get(`${RUTA}/agenda?desde=${enDias(-1000)}&hasta=${enDias(40)}&capa=1`).expect(200)).body as Array<{ clave: string; estado: string }>;
       const de = (i: number) => eventos.find((e) => e.clave === `ep1-${i}`)!.estado;
       expect(de(id)).toBe(abierto?.estado === 'EN_PROGRESO' ? 'EN_CURSO' : 'PROGRAMADO');
-      expect(de(vencido)).toBe('VENCIDO');
+      expect(de(vencido)).toBe('POR_EJECUTAR');
       expect(de(enProgreso)).toBe('EN_CURSO');
     }, LENTO);
   });

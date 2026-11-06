@@ -8,6 +8,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   MinLength,
@@ -308,4 +309,22 @@ export class ResumenVigenciasDto {
   @ApiProperty() proximas: number;
   @ApiProperty() caducadas: number;
   @ApiProperty() sinCaducidad: number;
+}
+
+/** Bitácora operativa: los filtros del listado y el período (año y, si se indica, mes). */
+export class QueryBitacoraRenovacionesDto extends QueryRenovacionesDto {
+  @ApiProperty({ minimum: 2000, maximum: 2100, example: 2026 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  anio: number;
+
+  @ApiPropertyOptional({ minimum: 1, maximum: 12, description: 'Mes; sin él, el año entero.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(12)
+  mes?: number;
 }

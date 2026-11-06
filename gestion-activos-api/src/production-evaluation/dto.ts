@@ -57,6 +57,14 @@ export class DatosEjecucionEvaluacionDto {
   @IsDate()
   fechaPruebas?: Date;
 
+  @ApiPropertyOptional({ example: 'Seguridad TIC · M. López', description: 'Quién realizó las pruebas (puede ser distinto del asignado). Obligatorio al cerrar.' })
+  @IsOptional()
+  @Trim()
+  @IsString()
+  @MinLength(1)
+  @MaxLength(191)
+  responsableEjecucion?: string;
+
   @ApiPropertyOptional({ example: 'Informe de pruebas de seguridad nómina v2.1.pdf', description: '«Verificable»: informe de las pruebas.' })
   @IsOptional()
   @Trim()
@@ -92,6 +100,13 @@ export class ReabrirEvaluacionDto {
 }
 
 export class QueryEvaluacionesDto extends PaginationQueryDto {
+  @ApiPropertyOptional({ description: 'Categoría del sistema.' })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  categoriaId?: number;
+
   @ApiPropertyOptional({ description: 'Código o nombre del sistema, o la descripción.' })
   @IsOptional()
   @Trim()
@@ -161,6 +176,7 @@ export class EvaluacionSistemaDto extends RegistroDto {
   // Fase 2
   @ApiProperty({ type: String, format: 'date-time', nullable: true, description: 'Fecha real de las pruebas de seguridad.' })
   fechaPruebas: Date | null;
+  @ApiProperty({ type: String, nullable: true, description: 'Quién realizó las pruebas. Vacío en las cerradas antes de este dato.' }) responsableEjecucion: string | null;
   @ApiProperty({ type: String, nullable: true, description: '«Verificable»: informe de las pruebas.' }) evidencia: string | null;
   @ApiProperty({ type: String, nullable: true, description: '«Repositorio Verificable».' }) repositorioVerificable: string | null;
   @ApiProperty({ type: String, nullable: true }) observacion: string | null;
@@ -249,4 +265,35 @@ export class QueryBitacoraEspecificaEvaluacionDto extends PaginationQueryDto {
   @IsOptional()
   @IsIn(SITUACIONES)
   situacion?: Situacion;
+
+  @ApiPropertyOptional({
+    enum: ['PLANIFICACION', 'PRUEBAS'],
+    default: 'PLANIFICACION',
+    description: 'Cómo se aplican año y semestre: PLANIFICACION (fecha planificada) o PRUEBAS (cerradas con la fecha real de pruebas en el período: el numerador del indicador).',
+  })
+  @IsOptional()
+  @IsIn(['PLANIFICACION', 'PRUEBAS'])
+  segun?: 'PLANIFICACION' | 'PRUEBAS';
 }
+
+/** Un sistema del «Total sistemas en producción» de un semestre y si se evaluó en él. */
+export class SistemaProduccionDto {
+  @ApiProperty({ type: ActivoBreveDto }) activo: ActivoBreveDto;
+  @ApiProperty({ description: 'true = tiene una evaluación CERRADA con las pruebas en el semestre (cuenta en el numerador).' }) evaluado: boolean;
+  @ApiProperty({ type: [Number], description: 'Evaluaciones cerradas del sistema en el semestre.' }) evaluaciones: number[];
+}
+
+export class QuerySistemasProduccionDto {
+  @ApiProperty({ minimum: 2000, maximum: 2100 })
+  @Type(() => Number)
+  @IsInt()
+  @Min(2000)
+  @Max(2100)
+  anio: number;
+
+  @ApiProperty({ enum: [1, 2] })
+  @Type(() => Number)
+  @IsIn([1, 2])
+  semestre: 1 | 2;
+}
+

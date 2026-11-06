@@ -13,6 +13,7 @@ import {
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
 import { Roles } from '../auth/decorators/roles.decorator.js';
 import type { AuthUser } from '../auth/interfaces/auth-user.interface.js';
+import { BitacoraIndicadorDto, QueryBitacoraIndicadorDto } from '../common/bitacora/dto.js';
 import { EventoAgendaDto, QueryAgendaDto } from '../common/dto/agenda.dto.js';
 import { ApiErrorDto } from '../common/dto/api-error.dto.js';
 import type { Paginated } from '../common/dto/paginated-response.dto.js';
@@ -25,7 +26,9 @@ import {
   QueryBitacoraEspecificaEvaluacionDto,
   QueryBitacoraEvaluacionDto,
   QueryEvaluacionesDto,
+  QuerySistemasProduccionDto,
   ReabrirEvaluacionDto,
+  SistemaProduccionDto,
 } from './dto.js';
 import { EvaluacionesService } from './evaluaciones.service.js';
 
@@ -60,6 +63,23 @@ export class EvaluacionesController {
   @Get('bitacora/general')
   bitacoraGeneral(@Query() q: QueryBitacoraEvaluacionDto): Promise<BitacoraEvaluacionDto> {
     return this.evaluaciones.bitacoraGeneral(q);
+  }
+
+  @ApiOperation({
+    summary: 'Bitácora General con la fórmula del Excel (semestral)',
+    description: '«Pruebas de seguridad ejecutadas / Total sistemas en producción»: sistemas distintos con una evaluación CERRADA (pruebas reales en el semestre) sobre el inventario de producción al corte del semestre. Solo lectura.',
+  })
+  @ApiOkResponse({ type: BitacoraIndicadorDto })
+  @Get('bitacora/indicador')
+  indicador(@Query() q: QueryBitacoraIndicadorDto): Promise<BitacoraIndicadorDto> {
+    return this.evaluaciones.indicador(q.anio);
+  }
+
+  @ApiOperation({ summary: 'Sistemas en producción del semestre', description: 'El denominador del indicador (inventario al corte) y si cada sistema se evaluó en el semestre.' })
+  @ApiOkResponse({ type: [SistemaProduccionDto] })
+  @Get('bitacora/sistemas')
+  sistemas(@Query() q: QuerySistemasProduccionDto): Promise<SistemaProduccionDto[]> {
+    return this.evaluaciones.sistemasDelSemestre(q.anio, q.semestre);
   }
 
   @ApiOperation({

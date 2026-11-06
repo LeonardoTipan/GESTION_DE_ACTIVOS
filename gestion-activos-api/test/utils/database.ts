@@ -28,6 +28,7 @@ export async function limpiarBaseDeDatos(prisma: PrismaService): Promise<void> {
     prisma.renovacion.updateMany({ data: { renovacionAnteriorId: null } }),
     prisma.renovacion.deleteMany(),
     prisma.evaluacionSistema.deleteMany(),
+    prisma.periodoEndpointActivo.deleteMany(),
     prisma.periodoEndpoint.deleteMany(),
     prisma.vulnerabilidad.deleteMany(),
     prisma.historialControlAcceso.deleteMany(),
